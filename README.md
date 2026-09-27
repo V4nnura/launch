@@ -17,6 +17,7 @@
 - Displays a hierarchical folder based menu, modally over the top of the existing console contents.
 - Supports trigger by a customizable keyboard shortcut.
 - Launches commands using the existing command interpreter and shell.
+- [Quick Launch](https://github.com/therenegar/launch/wiki/Quick-Launch#quick-launch) type to search the menu and run with minimal keystrokes.
 - Easy [visual menu editing](https://github.com/therenegar/launch/wiki/Menu-Management).
 - Automatic [menu generator](https://github.com/therenegar/launch/wiki/!MNUGEN.COM) with comprehensive DOS program database to automatically identify programs.
 - Built in [executable explorer](https://github.com/therenegar/launch/wiki/Explore-and-Run) to quickhttps://github.com/therenegar/launch/wiki/Configuration#promptly browse and run programs anywhere.
