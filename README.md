@@ -37,9 +37,8 @@
 **[Check out the wiki](https://github.com/therenegar/launch/wiki) for detailed information and documentation.**
 
 
-----
 <a id="install"></a>
-## <img width="500" alt="Install" src="https://github.com/user-attachments/assets/b7dee4b9-154f-47b6-b407-8b24ef9b03fd" />
+### <img alt="Installation" src="https://github.com/user-attachments/assets/a14320e8-f790-4a82-95d6-1cee146512c9" />
 
 Extract the release zip file or mount the floppy image and run
 ```
@@ -49,9 +48,8 @@ INSTALL.EXE
 
 <img width="720" alt="Installation" src="https://github.com/user-attachments/assets/8155900c-7c0f-40c9-aa0f-32c0554b03e6" />
 
-----
 <a id="the-menu"></a>
-## <img width="500" alt="The Menu" src="https://github.com/user-attachments/assets/833bd071-f0c6-436f-8cfa-fd933ac6685f" />
+### <img height="100" alt="The menu" src="https://github.com/user-attachments/assets/eb20a623-f631-4b33-b340-90d470f6e7c1" />
 
 At the **command prompt**, display your menu by pressing the keyboard shortcut which by default is set to:
 ```
@@ -62,13 +60,12 @@ CTRL + ALT + .
 <img width="720" alt="default-boot" src="https://github.com/user-attachments/assets/da13f54b-66d0-4f84-a8f5-0aa6ac7e95b8" />
 
 
-----
 <a id="config"></a>
-## <img width="500" alt="Config" src="https://github.com/user-attachments/assets/281d5d70-bcd8-4730-baf8-df572e7006bf" />
+### <img alt="Config" src="https://github.com/user-attachments/assets/8b30b2a6-cb46-435e-b9e1-7fb47e5fc44e" />
 
 Everything in Launch! can be configured in one place by running
 ```
-! /CONFIG
+! /CONFIG``
 ```
 Configuration includes the menu, colors, screen savers, prompt customization, font customization and shortcut key settings.
 
@@ -77,9 +74,8 @@ Configuration includes the menu, colors, screen savers, prompt customization, fo
 <img width="720" alt="config-menu" src="https://github.com/user-attachments/assets/7ec8b314-e2a1-4789-b78d-a40492139413" />
 
 
-----
 <a id="screen-savers"></a>
-## <img width="500" alt="Screen Savers" src="https://github.com/user-attachments/assets/60492c02-09ae-4846-8761-b318f9ddb504" />
+### <img alt="Screen Savers" src="https://github.com/user-attachments/assets/447f06ad-4597-45bc-b4cf-3f3debcc02a1" />
 
 Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Screen-Savers).
 
@@ -98,10 +94,9 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 <img width="360" height="300" alt="StarryNite" src="https://github.com/user-attachments/assets/f8db1076-934a-44ec-828d-24a633c52f6a" />
 <img width="360" height="300" alt="Warp" src="https://github.com/user-attachments/assets/79a98013-a37a-4690-9eef-cbe7f30f10a5" />
 
-----
 
 <a id="accessories"></a>
-## <img width="500" alt="Accessories" src="https://github.com/user-attachments/assets/98418a23-1b67-43ee-b6f4-77de6fecee98" />
+### <img alt="Accessories" src="https://github.com/user-attachments/assets/59ceb839-9cc4-456e-8e5f-99d103b871cb" />
 
 **Learn more about [Accessories](https://github.com/therenegar/launch/wiki/Accessories).**
 
@@ -115,10 +110,8 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 <img width="360" height="300" alt="journal" src="https://github.com/user-attachments/assets/273505f9-87ea-4354-9065-99e68b9994ed" />
 <img width="360" height="300" alt="typo" src="https://github.com/user-attachments/assets/00b4d154-1d18-4cc1-b79d-6859a6b1a5bf" />
 
-
-----
 <a id="games"></a>
-## <img width="500" alt="Games" src="https://github.com/user-attachments/assets/c4d31625-d74d-4534-a256-eb436e3ece78" />
+### <img alt="Games" src="https://github.com/user-attachments/assets/ad644a58-0e3b-4f34-b6cb-8de93f67bdcc" />
 
 **Learn more about [Games](https://github.com/therenegar/launch/wiki/Games).**
 
@@ -130,25 +123,21 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 <img width="360" height="300" alt="fcell" src="https://github.com/user-attachments/assets/acd785ad-0b7b-4e37-b1b5-203ec5eb166c" />
 <img width="360" height="300" alt="sol" src="https://github.com/user-attachments/assets/25ebb582-f0c1-400a-954b-85a2ac28e199" />
 
-
-
-----
 <a id="tooling"></a>
-## <img width="500" alt="Tooling" src="https://github.com/user-attachments/assets/dd935b02-2baa-4626-8c37-9cae052432f4" />
+### <img alt="Tooling" src="https://github.com/user-attachments/assets/e96b1ec4-fcfb-4368-b9e1-801024401611" />
 
 **Learn more about [Tooling](https://github.com/therenegar/launch/wiki/Tooling).**
 
-
-----
 <a id="techinfo"></a>
-## Technical Information
+### <img alt="Tech Info" src="https://github.com/user-attachments/assets/702756ee-38aa-4eb7-b39b-d7e15cbf0ca2" />
 
 **Read [Technical Information](https://github.com/therenegar/launch/wiki/Tech-Info).**
 
-
 Launch is created on a 486DX4/100 machine, 32mb RAM, running IBM PC DOS 7.0. Coded using [Microsoft QuickC](https://en.wikipedia.org/wiki/QuickC) IDE and [FTE](https://fte.sourceforge.net/) (Folding Text Editor). Graphical glyphs created using [Fontraption](https://int10h.org/blog/2019/05/fontraption-vga-text-mode-font-editor/). Screen layout and composition done with [TheDraw](https://www.abandonwaredos.com/abandonware-game.php?abandonware=TheDraw+4&gid=3563).
-Compiled with Microsoft C/C++ Optimizing Compiler 7.00 from 1992 (Takes approx 30-45 minutes to build the whole shebang). Builds transferred using FTP to a Linux host where a simple Python script integrates the build into (this) GIT repository- and automates creation of release zip/img files.
-Screenshots taken on this machine using [Screen Thief](http://www.win3x.org/win3board/viewtopic.php?t=2710&view=min).
+Compiled with Microsoft C/C++ Optimizing Compiler 7.00 from 1992 (Takes approx 30-45 minutes to build the whole shebang).<br/>
+Screenshots taken on this machine using [Screen Thief](http://www.win3x.org/win3board/viewtopic.php?t=2710&view=min).<br/>
+Builds transferred using FTP to a Linux host where a simple Python script integrates the build into (this) GIT repository- and automates creation of release zip/img files.
+
 
 <img width="720" height="600" alt="About Launch!" src="https://github.com/user-attachments/assets/cfb867d4-a228-4291-b720-ed73aaa4dac6" />
 
