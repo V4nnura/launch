@@ -2,7 +2,8 @@
 
 > A lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- and loads of goodies to uplift an old DOS machine and give it something to do!
 
-&nbsp;<br/>
+<img height="75" alt="Go get it!" src="https://github.com/user-attachments/assets/deef3126-a840-4c73-bf86-51d12d398ec1" />
+
 **Download the latest release [here](https://github.com/therenegar/launch/releases/latest)**
 
 **Requires** DOS 3.3, 80286, EGA or better. 1.2MB free disk space for install.
@@ -10,8 +11,9 @@
 **Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS.
 
 <img width="720" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/7e928087-c592-4ce9-9cd5-2ba3f794cdbe" />
+<br/>
+<img height="75" alt="So. Many. Features." src="https://github.com/user-attachments/assets/0192af1f-a429-4d77-b570-05c9d66106e9" />
 
-## Features
 - Displays a hierarchical folder based menu, modally over the top of the existing console contents.
 - Supports trigger by a customizable keyboard shortcut.
 - Launches commands using the existing command interpreter and shell.
