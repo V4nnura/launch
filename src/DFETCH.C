@@ -513,7 +513,7 @@ int main(int argc,char **argv)
   fetch_item(x+24,row++,"Memory",s);
   fetch_item(x+24,row++,"Manager",memory_manager());
 
-  if(drive_count){char lab[18];sprintf(lab,"System Disk");report_item(lab,"");acc_text(x+24,row,"System Disk:",ACC_TITLE,15);draw_disk_bar(x+38,row,drive_letter[0],drive_percent[0]);row++;}
+  if(drive_count){char lab[18];sprintf(lab,"System Disk");report_item(lab,"");acc_text(x+24,row,"System Disk:",ACC_ATTR(acc_appearance.background,acc_appearance.folders),15);draw_disk_bar(x+38,row,drive_letter[0],drive_percent[0]);row++;}
   else fetch_item(x+24,row++,"System Disk","None detected");
 
   eq=_bios_equiplist();flops=(eq&1)?((eq>>6)&3)+1:0;drive_list(floppy_s,flops,0);fetch_item(x+24,row++,"Floppy",floppy_s);

@@ -744,6 +744,7 @@ static void maximize_refresh(int key,int oldtop)
  if(top!=oldtop||key==8||key==13||key==24||key==22||key==256+83){if(view_mode==0){draw_source(0,0,12,1,FULL_COLS);draw_preview(0,13,11);}else if(view_mode==1)draw_source(0,0,24,1,FULL_COLS);else draw_preview(0,0,24);md_scrollbar(79,0,rows,1);maximize_page_bar();return;}
  if(view_mode!=2)draw_source(0,0,rows,1,FULL_COLS);if(view_mode==0&&((key>=32&&key<=255)||(key>=513&&key<=767))&&cy>=top&&cy<top+12){on=code_before(current,cy);preview_line(0,13+cy-top,current,cy,on);}md_scrollbar(79,0,rows,1);maximize_page_bar();
 }
+static int md_prompt_current(void);
 static void maximize_mode(void)
 {
  int key=0,mx=0,my=0,rows,oldtop,editkey,oldpage,old_close_x,old_close_y;unsigned mb=0;clear_selection();
@@ -751,7 +752,14 @@ static void maximize_mode(void)
  if(view_mode!=2&&!reflow_page(current,FULL_COLS)){acc_modal_end();acc_close_target_restore(old_close_x,old_close_y);acc_notice("Markdown","Not enough memory to expand the full-screen editor.");return;}
  if(cy<top)top=cy;rows=view_mode==0?12:24;if(cy>=top+rows)top=cy-rows+1;maximize_draw();
  while(key!=27&&key!=256+0x85&&key!=256+0x57){
-  acc_wait(&key,&mx,&my,&mb);rows=view_mode==0?12:24;if(key==256+0x32){headings_popup();acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);maximize_draw();key=0;continue;}
+  acc_wait(&key,&mx,&my,&mb);rows=view_mode==0?12:24;
+  /* Keep the normal editor shortcuts active in full-screen mode. */
+  if(key==19){save_current();maximize_draw();key=0;continue;}
+  if(key==15){static char openlist[ACC_PATH];if(view_mode!=2)reflow_page(current,COLS);if(md_open_dialog(openlist))md_open_files(openlist);if(view_mode!=2)reflow_page(current,FULL_COLS);cx=cy=top=0;maximize_draw();key=0;continue;}
+  if(key==14){if(md_prompt_current()){blank_page(current);memset(softwrap[current],0,LINES);paths[current][0]=0;external[current]=0;dirty[current]=0;cx=cy=top=0;clear_selection();}maximize_draw();key=0;continue;}
+  if(key==31){if(view_mode!=2)reflow_page(current,COLS);view_mode=(view_mode+1)%3;top=0;if(view_mode!=2)reflow_page(current,FULL_COLS);clear_selection();maximize_draw();key=0;continue;}
+  if(key==6){if(view_mode!=2)reflow_page(current,COLS);focus_mode();if(view_mode!=2)reflow_page(current,FULL_COLS);maximize_draw();key=0;continue;}
+  if(key==256+0x3F){if(view_mode!=2)reflow_page(current,COLS);graph_show();if(view_mode!=2)reflow_page(current,FULL_COLS);maximize_draw();key=0;continue;}if(key==256+0x32){headings_popup();acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);maximize_draw();key=0;continue;}
   if((mb&1)&&view_mode!=2&&mx>=0&&mx<FULL_COLS&&((view_mode==0&&my>=0&&my<12)||(view_mode==1&&my>=0&&my<24))){cx=mx;cy=top+my;clear_selection();if(view_mode==0)draw_source(0,0,12,1,FULL_COLS);else draw_source(0,0,24,1,FULL_COLS);key=0;continue;}
   if((mb&1)&&my==24){int pg,xx=0;for(pg=0;pg<count;pg++){char ps[6];int pw;sprintf(ps," %d ",pg+1);pw=(int)strlen(ps);if(mx>=xx&&mx<xx+pw)break;xx+=pw+1;}if(pg<count){oldpage=current;if(view_mode!=2)reflow_page(oldpage,COLS);current=pg;cx=cy=top=0;clear_selection();if(view_mode!=2&&!reflow_page(current,FULL_COLS)){current=oldpage;reflow_page(current,FULL_COLS);acc_notice("Markdown","Not enough memory to expand that page.");}maximize_draw();}else if(count<PAGES&&mx==xx){if(!ensure_page(count)){acc_notice("Markdown","Not enough memory for another page.");maximize_draw();key=0;continue;}oldpage=current;if(view_mode!=2)reflow_page(oldpage,COLS);current=count++;blank_page(current);memset(softwrap[current],0,LINES);wrap_width[current]=COLS;paths[current][0]=0;external[current]=0;cx=cy=top=0;clear_selection();if(view_mode!=2&&!reflow_page(current,FULL_COLS)){current=oldpage;count--;reflow_page(current,FULL_COLS);acc_notice("Markdown","Not enough memory to expand the new page.");}maximize_draw();}key=0;continue;}
   if((mb&1)&&mx==79&&my>=0&&my<rows){if(my==0){headings_popup();acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);maximize_draw();key=0;continue;}else if(my==1&&top>0)top--;else if(my==rows-1&&top<LINES-rows)top++;else if(my>1&&my<rows-1)top=(my-2)*(LINES-rows)/(rows-3);if(top<0)top=0;if(top>LINES-rows)top=LINES-rows;if(cy<top)cy=top;if(cy>=top+rows)cy=top+rows-1;maximize_draw();key=0;continue;}

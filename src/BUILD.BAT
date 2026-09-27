@@ -4,7 +4,7 @@ REM   / /   / __ `/ / / / __ \/ ___/ __ \/ /
 REM  / /___/ /_/ / /_/ / / / /__/ / / /_/  
 REM /_____/\__,_/\__,_/_/ /_/\___/_/ /_(_)   
 REM Launch! for DOS ---------------------
-REM MAINTAINER NOTES - Launch! 3.73
+REM MAINTAINER NOTES - Launch! 3.74
 REM File: BUILD.BAT
 REM Role: Primary DOS build script
 REM Build/ownership: Builds complete suite or named component and captures transcript in BUILD.LOG.
@@ -54,6 +54,8 @@ IF "%1"=="!SNAKE" GOTO SNAKE
 IF "%1"=="!PLUMB" GOTO PLUMB
 IF "%1"=="!WORDZ" GOTO WORDZ
 IF "%1"=="!TYPO" GOTO TYPO
+IF "%1"=="!METRO" GOTO METRO
+IF "%1"=="!JELLOH" GOTO JELLOH
 IF "%1"=="!cal" GOTO CAL
 IF "%1"=="!calc" GOTO CALC
 IF "%1"=="!draw" GOTO DRAW
@@ -72,6 +74,8 @@ IF "%1"=="!snake" GOTO SNAKE
 IF "%1"=="!plumb" GOTO PLUMB
 IF "%1"=="!wordz" GOTO WORDZ
 IF "%1"=="!typo" GOTO TYPO
+IF "%1"=="!metro" GOTO METRO
+IF "%1"=="!jelloh" GOTO JELLOH
 ECHO Unknown component: %1
 GOTO FAIL
 :CORE
@@ -132,6 +136,12 @@ CL /AS /Os /Gs /W3 /Fe!WORDZ.EXE WORDZ.C ACCLIBX.C
 GOTO CHECK
 :TYPO
 CL /AS /Os /Gs /W3 /Fe!TYPO.EXE TYPO.C ACCLIBX.C
+GOTO CHECK
+:METRO
+CL /AS /Os /Gs /W3 /Fe!METRO.EXE METROBLD.C ACCLIBX.C
+GOTO CHECK
+:JELLOH
+CL /AS /Os /Gs /W3 /Fe!JELLOH.EXE JELLOHBLD.C ACCLIBX.C
 GOTO CHECK
 :CHECK
 IF ERRORLEVEL 1 GOTO FAIL
@@ -196,6 +206,10 @@ IF ERRORLEVEL 1 GOTO FAIL
 CALL BUILD !WORDZ
 IF ERRORLEVEL 1 GOTO FAIL
 CALL BUILD !TYPO
+IF ERRORLEVEL 1 GOTO FAIL
+CALL BUILD !METRO
+IF ERRORLEVEL 1 GOTO FAIL
+CALL BUILD !JELLOH
 IF ERRORLEVEL 1 GOTO FAIL
 PACKDAT.EXE
 IF ERRORLEVEL 1 GOTO FAIL

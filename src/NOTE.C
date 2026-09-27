@@ -515,6 +515,10 @@ static void note_maximize(int *pcx,int *pcy,int *ptop,int *ptabfirst,int *ppagef
  note_selection_clear();acc_close_target_suspend(&old_close_x,&old_close_y);acc_modal_begin();acc_input_bounds(0,0,acc_cols,acc_rows);if(!note_reflow(MAX_EW,&cx,&cy)){acc_modal_end();acc_close_target_restore(old_close_x,old_close_y);acc_notice("Maximize","Not enough memory for full-screen reflow.");return;}top=cy>22?cy-22:0;note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);
  while(key!=27&&key!=256+0x85&&key!=256+0x57){
   acc_wait(&key,&mx,&my,&mb);
+  /* Normal suite shortcuts remain live while maximized. */
+  if(key==19){note_save_current_as();note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
+  if(key==15){char openlist[ACC_PATH];page_save();if(note_open_dialog(openlist)&&note_open_files(openlist)){*ppsel=cpage=0;*ppagefirst=0;page_load();cx=cy=top=0;note_reflow(MAX_EW,&cx,&cy);}note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
+  if(key==14){if(ctab!=external_tab&&(int)pages[ctab]<MAXPAGES){page_save();pages[ctab]++;cpage=*ppsel=pages[ctab]-1;memset(note,' ',sizeof(note));memset(softwrap,0,sizeof(softwrap));persistent_dirty=1;meta_save();page_save();cx=cy=top=0;}note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
   if((mb&1)&&my==0){int i,xx=6,last=tab_last_visible(*ptabfirst);for(i=*ptabfirst;i<=last&&i<ntab;i++){int w=(int)strlen(tabs[i])+4;if(mx>=xx&&mx<xx+w)break;xx+=w+1;}if(i<=last&&i<ntab&&i!=ctab){page_save();ctab=i;cpage=*ppsel=0;*ppagefirst=0;page_load();cx=cy=top=0;}note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
   if((mb&1)&&mx==4+note_edit_width&&my>=1&&my<24){int last=last_note_line(),max=last-22;if(max<0)max=0;if(my==1&&top>0)top--;else if(my==23&&top<max)top++;else if(my>1&&my<23&&max>0)top=(my-2)*max/21;if(top<0)top=0;if(top>max)top=max;if(cy<top)cy=top;if(cy>=top+23)cy=top+22;note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
   if((mb&1)&&my>=1&&my<24&&mx>=4&&mx<4+note_edit_width){cx=mx-4;cy=top+my-1;note_selection_clear();note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}

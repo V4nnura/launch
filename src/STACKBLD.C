@@ -346,13 +346,13 @@ int main(int argc,char **argv)
 {
   char counter[12],exported[ACC_PATH],message[ACC_PATH+32];
   int x,y,px,cx=0,cy=0,top=0,tp=0,key=0,mx=0,my=0,focus=-1,title_edit=0,i,dirty=1,insert=1,ch;
-  int oldcy,oldtop,base;
+  int oldcy,oldtop,base,quit=0;
   unsigned mb=0;
   if(acc_help(argc,argv,"!STACK","A persistent card stack of editable titled text cards."))return 0;
   if(!acc_begin(argv[0],"Card Stack",0))return 1;
   load_cards();x=(acc_cols-68)/2+3;px=x+1;y=(acc_rows-22)/2+6;acc_box(x-3,y-6,68,22,"Card Stack");
 
-  while(1){
+  while(!quit){
     if(dirty){cards_draw(px,y,focus,title_edit,tp,cx,cy,top);dirty=0;}
     if(count>1)acc_button(x,y+13," Prev ",focus==2);else acc_button_disabled(x,y+13," Prev ");
     if(count>1)acc_button(x+6,y+13," Next ",focus==3);else acc_button_disabled(x+6,y+13," Next ");
@@ -360,6 +360,9 @@ int main(int argc,char **argv)
     acc_put(x+18,y+13,179,ACC_BORDER);acc_button(x+20,y+13,"  Add  ",focus==4);
     if(count>1)acc_button(x+28,y+13,"  Delete  ",focus==5);else acc_button_disabled(x+28,y+13,"  Delete  ");acc_button(x+36,y+13,"  Export  ",focus==6);acc_button(x+44,y+13,"  Print  ",focus==7);
     acc_button(x+56,y+13,"  Exit  ",focus==8);acc_wait(&key,&mx,&my,&mb);
+    /* ACCLIBX suppresses bare Esc at top level.  A returned 27 here is the
+       suite-wide Ctrl+Q / Alt+F4 close request. */
+    if(key==27){quit=1;continue;}
     if(key==256+0x85||key==256+0x57){stack_fullscreen(exported,message);acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;key=0;continue;}
     if(key==256+0x73){stack_selection_clear();select_card(higher_card());cx=cy=top=0;focus=0;dirty=1;key=0;continue;}
     if(key==256+0x74){stack_selection_clear();select_card(lower_card(1));cx=cy=top=0;focus=0;dirty=1;key=0;continue;}
@@ -385,7 +388,7 @@ int main(int argc,char **argv)
       focus=1;title_edit=0;dirty=1;key=0;continue;
     }
     if((mb&1)&&my>=y+3&&my<y+3+VISIBLE_LINES&&mx>=px+2&&mx<px+2+CW){focus=1;title_edit=0;stack_selection_clear();cx=mx-(px+2);cy=top+my-(y+3);dirty=1;key=0;continue;}
-    if((mb&1)&&my==y+13){stack_selection_clear();title_edit=0;if(mx>=x&&mx<x+5)focus=2;else if(mx>=x+6&&mx<x+11)focus=3;else if(mx>=x+20&&mx<x+26)focus=4;else if(count>1&&mx>=x+28&&mx<x+34)focus=5;else if(mx>=x+36&&mx<x+42)focus=6;else if(mx>=x+44&&mx<x+50)focus=7;else if(mx>=x+56&&mx<x+62)focus=8;key=13;}
+    if((mb&1)&&my==y+13){stack_selection_clear();title_edit=0;if(mx>=x&&mx<x+5)focus=2;else if(mx>=x+6&&mx<x+11)focus=3;else if(mx>=x+20&&mx<x+26)focus=4;else if(count>1&&mx>=x+28&&mx<x+34)focus=5;else if(mx>=x+36&&mx<x+42)focus=6;else if(mx>=x+44&&mx<x+50)focus=7;else if(mx>=x+56&&mx<x+62){focus=8;quit=1;continue;}key=13;}
 
     /* Bare Esc is local only: leave title editing / clear focus.
        Program exit is via Exit, Ctrl+Q or Alt+F4. */
@@ -409,8 +412,8 @@ int main(int argc,char **argv)
       else if(focus==5&&count>1){stack_delete_current();cx=cy=top=0;}
       else if(focus==6){if(!export_cards(exported))acc_notice("Export","Unable to export stack.");else{sprintf(message,"Card Stack exported to\n%s",exported);acc_notice("Export",message);}}
       else if(focus==7){if(!stack_print_current())acc_notice("Print","Unable to open LPT1.");}
-      else if(focus==8)key=27;
-      dirty=1;if(key!=27)key=0;continue;
+      else if(focus==8){quit=1;continue;}
+      dirty=1;key=0;continue;
     }
 
     if(focus==0&&title_edit){

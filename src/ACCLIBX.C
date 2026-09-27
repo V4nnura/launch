@@ -127,7 +127,7 @@ static int game_digit_app(void)
   return acc_app_is("!BOXES")||acc_app_is("!SOL")||
          acc_app_is("!FCELL")||acc_app_is("!POP")||
          acc_app_is("!SNAKE")||acc_app_is("!PLUMB")||
-         acc_app_is("!WORDZ");
+         acc_app_is("!WORDZ")||acc_app_is("!METRO")||acc_app_is("!JELLOH");
 }
 static void game_digits_install(void)
 {

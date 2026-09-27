@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.73 - modal command menu for DOS
+/* Launch! 3.74 - modal command menu for DOS
  * Microsoft C/C++ 7.0, medium model (.EXE), 286/EGA or later.
  */
 #include <dos.h>
@@ -805,16 +805,18 @@ static int merge_default_menu_nodes(int *changed)
 
   if(sibling_exists("!BOXES.EXE")||sibling_exists("!FCELL.EXE")||sibling_exists("!POP.EXE")||
      sibling_exists("!SNAKE.EXE")||sibling_exists("!SOL.EXE")||sibling_exists("!PLUMB.EXE")||
-     sibling_exists("!WORDZ.EXE")||sibling_exists("!TYPO.EXE")){
+     sibling_exists("!WORDZ.EXE")||sibling_exists("!TYPO.EXE")||sibling_exists("!METRO.EXE")||sibling_exists("!JELLOH.EXE")){
     folder=ensure_default_folder("Games",changed);if(folder<0)return 0;
     if(sibling_exists("!BOXES.EXE")&&!ensure_launcher(folder,"Boxes","!BOXES",1,changed))return 0;
     if(sibling_exists("!FCELL.EXE")&&!ensure_launcher(folder,"FreeCell","!FCELL",1,changed))return 0;
+    if(sibling_exists("!METRO.EXE")&&!ensure_launcher(folder,"Metro","!METRO",1,changed))return 0;
+    if(sibling_exists("!JELLOH.EXE")&&!ensure_launcher(folder,"Jell-Oh","!JELLOH",1,changed))return 0;
+    if(sibling_exists("!PLUMB.EXE")&&!ensure_launcher(folder,"Plumb","!PLUMB",1,changed))return 0;
     if(sibling_exists("!POP.EXE")&&!ensure_launcher(folder,"Pop","!POP",1,changed))return 0;
     if(sibling_exists("!SNAKE.EXE")&&!ensure_launcher(folder,"Snake","!SNAKE",1,changed))return 0;
     if(sibling_exists("!SOL.EXE")&&!ensure_launcher(folder,"Solitaire","!SOL",1,changed))return 0;
-    if(sibling_exists("!PLUMB.EXE")&&!ensure_launcher(folder,"Plumb","!PLUMB",1,changed))return 0;
-    if(sibling_exists("!WORDZ.EXE")&&!ensure_launcher(folder,"Wordz","!WORDZ",1,changed))return 0;
     if(sibling_exists("!TYPO.EXE")&&!ensure_launcher(folder,"Typo","!TYPO",1,changed))return 0;
+    if(sibling_exists("!WORDZ.EXE")&&!ensure_launcher(folder,"Wordz","!WORDZ",1,changed))return 0;
   }
 
   folder=ensure_default_folder("DOS Commands",changed);if(folder<0)return 0;
@@ -3528,7 +3530,7 @@ static void config_about_box(void)
   bx=x+3;subdialog_box(x,y,w,h,"About Launch!");
   textout(x+3,y+2,"(C)Copyright 2026 Ben Renegar",C_INPUT_LABEL,34);
   textout(x+3,y+3,"www.benrenegar.com",C_INPUT_LABEL,34);
-  textout(x+3,y+6,"Version 3.73 - 2026-09-26",C_INPUT_LABEL,34);
+  textout(x+3,y+6,"Version 3.74 - 2026-09-27",C_INPUT_LABEL,34);
   for(;;){
     draw_button(bx,y+h-3,"  OK  ",6,focus==0);
     wait_input(&k,&mx,&my,&mb);
@@ -6464,7 +6466,7 @@ static void shortcut_idle_sync(void)
 
 static void show_help(void)
 {
-  puts("Launch! 3.73 - a lightweight command menu for DOS\n");
+  puts("Launch! 3.74 - a lightweight command menu for DOS\n");
   puts("Usage: ! [menu.mnu] [/CONFIG | /EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
   puts("Menu management shortcuts:");
   puts("  Ctrl+A        Add a folder, launcher or separator");

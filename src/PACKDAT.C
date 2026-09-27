@@ -20,6 +20,7 @@ Launch! for DOS ---------------------
    Microsoft C/C++ 7.0 / DOS small model. */
 #include <stdio.h>
 #include <string.h>
+#include <dos.h>
 
 #define MAGIC "L361Z1\032"
 #define WINDOW 4096
@@ -31,10 +32,12 @@ Launch! for DOS ---------------------
 
 static const char *files[]={
   "!.EXE","!KEY.COM","!KEYDB.COM","!KEY286.COM","!MNUGEN.EXE","AUTOGEN.DAT",
-  "PWROFF.BMP","FONT.DAT","PROMPTS.CFG","COLORS.CFG","CAL.ICS","!CAL.EXE","!CALC.EXE",
-  "!DRAW.EXE","!JOURNAL.EXE","!MKDOWN.EXE","!NOTE.EXE","!STACK.EXE","!DFETCH.EXE",
-  "!TODOS.EXE","!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE","!POP.EXE",
-  "!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL",0
+  "PWROFF.BMP","FONT.DAT","PROMPTS.CFG","COLORS.CFG","CAL.ICS","!CAL.EXE",
+  "!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MKDOWN.EXE","!NOTE.EXE","!STACK.EXE",
+  "!DFETCH.EXE","!TODOS.EXE","!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL",
+  "!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE",
+  "WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLY.LVL",
+  0
 };
 
 
@@ -43,9 +46,35 @@ static void source_path(const char *name,char *out)
   const char *dot=strrchr(name,'.');
   if(!stricmp(name,"PWROFF.BMP")){sprintf(out,"res\\%s",name);return;}
   if(!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")){sprintf(out,"conf\\%s",name);return;}
-  if(!stricmp(name,"CAL.ICS")){sprintf(out,"samples\\%s",name);return;}
+  if(!stricmp(name,"CAL.ICS")){sprintf(out,"appdata\\%s",name);return;}
   if(dot&&!stricmp(dot,".LVL")){sprintf(out,"appdata\\%s",name);return;}
   strcpy(out,name);
+}
+
+
+#define MAX_FILES 96
+static char sample_names[MAX_FILES][13];
+static char sample_paths[MAX_FILES][64];
+static int sample_count=0;
+/* Keep archive index arrays out of main()'s small DOS stack. */
+static unsigned long pack_offsets[MAX_FILES];
+static unsigned long pack_csizes[MAX_FILES];
+static unsigned long pack_usizes[MAX_FILES];
+
+static void collect_sample_dir(const char *subdir)
+{
+  struct find_t ff; char pattern[64],path[64]; unsigned rc;
+  sprintf(pattern,"samples\\%s\\*.*",subdir);
+  rc=_dos_findfirst(pattern,_A_NORMAL,&ff);
+  while(!rc){
+    if(ff.name[0]!='.' && !(ff.attrib&_A_SUBDIR) && sample_count<MAX_FILES){
+      strncpy(sample_names[sample_count],ff.name,12);sample_names[sample_count][12]=0;
+      sprintf(path,"samples\\%s\\%s",subdir,ff.name);
+      strncpy(sample_paths[sample_count],path,63);sample_paths[sample_count][63]=0;
+      sample_count++;
+    }
+    rc=_dos_findnext(&ff);
+  }
 }
 
 static unsigned char window_buf[WINDOW];
@@ -144,39 +173,40 @@ static int compress_file(FILE *in,FILE *out,unsigned long *usize,unsigned long *
 
 int main(void)
 {
-  FILE *in,*out;char name[13],source[40];unsigned long offsets[64],csizes[64],usizes[64],data_start,total_raw=0,total_cmp=0;
-  int i,count=0,ok=1;
-  while(files[count])count++;
-  if(count>64){puts("PACKDAT: too many archive members");return 1;}
+  FILE *in,*out;char name[13],source[64];unsigned long data_start,total_raw=0,total_cmp=0;
+  int i,base_count=0,count,ok=1;
+  while(files[base_count])base_count++;
+  collect_sample_dir("DRAW");collect_sample_dir("MKDOWN");
+  count=base_count+sample_count;
+  if(count>MAX_FILES){puts("PACKDAT: too many archive members");return 1;}
   out=fopen("INSTALL.DAT","w+b");
   if(!out){puts("PACKDAT: cannot create INSTALL.DAT");return 1;}
-
   fwrite(MAGIC,1,8,out);write_u16(out,(unsigned)count);
   data_start=10UL+(unsigned long)count*25UL;
   for(i=0;i<count;i++){
-    memset(name,0,sizeof(name));strncpy(name,files[i],12);fwrite(name,1,13,out);
+    const char *member=i<base_count?files[i]:sample_names[i-base_count];
+    memset(name,0,sizeof(name));strncpy(name,member,12);fwrite(name,1,13,out);
     write_u32(out,0);write_u32(out,0);write_u32(out,0);
   }
   if((unsigned long)ftell(out)!=data_start){fclose(out);remove("INSTALL.DAT");puts("PACKDAT: header size error");return 1;}
-
   for(i=0;i<count&&ok;i++){
-    source_path(files[i],source);in=fopen(source,"rb");
-    if(!in){printf("PACKDAT: cannot open %s (%s)\n",files[i],source);ok=0;break;}
-    offsets[i]=(unsigned long)ftell(out);
-    if(!compress_file(in,out,&usizes[i],&csizes[i]))ok=0;
-    fclose(in);total_raw+=usizes[i];total_cmp+=csizes[i];
-    if(ok)printf("Compressed %-12s %7lu -> %7lu\n",files[i],usizes[i],csizes[i]);
+    const char *member=i<base_count?files[i]:sample_names[i-base_count];
+    if(i<base_count)source_path(member,source);else strcpy(source,sample_paths[i-base_count]);
+    in=fopen(source,"rb");
+    if(!in){printf("PACKDAT: cannot open %s (%s)\n",member,source);ok=0;break;}
+    pack_offsets[i]=(unsigned long)ftell(out);
+    if(!compress_file(in,out,&pack_usizes[i],&pack_csizes[i]))ok=0;
+    fclose(in);total_raw+=pack_usizes[i];total_cmp+=pack_csizes[i];
+    if(ok)printf("Compressed %-12s %7lu -> %7lu\n",member,pack_usizes[i],pack_csizes[i]);
   }
-
   if(ok){
     for(i=0;i<count;i++){
       if(fseek(out,10L+(long)i*25L+13L,SEEK_SET)){ok=0;break;}
-      write_u32(out,offsets[i]);write_u32(out,csizes[i]);write_u32(out,usizes[i]);
+      write_u32(out,pack_offsets[i]);write_u32(out,pack_csizes[i]);write_u32(out,pack_usizes[i]);
     }
   }
   if(fclose(out)!=0)ok=0;
   if(!ok){remove("INSTALL.DAT");puts("PACKDAT: archive creation failed");return 1;}
-  printf("Built compressed INSTALL.DAT with %d files (%lu -> %lu bytes, %lu%%).\n",
-         count,total_raw,total_cmp,total_raw?(100UL*total_cmp)/total_raw:0UL);
+  printf("Built compressed INSTALL.DAT with %d files (%lu -> %lu bytes, %lu%%).\n",count,total_raw,total_cmp,total_raw?(100UL*total_cmp)/total_raw:0UL);
   return 0;
 }

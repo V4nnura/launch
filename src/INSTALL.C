@@ -632,7 +632,7 @@ typedef struct {
   unsigned long offset,csize,usize;
 } DAT_ENTRY;
 
-static DAT_ENTRY dat_entry[64];
+static DAT_ENTRY dat_entry[128];
 
 static int component_member(const char *name,int component)
 {
@@ -660,7 +660,7 @@ static void remove_unselected_components(const char *install,int accessories,int
 }
 
 static int selected_member(const char *name,int shortcut_build,int accessories,
-                           int games,int fonts,int menu_generator,const char **dest_name)
+                           int games,int fonts,int menu_generator,int sample_docs,const char **dest_name)
 {
   *dest_name=name;
   if(!stricmp(name,"!.EXE")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
@@ -668,6 +668,7 @@ static int selected_member(const char *name,int shortcut_build,int accessories,
   if(menu_generator&&(!stricmp(name,"!MNUGEN.EXE")||!stricmp(name,"AUTOGEN.DAT")))return 1;
   if(accessories&&component_member(name,1))return 1;
   if(games&&component_member(name,2))return 1;
+  if(sample_docs&&((strlen(name)>4&&!stricmp(name+strlen(name)-4,".BMP")&&stricmp(name,"PWROFF.BMP"))||(strlen(name)>3&&!stricmp(name+strlen(name)-3,".MD"))))return 1;
   if(shortcut_build<0)return 0;
   if(!stricmp(name,"!KEY.COM")){
     if(shortcut_build!=0)return 0;*dest_name="!KEY.COM";return 1;
@@ -694,13 +695,14 @@ static int skip_compressed(FILE *in,unsigned long size)
 /* Read INSTALL.DAT once, then walk its payloads sequentially.  This avoids
    repeatedly reopening and seeking around a floppy for every installed file. */
 static int extract_install_files(const char *archive,const char *install,int shortcut_build,
-                                 int accessories,int games,int fonts,int menu_generator)
+                                 int accessories,int games,int fonts,int menu_generator,int sample_docs)
 {
   FILE *in,*out;char magic[8],destination[PATH_SIZE];const char *dest_name;
   unsigned count,i;int selected,done=0,ok;
+  if(sample_docs){sprintf(destination,"%s\\SAMPLES",install);if(!make_directories(destination))return 0;}
   in=fopen(archive,"rb");if(!in)return 0;
   if(fread(magic,1,8,in)!=8||memcmp(magic,DAT_MAGIC,8)){fclose(in);return 0;}
-  count=read_u16(in);if(!count||count>64){fclose(in);return 0;}
+  count=read_u16(in);if(!count||count>128){fclose(in);return 0;}
   for(i=0;i<count;i++){
     if(fread(dat_entry[i].name,1,13,in)!=13){fclose(in);return 0;}
     dat_entry[i].name[12]=0;
@@ -710,16 +712,18 @@ static int extract_install_files(const char *archive,const char *install,int sho
   }
   extract_progress_total=0;
   for(i=0;i<count;i++)
-    if(selected_member(dat_entry[i].name,shortcut_build,accessories,games,fonts,menu_generator,&dest_name))
+    if(selected_member(dat_entry[i].name,shortcut_build,accessories,games,fonts,menu_generator,sample_docs,&dest_name))
       extract_progress_total++;
   if(!extract_progress_total)extract_progress_total=1;
   extract_progress_done=0;draw_extract_progress();
   if(fseek(in,(long)dat_entry[0].offset,SEEK_SET)){fclose(in);return 0;}
 
   for(i=0;i<count;i++){
-    selected=selected_member(dat_entry[i].name,shortcut_build,accessories,games,fonts,menu_generator,&dest_name);
+    selected=selected_member(dat_entry[i].name,shortcut_build,accessories,games,fonts,menu_generator,sample_docs,&dest_name);
     if(selected){
-      sprintf(destination,"%s\\%s",install,dest_name);
+      if(sample_docs&&strlen(dest_name)>4&&!stricmp(dest_name+strlen(dest_name)-4,".BMP")&&stricmp(dest_name,"PWROFF.BMP")){sprintf(destination,"%s\\SAMPLES\\DRAW",install);make_directories(destination);sprintf(destination,"%s\\SAMPLES\\DRAW\\%s",install,dest_name);}
+      else if(sample_docs&&strlen(dest_name)>3&&!stricmp(dest_name+strlen(dest_name)-3,".MD")){sprintf(destination,"%s\\SAMPLES\\MKDOWN",install);make_directories(destination);sprintf(destination,"%s\\SAMPLES\\MKDOWN\\%s",install,dest_name);}
+      else sprintf(destination,"%s\\%s",install,dest_name);
       out=fopen(destination,"wb");
       if(!out){fclose(in);error_icon(0);printf("Cannot create %s\n",destination);return 0;}
       ok=decompress_file(in,out,dat_entry[i].csize,dat_entry[i].usize);
@@ -755,9 +759,11 @@ int main(int argc,char **argv)
 {
   static char install[PATH_SIZE],source_dir[PATH_SIZE],archive[PATH_SIZE];
   static char destination[PATH_SIZE],launch_exe[PATH_SIZE],autoexec[16],key_spec[64];
+  char child_comspec[PATH_SIZE+9];
+  char *child_env[2];
   char *comspec;
   int n,dosbox_detected,shortcut_build=-1,is286,update_autoexec=0,upgrade=0;
-  int accessories=0,games=0,screensavers=0,fonts=0,menu_generator=0,shortcut_key=0;
+  int accessories=0,games=0,screensavers=0,fonts=0,menu_generator=0,shortcut_key=0,sample_docs=0;
   int cpu_ok,display_ok,vga_display,menu_result;
   const char *display_name;
   int add_path=0,add_shortcut=0,show_menu=0,autoexec_changed=0;
@@ -783,13 +789,13 @@ int main(int argc,char **argv)
   if(upgrade)puts("\nExisting Launch! installation detected.\nAn upgrade will be performed, and existing configuration retained.");
   {
     char choose[32];int i,first_omit=1;
-    int *flags[6];
-    const char *labels[6]={"Accessories","Games","Screensavers","Fonts","Menu Generator","Keyboard Shortcut"};
-    flags[0]=&accessories;flags[1]=&games;flags[2]=&screensavers;flags[3]=&fonts;flags[4]=&menu_generator;flags[5]=&shortcut_key;
-    accessories=games=screensavers=fonts=menu_generator=shortcut_key=1;
+    int *flags[7];
+    const char *labels[7]={"Accessories","Games","Screensavers","Fonts","Menu Generator","Keyboard Shortcut","Sample Docs"};
+    flags[0]=&accessories;flags[1]=&games;flags[2]=&screensavers;flags[3]=&fonts;flags[4]=&menu_generator;flags[5]=&shortcut_key;flags[6]=&sample_docs;
+    accessories=games=screensavers=fonts=menu_generator=shortcut_key=sample_docs=1;
 
     puts("\nThe following components will be installed:\n");
-    for(i=0;i<6;i++){
+    for(i=0;i<7;i++){
       component_icon(i+1);
       printf("%s\n",labels[i]);
     }
@@ -806,10 +812,10 @@ int main(int argc,char **argv)
     }
     strip_line(choose);
     for(i=0;choose[i];i++){
-      if(choose[i]>='1'&&choose[i]<='6')
+      if(choose[i]>='1'&&choose[i]<='7')
         *flags[choose[i]-'1']=0;
       else if(choose[i]!=' '&&choose[i]!=','&&choose[i]!=';'){
-        error_icon(0);puts("Invalid component selection. Use only numbers 1 through 6.");return 1;
+        error_icon(0);puts("Invalid component selection. Use only numbers 1 through 7.");return 1;
       }
     }
 
@@ -817,7 +823,7 @@ int main(int argc,char **argv)
       puts("\nAll components selected for install.");
     }else{
       fputs("\nNot installing: ",stdout);
-      for(i=0;i<6;i++)if(!*flags[i]){
+      for(i=0;i<7;i++)if(!*flags[i]){
         if(!first_omit)fputs(", ",stdout);
         fputs(labels[i],stdout);
         first_omit=0;
@@ -835,13 +841,24 @@ int main(int argc,char **argv)
   source_directory(argv[0],source_dir);sprintf(archive,"%sINSTALL.DAT",source_dir);
   if(!exists(archive)){error_icon(0);printf("Cannot find %s\n",archive);return 1;}
   sprintf(launch_exe,"%s\\!.EXE",install);
-  if(!extract_install_files(archive,install,shortcut_build,accessories,games,fonts,menu_generator))return 1;
+  if(!extract_install_files(archive,install,shortcut_build,accessories,games,fonts,menu_generator,sample_docs))return 1;
   remove_unselected_components(install,accessories,games,fonts,menu_generator,shortcut_key);
   if(!upgrade&&!write_initial_font_config(install,(fonts&&vga_display)?1:0)){error_icon(0);puts("Files were copied, but the initial font configuration could not be created.");return 1;}
   if(!apply_component_config(install,screensavers,fonts)){
     error_icon(0);puts("Files were copied, but the selected component configuration could not be applied.");return 1;
   }
-  menu_result=spawnl(P_WAIT,launch_exe,"!.EXE","/INITMENU",NULL);
+  /* Keep the /INITMENU helper environment deliberately tiny.  The Microsoft C
+     startup code copies the inherited DOS environment into the child near heap;
+     a large development AUTOEXEC environment can otherwise make the already-large
+     core fail at startup with R6009 even though conventional memory is available. */
+  comspec=getenv("COMSPEC");
+  child_env[0]=NULL;
+  if(comspec && *comspec){
+    sprintf(child_comspec,"COMSPEC=%s",comspec);
+    child_env[0]=child_comspec;
+    child_env[1]=NULL;
+  }
+  menu_result=spawnle(P_WAIT,launch_exe,"!.EXE","/INITMENU",NULL,child_env);
   if(menu_result!=0){error_icon(0);puts("Files were copied, but the standard Launch! menu could not be created or updated.");return 1;}
   comspec=getenv("COMSPEC");
   autoexec[0]=(comspec && comspec[1]==':')?(char)toupper(comspec[0]):'C';

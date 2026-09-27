@@ -71,6 +71,14 @@ static unsigned char snake_old_glyph[14][32];
    adapted from its 80x50 logical arena to Launch!'s 58x13 text-cell field. */
 static void wall_v(int x,int y1,int y2){int y;if(x<0||x>=BW)return;if(y1<0)y1=0;if(y2>=BH)y2=BH-1;for(y=y1;y<=y2;y++)board[y][x]=1;}
 static void wall_h(int y,int x1,int x2){int x;if(y<0||y>=BH)return;if(x1<0)x1=0;if(x2>=BW)x2=BW-1;for(x=x1;x<=x2;x++)board[y][x]=1;}
+static const char *classic_patterns[6][BH] = {
+    {"                                                          ", "                                                          ", "              #                            #              ", "              #                            #              ", "              #                            #              ", "              #                            #              ", "              #                            #              ", "              #                            #              ", "              #                            #              ", "              #                            #              ", "              #                            #              ", "                                                          ", "                                                          "},
+    {"                                                          ", "      ##########                         ##########       ", "                                                          ", "                                                          ", "                    ##################                    ", "                                                          ", "                                                          ", "                                                          ", "                    ##################                    ", "                                                          ", "                                                          ", "      ##########                         ##########       ", "                                                          "},
+    {"                                                          ", "        #        #        #        #        #             ", "        #        #        #        #        #             ", "        #        #        #        #        #             ", "                 #                 #                      ", "                                                          ", "  #################                 #################     ", "                                                          ", "                       #                 #                ", "              #        #        #        #        #       ", "              #        #        #        #        #       ", "              #        #        #        #        #       ", "                                                          "},
+    {"                                                          ", "     ###########                            ###########   ", "     #         #                            #         #   ", "     #         #                            #         #   ", "     #         ##############################         #   ", "     #                                              #     ", "     ##################          ####################     ", "                      #          #                        ", "     ##################          ####################     ", "     #                                              #     ", "     #         ##############################         #   ", "     #         #                            #         #   ", "     ###########                            ###########   "},
+    {"                                                          ", "       #      #      #      #      #      #               ", "                                                          ", "  #####   #####   #####   #####   #####   #####           ", "                                                          ", "       #      #      #      #      #      #               ", "                                                          ", "  #####   #####   #####   #####   #####   #####           ", "                                                          ", "       #      #      #      #      #      #               ", "                                                          ", "  #####   #####   #####   #####   #####   #####           ", "                                                          "},
+    {"                                                          ", "   ####################################################   ", "   #                                                  #   ", "   #  #########  #########  #########  #########      #   ", "   #  #       #  #       #  #       #  #       #      #   ", "   #  #       #  #       #  #       #  #       #      #   ", "   #      #####       #####       #####       #####    #  ", "   #                                                  #   ", "   #  #####       #####       #####       #####        #  ", "   #      #       #       #       #       #            #  ", "   #      #########       #########       #########     # ", "   #                                                  #   ", "   ####################################################   "}};
+
 static unsigned level_seed[LEVELS];
 static unsigned local_rand_state;
 static unsigned local_rand(void){local_rand_state=local_rand_state*25173U+13849U;return local_rand_state;}
@@ -98,19 +106,52 @@ static void generated_board(int lev)
 }
 static void board_load(void)
 {
- int i;memset(board,0,sizeof(board));if(level>=10){generated_board(level);return;}
- switch(level){
- case 0: break; /* Nibbles level 1: open arena */
- case 1: wall_h(6,14,43); break;
- case 2: wall_v(14,2,10);wall_v(43,2,10);break;
- case 3: wall_v(14,1,7);wall_v(43,6,12);wall_h(9,1,28);wall_h(3,29,56);break;
- case 4: wall_v(15,3,9);wall_v(42,3,9);wall_h(2,16,41);wall_h(10,16,41);break;
- case 5: for(i=7;i<=50;i+=7){wall_v(i,1,5);wall_v(i,8,12);}break;
- case 6: for(i=1;i<12;i+=2)board[i][29]=1;break;
- case 7: for(i=7;i<=50;i+=7){if(((i/7)&1)==0)wall_v(i,1,10);else wall_v(i,3,12);}break;
- case 8: for(i=2;i<12;i++){int xx=4+i*3;if(xx<BW-1)board[i][xx]=1;if(xx+20<BW-1)board[i][xx+20]=1;}break;
- default: for(i=1;i<12;i+=2){board[i][7]=1;board[i+1][14]=1;board[i][21]=1;board[i+1][28]=1;board[i][35]=1;board[i+1][42]=1;board[i][49]=1;}break;
- }
+    int i, x, y;
+    memset(board, 0, sizeof(board));
+    if (level < 6) {
+        for (y = 0; y < BH; y++)
+            for (x = 0; x < BW; x++)
+                board[y][x] = (classic_patterns[level][y][x] == '#');
+        return;
+    }
+    if (level >= 10) {
+        generated_board(level);
+        return;
+    }
+    switch (level) {
+    case 6:
+        for (i = 1; i < 12; i += 2)
+            board[i][29] = 1;
+        break;
+    case 7:
+        for (i = 7; i <= 50; i += 7) {
+            if (((i / 7) & 1) == 0)
+                wall_v(i, 1, 10);
+            else
+                wall_v(i, 3, 12);
+        }
+        break;
+    case 8:
+        for (i = 2; i < 12; i++) {
+            int xx = 4 + i * 3;
+            if (xx < BW - 1)
+                board[i][xx] = 1;
+            if (xx + 20 < BW - 1)
+                board[i][xx + 20] = 1;
+        }
+        break;
+    default:
+        for (i = 1; i < 12; i += 2) {
+            board[i][7] = 1;
+            board[i + 1][14] = 1;
+            board[i][21] = 1;
+            board[i + 1][28] = 1;
+            board[i][35] = 1;
+            board[i + 1][42] = 1;
+            board[i][49] = 1;
+        }
+        break;
+    }
 }
 static int snake_at(int x,int y){int i;for(i=0;i<slen;i++)if((int)snake[i].x==x&&(int)snake[i].y==y)return 1;return 0;}
 static void put_fruit(void){int x,y,tries=0;do{x=1+rand()%(BW-2);y=1+rand()%(BH-2);tries++;}while(tries<500&&(board[y][x]||snake_at(x,y)||fruit[y][x]));if(tries<500)fruit[y][x]=1;}
