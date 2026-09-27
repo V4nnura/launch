@@ -20,7 +20,7 @@
 - [Quick Launch](https://github.com/therenegar/launch/wiki/Quick-Launch#quick-launch) type to search the menu and run with minimal keystrokes.
 - Easy [visual menu editing](https://github.com/therenegar/launch/wiki/Menu-Management).
 - Automatic [menu generator](https://github.com/therenegar/launch/wiki/!MNUGEN.COM) with comprehensive DOS program database to automatically identify programs.
-- Built in [executable explorer](https://github.com/therenegar/launch/wiki/Explore-and-Run) to quickhttps://github.com/therenegar/launch/wiki/Configuration#promptly browse and run programs anywhere.
+- Built in [executable explorer](https://github.com/therenegar/launch/wiki/Explore-and-Run) to browse and run programs anywhere.
 - Built in [file opener](https://github.com/therenegar/launch/wiki/File-Open) to create associations between files and launchers for easy open.
 - Integrated [file searching](https://github.com/therenegar/launch/wiki/File-Open#file-search) including "Go Deep" mode for searching file contents as well.
 - Built in [Power Off/Reboot control](https://github.com/therenegar/launch/wiki/Shutdown) with retro Windows 95 power off experience.
