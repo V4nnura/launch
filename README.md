@@ -26,8 +26,8 @@
 - Built in [Power Off/Reboot control](https://github.com/therenegar/launch/wiki/Shutdown) with retro Windows 95 power off experience.
 - 10 handy and modern text-mode [accessories](https://github.com/therenegar/launch/wiki/Accessories)
     - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MKDOWN.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE) , [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE)
-- 7 fun and addictive text-mode [games](https://github.com/therenegar/launch/wiki/Games)
-    - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
+- 9 fun and addictive text-mode [games](https://github.com/therenegar/launch/wiki/Games)
+    - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE),[Jell-Oh](https://github.com/therenegar/launch/wiki/!JELLOH.EXE), [Metro](https://github.com/therenegar/launch/wiki/!METRO.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
 - 14 awesome [screensavers](https://github.com/therenegar/launch/wiki/Screen-Savers) including a 7-segment digital clock, starry night skyline, bouncing DOS logo, disk defrag simulation, 3D pipes, bouncing 3D ball, paintball, and more!
 - Various [Command Prompt styles](https://github.com/therenegar/launch/wiki/Configuration#prompt) to choose from to uplift your C:\
 - 30 Custom [VGA display fonts](https://github.com/therenegar/launch/wiki/Fonts) to change the look of your whole DOS environment.
@@ -118,6 +118,8 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 
 <img width="360" height="300" alt="boxes" src="https://github.com/user-attachments/assets/ac5d5edf-cf7d-4a45-ba55-305095763bf1" />
 <img width="360" height="300" alt="plumb" src="https://github.com/user-attachments/assets/389a9c8f-4d8c-425f-8f12-90b4154b91fb" />
+<img width="360" height="300" alt="jello" src="https://github.com/user-attachments/assets/b3a35ac3-6020-4726-a528-b720c0ec1275" />
+<img width="360" height="300" alt="metro" src="https://github.com/user-attachments/assets/23489e48-47db-47fe-927d-3f7f691c6c83" />
 <img width="360" height="300" alt="pop" src="https://github.com/user-attachments/assets/274239b0-7ad7-48d2-8079-f99820646b8d" />
 <img width="360" height="300" alt="snake" src="https://github.com/user-attachments/assets/8857dc7d-7e91-444c-8e33-7cd111fbdb8e" />
 <img width="360" height="300" alt="wordz" src="https://github.com/user-attachments/assets/484df84f-35fb-485d-a5b0-f120332e340e" />
