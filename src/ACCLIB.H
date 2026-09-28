@@ -82,6 +82,8 @@ void acc_input_bounds(int x,int y,int w,int h);
 void acc_set_idle_hook(void (*fn)(void));
 void acc_modal_begin(void);
 void acc_modal_end(void);
+void acc_region_save(int x,int y,int width,int height,void *buffer);
+void acc_region_restore(int x,int y,int width,int height,const void *buffer);
 void acc_mouse_display(int show);
 void acc_canvas_cursor_region(int x,int y,int width,int height,int colour);
 void acc_mouse_reapply_cursor(void);

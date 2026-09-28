@@ -55,8 +55,8 @@ typedef struct {
   unsigned char font_id,font_persist,mouse_cursor,prompt_inactivity;
 } APPEARANCE;
 
-static const APPEARANCE default_appearance={1,11,15,7,12,14,15,10,15,3,0,7,7,0,1,1,1,1,0,1,10,0,1,1,0,0,0};
-static APPEARANCE appearance={1,11,15,7,12,14,15,10,15,3,0,7,7,0,1,1,1,1,0,1,10,0,1,1,0,0,0};
+static const APPEARANCE default_appearance={1,11,15,7,12,14,15,10,15,3,0,7,7,0,1,1,1,1,0,1,10,0,1,6,0,0,0};
+static APPEARANCE appearance={1,11,15,7,12,14,15,10,15,3,0,7,7,0,1,1,1,1,0,1,10,0,1,6,0,0,0};
 
 static void (interrupt far *setkey_old_int09)();
 static volatile unsigned char setkey_scan,setkey_e0,setkey_mods;
@@ -2391,7 +2391,7 @@ static void draw_button_state(int x,int y,const char *label,int width,int focuse
   int i,a=0,b=0,icon=button_icon(label,&a,&b),left;unsigned short v;if(icon==2)width=9;else if(icon==3)width=9;else if(icon)width=(b<0)?5:6;/* Clear only the actual rendered button plus its one-cell shadow.  The old code cleared the caller's legacy text width after shrinking an icon button, which erased the two-cell right margin and dialog border. */for(i=0;i<=width;i++){cell(x+i,y,' ',C_MENU_BACKGROUND);cell(x+i,y+1,' ',C_MENU_BACKGROUND);}
   for(i=1;i<=width;i++){v=video[(y+1)*screen_cols+x+i];cell(x+i,y+1,220,((v>>8)&0xF0)|C_BLOCK_SHADOW_FG);}
   v=video[y*screen_cols+x+width];cell(x+width,y,245,((v>>8)&0xF0)|C_BLOCK_SHADOW_FG);v=video[(y+1)*screen_cols+x+width];cell(x+width,y+1,244,((v>>8)&0xF0)|C_BLOCK_SHADOW_FG);
-  {int ba=enabled?C_BUTTON:ATTR(appearance.controls_bg,(appearance.controls_fg&7)|8);textout(x,y,"",ba,width);if(icon==2){left=x+2;cell(left,y,a,ba);cell(left+1,y,b,ba);textout(left+2,y,"Run",ba,3);}else if(icon==3){left=x+1;cell(left,y,a,ba);cell(left+1,y,b,ba);textout(left+3,y,"Open",ba,4);}else if(icon){left=x+(b<0?2:(width-2)/2);cell(left,y,a,ba);if(b>=0)cell(left+1,y,b,ba);}else textout(x,y,label,ba,width);}if(focused&&enabled){int fa=ATTR(appearance.controls_bg,appearance.main_title);cell(x,y,169,fa);cell(x+width-1,y,170,fa);}
+  {int ba=enabled?C_BUTTON:ATTR(appearance.controls_bg,(appearance.controls_fg&7)|8);textout(x,y,"",ba,width);if(icon==2){left=x+2;cell(left,y,a,ba);cell(left+1,y,b,ba);textout(left+2,y,"Run",ba,3);}else if(icon==3){left=x+1;cell(left,y,a,ba);cell(left+1,y,b,ba);textout(left+3,y,"Open",ba,4);}else if(icon){left=x+(b<0?2:(width-2)/2);cell(left,y,a,ba);if(b>=0)cell(left+1,y,b,ba);}else textout(x,y,label,ba,width);}if(focused&&enabled){int fa=ATTR(appearance.controls_bg,appearance.controls_fg);cell(x,y,169,fa);cell(x+width-1,y,170,fa);}
 }
 static void draw_button(int x,int y,const char *label,int width,int focused){draw_button_state(x,y,label,width,focused,1);}
 static void draw_button_disabled(int x,int y,const char *label,int width){draw_button_state(x,y,label,width,0,0);}
@@ -2407,7 +2407,7 @@ static void press_button(int x,int y,const char *label,int width)
   else if(icon==3){left=x+1;cell(left,y,a,C_BUTTON);cell(left+1,y,b,C_BUTTON);textout(left+3,y,"Open",C_BUTTON,4);}
   else if(icon){left=x+(b<0?2:(rw-2)/2);cell(left,y,a,C_BUTTON);if(b>=0)cell(left+1,y,b,C_BUTTON);}
   else textout(x,y,label,C_BUTTON,rw);
-  {int fa=ATTR(appearance.controls_bg,appearance.main_title);cell(x,y,169,fa);cell(x+rw-1,y,170,fa);}
+  {int fa=ATTR(appearance.controls_bg,appearance.controls_fg);cell(x,y,169,fa);cell(x+rw-1,y,170,fa);}
   mouse_show();do{(void)mouse_poll(&mx,&my);}while(mouse_last_buttons&1);mouse_stop();
 }
 
@@ -3033,7 +3033,7 @@ static const char *saver_delay_names[4]={
 static const char *mouse_cursor_names[3]={"Pointer","Block","Up Arrow"};
 
 static const char *font_names[36]={
-  "Standard","Launch!","ISO","Clean","Big","Tall","Bold","Bold Alt",
+  "Standard","Nix Term","ISO","Clean","Big","Tall","Launch!","Bold",
   "Extra","Max","Chunky","Pixel","Humanist","Elite","Max Elite","Elergon",
   "Neat","Gothic","Hand","Scribble","Script","ProFont","ProFont Bold",
   "Bauhaus '89","Bold Italic","Broadway","Courier","Italic","Modern","Nutso",
@@ -3579,6 +3579,10 @@ static int select_popup(int x,int y,const char **items,int count,int current,int
       textout(x+1,py+1+i,idx<count?items[idx]:"",idx==sel?C_SELECTED:C_ITEM,width-2);
       cell(x+width-1,py+1+i,179,C_BORDER);
     }
+    /* Mouse scroll affordances live in the right border and only appear
+       when there are hidden items in that direction. */
+    if(top>0)cell(x+width-1,py+1,30,C_BORDER);
+    if(top+h<count)cell(x+width-1,py+h,31,C_BORDER);
     cell(x,py+h+1,192,C_BORDER);
     for(i=1;i<width-1;i++)cell(x+i,py+h+1,196,C_BORDER);
     cell(x+width-1,py+h+1,217,C_BORDER);
@@ -3592,6 +3596,19 @@ static int select_popup(int x,int y,const char **items,int count,int current,int
       continue;
     }
     if(mb&1){
+      /* Clicking a scroll triangle scrolls in place; it must not dismiss the
+         drop-down.  Wait for release so one click cannot repeat rapidly. */
+      if(mx==x+width-1&&my==py+1&&top>0){
+        top--;if(sel>=top+h)sel=top+h-1;
+        /* mouse_poll reports press edges, not button-up events.  Do not wait
+           for a release here: that would wait forever when the mouse is
+           stationary.  The press has already been consumed. */
+        k=0;continue;
+      }
+      if(mx==x+width-1&&my==py+h&&top+h<count){
+        top++;if(sel<top)sel=top;
+        k=0;continue;
+      }
       if(mx>x&&mx<x+width-1&&my>py&&my<py+h+1){
         int n=top+my-py-1;
         if(n<count)result=n;
@@ -3632,7 +3649,8 @@ static void config_select_control(int tab,int item,int x,int y)
 {
   int sx=x+25,sy=y+4;
   static const char *posopt[2]={"Bottom","Top"},*timeopt[2]={"24-hour","12-hour"};
-  const char *opts[64];unsigned char *field;int n=0,current=0,chosen,i,limit;
+  const char *opts[64];unsigned char *field;int n=0,current=0,chosen,i,j,limit;
+  int font_map[64];
   if(tab==0&&item==0){opts[0]=posopt[0];opts[1]=posopt[1];n=2;current=appearance.menu_top;}
   else if(tab==0&&item==6){opts[0]=timeopt[0];opts[1]=timeopt[1];n=2;current=appearance.hour_12;}
   else if(tab==0&&item==7){for(i=0;i<3;i++)opts[i]=mouse_cursor_names[i];n=3;current=appearance.mouse_cursor;}
@@ -3641,13 +3659,24 @@ static void config_select_control(int tab,int item,int x,int y)
   else if(tab==2&&item==0){for(i=0;i<15;i++)opts[i]=screensaver_names[i];n=15;current=appearance.screensaver;}
   else if(tab==2){field=config_field(tab,item,&limit);if(appearance.screensaver==1&&item==1){for(i=0;i<=limit;i++)opts[i]=colour_names[i];}else{for(i=0;i<=limit;i++)opts[i]=saver_delay_names[i];}n=limit+1;current=field?*field:0;}
   else if(tab==3&&item==0){for(i=0;i<prompt_count;i++)opts[i]=prompt_names[i];n=prompt_count;current=prompt_style;}
-  else if(tab==4&&item==0){for(i=0;i<total_fonts();i++)opts[i]=font_name_at(i);n=total_fonts();current=appearance.font_id;if(current>=n)current=0;}
+  else if(tab==4&&item==0){
+    /* Presentation order only: Standard first, Launch! second, then all
+       remaining built-in/external fonts alphabetically.  Font IDs stay
+       stable so Markdown mappings and saved configuration remain valid. */
+    n=total_fonts();if(n>64)n=64;font_map[0]=0;
+    if(n>1){font_map[1]=6;for(i=2,j=1;j<n;j++)if(j!=6)font_map[i++]=j;
+      for(i=2;i<n-1;i++)for(j=i+1;j<n;j++)
+        if(stricmp(font_name_at(font_map[i]),font_name_at(font_map[j]))>0){int t=font_map[i];font_map[i]=font_map[j];font_map[j]=t;}
+    }
+    current=0;for(i=0;i<n;i++){opts[i]=font_name_at(font_map[i]);if(font_map[i]==appearance.font_id)current=i;}
+  }
   if(tab==0){if(item==6)sy=y+10;else if(item==7)sy=y+12;}
   else if(tab==1){static const int ry[14]={4,6,7,8,8,9,10,11,12,13,13,14,14,15};static const int rx[14]={25,45,25,25,45,25,25,25,25,25,45,25,45,25};sy=y+ry[item];sx=x+rx[item];}
   else if(tab==2){sy=y+(item==0?4:(item==1?6:8));}
   if(!n)return;chosen=select_popup(sx,sy,opts,n,current,20);if(chosen==current)return;
-  if(tab==1&&item==0){apply_colour_scheme(chosen);return;}if(tab==3&&item==0){prompt_style=chosen;return;}field=config_field(tab,item,&limit);if(field)*field=(unsigned char)chosen;
-  if(tab==4&&item==0){mouse_pointer_restore();font_preview(appearance.font_id);mouse_pointer_install();}if(tab==0&&item==7)mouse_pointer_install();
+  if(tab==1&&item==0){apply_colour_scheme(chosen);return;}if(tab==3&&item==0){prompt_style=chosen;return;}
+  if(tab==4&&item==0){appearance.font_id=(unsigned char)font_map[chosen];mouse_pointer_restore();font_preview(appearance.font_id);mouse_pointer_install();return;}
+  field=config_field(tab,item,&limit);if(field)*field=(unsigned char)chosen;if(tab==0&&item==7)mouse_pointer_install();
 }
 
 static int config_reset_box(void)

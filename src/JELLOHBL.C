@@ -117,7 +117,7 @@ static int at(int x,int y)
 {return y*board_w+x;}
 
 static int jelly_cell(unsigned char c)
-{return c=='b'||c=='r'||c=='g'||c=='p';}
+{return c=='b'||c=='r'||c=='g'||c=='p'||c=='y';}
 
 static int jelly_symbol(unsigned char c)
 {return jelly_cell((unsigned char)(c|0x20));}
@@ -126,10 +126,10 @@ static unsigned char jelly_colour(unsigned char c)
 {return jelly_symbol(c)?(unsigned char)(c|0x20):0;}
 
 static int hidden_cell(unsigned char c)
-{return c>='1'&&c<='4';}
+{return c>='1'&&c<='5';}
 
 static unsigned char hidden_colour(unsigned char c)
-{static const unsigned char hc[4]={'b','r','g','p'};return hidden_cell(c)?hc[c-'1']:0;}
+{static const unsigned char hc[5]={'b','r','g','p','y'};return hidden_cell(c)?hc[c-'1']:0;}
 
 static int support_cell(unsigned char c)
 {return c=='k';}
@@ -137,14 +137,31 @@ static int support_cell(unsigned char c)
 static int piece_cell(unsigned char c)
 {return jelly_cell(c)||support_cell(c);}
 
+static int logical_colour_present(unsigned char c)
+{
+  int i; unsigned char b,h;
+  c=(unsigned char)(c|0x20);
+  for(i=0;i<board_w*board_h;++i){
+    b=board[i];
+    if(jelly_colour(b)==c)return 1;
+    h=hidden_colour(b);if(h==c)return 1;
+  }
+  return 0;
+}
+
 static int colour_fg(unsigned char c,int bright)
 {
-  int v;
+  static const unsigned char logical[5]={'b','r','g','p','y'};
+  static const int palette[5]={3,5,2,1,4}; /* Cyan, Purple, Green, Blue, Red */
+  int i,rank=0,v=3;
   c=(unsigned char)(c|0x20);
-  if(c=='b')v=1;
-  else if(c=='r')v=4;
-  else if(c=='g')v=2;
-  else v=5;
+  /* Compress whichever logical colours this level actually uses onto the
+     palette from the beginning. Thus every one-colour level is Cyan, every
+     two-colour level is Cyan/Purple, etc., regardless of its source symbols. */
+  for(i=0;i<5;++i){
+    if(logical[i]==c){v=palette[rank];break;}
+    if(logical_colour_present(logical[i]))++rank;
+  }
   return bright?v+8:v;
 }
 
@@ -335,8 +352,8 @@ static void cycle_selection(int backwards)
 
 static int solved(void)
 {
-  static const unsigned char colours[4]={'b','r','g','p'};int ci,i;unsigned short id=0;unsigned char c;
-  for(ci=0;ci<4;ci++){
+  static const unsigned char colours[5]={'b','r','g','p','y'};int ci,i;unsigned short id=0;unsigned char c;
+  for(ci=0;ci<5;ci++){
     c=colours[ci];id=0;
     for(i=0;i<board_w*board_h;i++){
       if(hidden_cell(board[i])&&hidden_colour(board[i])==c)return 0;

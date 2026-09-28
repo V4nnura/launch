@@ -241,6 +241,24 @@ void acc_button(int x,int y,const char *text,int selected)
   if(found>=0){acc_buttons[found].x=x;acc_buttons[found].y=y;acc_buttons[found].text=text;acc_buttons[found].selected=selected;acc_buttons[found].width=w;if(hovered)acc_hover_button=found;}
 }
 
+void acc_region_save(int x,int y,int width,int height,void *buffer)
+{
+  int i,j; unsigned short *dst=(unsigned short *)buffer;
+  if(!buffer)return;
+  for(j=0;j<height;j++)for(i=0;i<width;i++)
+    dst[j*width+i]=*(unsigned short far *)MAKE_FP(saved_video_segment,(((y+j)*acc_cols+x+i)*2));
+}
+
+void acc_region_restore(int x,int y,int width,int height,const void *buffer)
+{
+  int i,j; const unsigned short *src=(const unsigned short *)buffer;
+  if(!buffer)return;
+  acc_mouse_display(0);
+  for(j=0;j<height;j++)for(i=0;i<width;i++)
+    *(unsigned short far *)MAKE_FP(saved_video_segment,(((y+j)*acc_cols+x+i)*2))=src[j*width+i];
+  acc_mouse_display(1);
+}
+
 void acc_modal_begin(void)
 {
   acc_modal_depth++;

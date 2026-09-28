@@ -843,7 +843,7 @@ int main(int argc,char **argv)
   sprintf(launch_exe,"%s\\!.EXE",install);
   if(!extract_install_files(archive,install,shortcut_build,accessories,games,fonts,menu_generator,sample_docs))return 1;
   remove_unselected_components(install,accessories,games,fonts,menu_generator,shortcut_key);
-  if(!upgrade&&!write_initial_font_config(install,(fonts&&vga_display)?1:0)){error_icon(0);puts("Files were copied, but the initial font configuration could not be created.");return 1;}
+  if(!upgrade&&!write_initial_font_config(install,(fonts&&vga_display)?6:0)){error_icon(0);puts("Files were copied, but the initial font configuration could not be created.");return 1;}
   if(!apply_component_config(install,screensavers,fonts)){
     error_icon(0);puts("Files were copied, but the selected component configuration could not be applied.");return 1;
   }

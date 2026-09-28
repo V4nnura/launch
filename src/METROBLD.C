@@ -75,7 +75,7 @@ Launch! for DOS ---------------------
 #define MG_NW_R 197
 #define MG_SW_L 199
 #define MG_SW_R 202
-#define MG_X_L 203
+#define MG_X_L 226
 #define MG_X_R 204
 #define MG_H 205
 #define MG_SE_L 206
@@ -273,7 +273,7 @@ static void metro_font(int install)
       return;
 
     /* Person/train/station artwork is installed at its public Metro slots.
-       Track artwork is installed into private slots 141-153.  Saving every
+       Track artwork is installed into private extension-capable slots.  Saving every
        replaced slot keeps !METRO independent of the user's selected VGA font. */
     for (i = 0; i < 8; ++i) {
       acc_glyph_read(MG_PERSON + i, metro_old_glyph[i]);
@@ -317,6 +317,14 @@ static int line_has_type(METRO_LINE *ln, int type)
     if (stations[ln->station[i]].type == type)
       return 1;
   return 0;
+}
+
+static int line_type_count(METRO_LINE *ln, int type)
+{
+  int i,n=0;
+  for(i=0;i<ln->count;++i)
+    if(stations[ln->station[i]].type==type) ++n;
+  return n;
 }
 
 static int route_contains(METRO_LINE *ln, int station)
@@ -684,32 +692,20 @@ static void station_glyph_pair(int type, int *l, int *r)
 static void draw_station(int ox, int oy, int i)
 {
   METRO_STATION *s = &stations[i];
-  int fg, bg, sx, sy, l, r, q;
+  int sx, sy, l, r, q;
   char buf[8];
-  if (!world_visible_x(s->x) || !world_visible_y(s->y))
-    return;
-  sx = world_to_screen_x(ox, s->x);
-  sy = world_to_screen_y(oy, s->y);
-  fg = station_selected_colour(i);
+  if (!world_visible_x(s->x) || !world_visible_y(s->y)) return;
+  sx = world_to_screen_x(ox, s->x); sy = world_to_screen_y(oy, s->y);
   station_glyph_pair(s->type, &l, &r);
-  if (board_flash_bg >= 0) {
-    bg = board_flash_bg; fg = 15;
-    acc_put(sx, sy, l, ACC_ATTR(bg, fg));
-    acc_put(sx + 1, sy, r, ACC_ATTR(bg, fg));
-  } else if (fg < 0) {
-    acc_put(sx, sy, l, ACC_CONTROL);
-    acc_put(sx + 1, sy, r, ACC_CONTROL);
-  } else {
-    bg = fg & 7;
-    acc_put(sx, sy, l, ACC_ATTR(bg, fg));
-    acc_put(sx + 1, sy, r, ACC_ATTR(bg, fg));
-  }
+  /* Stations deliberately remain bright white on black. Selection is shown
+     by the surrounding route/selection UI, not by recolouring the station. */
+  acc_put(sx, sy, l, ACC_ATTR(0,15));
+  acc_put(sx + 1, sy, r, ACC_ATTR(0,15));
   q = total_wait(i);
   if (sy + 1 < oy + VIEW_H) {
-    acc_put(sx, sy + 1, MG_PERSON,
-            ACC_ATTR(bg_for_world(s->x, s->y), 15));
+    acc_put(sx, sy + 1, MG_PERSON, ACC_ATTR(bg_for_world(s->x,s->y),15));
     sprintf(buf, "%d", q);
-    acc_text(sx + 1, sy + 1, buf, ACC_ATTR(bg_for_world(s->x, s->y), 15), 3);
+    acc_text(sx + 1, sy + 1, buf, ACC_ATTR(bg_for_world(s->x,s->y),15), 3);
   }
 }
 
@@ -849,7 +845,7 @@ static void draw_status(int x, int y)
   acc_text(x, y, b, ACC_HEADING, VIEW_CELLS_W + 4);
   if (warning_station >= 0 || game_over) {
     int right_edge = x + VIEW_CELLS_W + 3; /* right edge of outer brick pair */
-    acc_text(right_edge - 8, y, "OVERLOAD!", ACC_ATTR(0, 12), 9);
+    acc_text(right_edge - 13, y, "Overcrowding!!", ACC_ATTR(acc_appearance.background, 12), 14);
   }
 }
 
@@ -859,10 +855,11 @@ static void draw_buttons(int x, int y, int w, int h, int focus)
   char lb[12];
   acc_button(x + 3, by, " Retry ", focus == 1);
   acc_button(x + 11, by, paused ? " Resume " : " Pause ", focus == 2);
-  acc_button(x + 20, by, " Prev ", focus == 3);
-  acc_button(x + 27, by, " Next ", focus == 4);
+  acc_button(x + 20, by, " Overview ", focus == 6);
+  acc_button(x + 32, by, " Prev ", focus == 3);
+  acc_button(x + 39, by, " Next ", focus == 4);
   sprintf(lb, "Level %d", level);
-  acc_text(x + 34, by, lb, ACC_HEADING, 9);
+  acc_text(x + 47, by, lb, ACC_HEADING, 9);
   acc_button(x + w - 10, by, " Exit ", focus == 5);
 }
 
@@ -871,7 +868,11 @@ static void unload_and_load(METRO_LINE *ln, int ti, int station)
   METRO_STATION *s = &stations[station];
   int dest = s->type, i, room, n;
   if (ln->pax[ti][dest] > 0) {
-    score += ln->pax[ti][dest];
+    n = ln->pax[ti][dest];
+    score += n;
+    /* A line that groups several stations of the destination type is more
+       efficient and earns a modest 50% delivery bonus. */
+    if (line_type_count(ln, dest) > 1) score += n / 2;
     ln->pax[ti][dest] = 0;
   }
   room = TRAIN_CAP - total_train_pax(ln, ti);
@@ -1022,7 +1023,7 @@ static int simulate_tick(void)
     last_station_spawn = sim_ticks;
     changed = 1;
   }
-  if ((sim_ticks & 3UL) == 0) {
+  if ((sim_ticks & 7UL) == 0) {
     for (i = 0; i < MAX_LINES; ++i)
       step_trains(&lines[i]);
     changed = 1;
@@ -1071,6 +1072,69 @@ static int find_station_screen(int ox, int oy, int mx, int my)
   wx = pan_x + (mx - ox) / 2;
   wy = pan_y + (my - oy);
   return find_station_world(wx, wy);
+}
+
+static void center_on_station(int s);
+static void select_station(int s);
+
+static int find_station_people_screen(int ox,int oy,int mx,int my)
+{
+  int i,sx,sy;
+  for(i=0;i<station_count;++i){
+    if(!world_visible_x(stations[i].x)||!world_visible_y(stations[i].y))continue;
+    sx=world_to_screen_x(ox,stations[i].x);
+    sy=world_to_screen_y(oy,stations[i].y)+1;
+    if(my==sy && mx>=sx && mx<=sx+3)return i;
+  }
+  return -1;
+}
+
+static void passenger_popup(int ox,int oy,int s)
+{
+  int px,py,l,r,key=0,mx=0,my=0,mb=0,last=1,row,col,w=20,h=9;
+  char n[8]; void *under=0;
+  if(s<0||s>=station_count)return;
+  px=world_to_screen_x(ox,stations[s].x)+4; py=world_to_screen_y(oy,stations[s].y);
+  if(px+w>=acc_cols)px=acc_cols-w-1;if(py+h>=acc_rows)py=acc_rows-h-1;if(px<0)px=0;if(py<0)py=0;
+  under=malloc((unsigned)((w+1)*(h+1)*2));
+  if(under)acc_region_save(px,py,w+1,h+1,under);
+  acc_modal_begin(); acc_subbox(px,py,w,h,"Passengers",0);
+  acc_text(px+2,py+2,"Destination:",ACC_BORDER,12);
+  station_glyph_pair(ST_TRIANGLE,&l,&r);acc_put(px+2,py+4,l,ACC_ATTR(0,15));acc_put(px+3,py+4,r,ACC_ATTR(0,15));sprintf(n,"%d",stations[s].wait[ST_TRIANGLE]);acc_text(px+6,py+4,n,ACC_TEXT,5);
+  station_glyph_pair(ST_SQUARE,&l,&r);acc_put(px+2,py+5,l,ACC_ATTR(0,15));acc_put(px+3,py+5,r,ACC_ATTR(0,15));sprintf(n,"%d",stations[s].wait[ST_SQUARE]);acc_text(px+6,py+5,n,ACC_TEXT,5);
+  station_glyph_pair(ST_CIRCLE,&l,&r);acc_put(px+2,py+6,l,ACC_ATTR(0,15));acc_put(px+3,py+6,r,ACC_ATTR(0,15));sprintf(n,"%d",stations[s].wait[ST_CIRCLE]);acc_text(px+6,py+6,n,ACC_TEXT,5);
+  while(last){if(acc_mouse_present){acc_mouse(&mx,&my,&mb);last=mb&1;}if(kbhit()){key=acc_key();break;}}
+  while(!key){if(kbhit()){key=acc_key();break;}if(acc_mouse_present){acc_mouse(&mx,&my,&mb);if(mb&1)break;}}
+  if(under){acc_region_restore(px,py,w+1,h+1,under);free(under);}
+  acc_modal_end();
+}
+
+static int overview_station_at(int mx,int my,int mapx,int mapy)
+{
+  int i,best=-1,dx,dy,d=999;
+  if(mx<mapx||mx>=mapx+WORLD_W||my<mapy||my>=mapy+(WORLD_H+1)/2)return -1;
+  for(i=0;i<station_count;i++){dx=stations[i].x-(mx-mapx);if(dx<0)dx=-dx;dy=(stations[i].y/2)-(my-mapy);if(dy<0)dy=-dy;if(dx+dy<d&&dx<=1&&dy<=1){d=dx+dy;best=i;}}
+  return best;
+}
+
+static void overview_popup(void)
+{
+  int w=64,h=23,x=(acc_cols-64)/2,y=(acc_rows-23)/2,mapx=x+2,mapy=y+2;
+  int wx,wy,row,mx=0,my=0,mb=0,last=1,key=0,s=-1,col; void *under;
+  under=malloc((unsigned)((w+1)*(h+1)*2));
+  if(under)acc_region_save(x,y,w+1,h+1,under);
+  acc_modal_begin();acc_subbox(x,y,w,h,"Overview",0);
+  /* One character represents two world rows: upper-half colour is foreground,
+     lower-half colour is background. Stations are black pixels only. */
+  for(wy=0;wy<WORLD_H;wy+=2)for(wx=0;wx<WORLD_W;wx++){
+    int up=bg_for_world(wx,wy),dn=(wy+1<WORLD_H)?bg_for_world(wx,wy+1):up,i;
+    for(i=0;i<station_count;i++){if(stations[i].x==wx&&stations[i].y==wy)up=0;if(stations[i].x==wx&&stations[i].y==wy+1)dn=0;}
+    acc_put(mapx+wx,mapy+wy/2,223,ACC_ATTR(dn,up));
+  }
+  while(last){if(acc_mouse_present){acc_mouse(&mx,&my,&mb);last=mb&1;}if(kbhit()){key=acc_key();break;}}
+  while(!key){if(kbhit()){key=acc_key();break;}if(acc_mouse_present){acc_mouse(&mx,&my,&mb);if(mb&1){s=overview_station_at(mx,my,mapx,mapy);if(s>=0)break;}}}
+  if(under){acc_region_restore(x,y,w+1,h+1,under);free(under);}
+  acc_modal_end(); if(s>=0){center_on_station(s);select_station(s);}
 }
 
 static int choose_station_exit(int s, int *nx, int *ny)
@@ -1396,6 +1460,11 @@ int main(int argc, char **argv)
       } else if (!game_over && (key == 'g' || key == 'G')) {
         if (warning_station >= 0) center_on_station(warning_station);
         redraw = 1; key = 0;
+      } else if (!game_over && (key == 'p' || key == 'P')) {
+        if (selected_station >= 0) passenger_popup(ox, oy, selected_station);
+        redraw = 1; key = 0;
+      } else if (key == 'm' || key == 'M') {
+        overview_popup(); redraw = 1; key = 0;
       } else if (!game_over && key == ' ') {
         paused = !paused;
         redraw = 1;
@@ -1440,6 +1509,7 @@ int main(int argc, char **argv)
         else if (focus == 2) paused = !paused;
         else if (focus == 3) change_level(-1);
         else if (focus == 4) change_level(1);
+        else if (focus == 6) overview_popup();
         else if (focus == 5) key = 27;
         if (key != 27) {
           redraw = 1;
@@ -1453,14 +1523,19 @@ int main(int argc, char **argv)
       if ((mb & 1) && !last_left) {
         if (my == y && (mx == x + w - 5 || mx == x + w - 4)) {
           key = 27;
+        } else if ((s = find_station_people_screen(ox, oy, mx, my)) >= 0) {
+          passenger_popup(ox, oy, s);
+          redraw = 1;
         } else if (my == y + h - 3) {
           if (mx >= x + 3 && mx < x + 9) {
             reset_game(); focus = 1; redraw = 1;
           } else if (mx >= x + 11 && mx < x + 18) {
             paused = !paused; focus = 2; redraw = 1;
-          } else if (mx >= x + 20 && mx < x + 26) {
+          } else if (mx >= x + 20 && mx < x + 30) {
+            overview_popup(); focus = 6; redraw = 1;
+          } else if (mx >= x + 32 && mx < x + 38) {
             change_level(-1); focus = 3; redraw = 1;
-          } else if (mx >= x + 27 && mx < x + 33) {
+          } else if (mx >= x + 39 && mx < x + 45) {
             change_level(1); focus = 4; redraw = 1;
           } else if (mx >= x + w - 10) {
             key = 27;
