@@ -1,14 +1,14 @@
 # <img alt="Launch! for DOS" src="https://github.com/user-attachments/assets/8f4207ab-15d2-47df-80a3-a44701e03f83" />
 
-> A lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- and loads of goodies to uplift an old DOS machine and give it something to do!
+> A lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- plus accessories and games, to create a modern and useful desktop environment.
 
 <img height="75" alt="Go get it!" src="https://github.com/user-attachments/assets/deef3126-a840-4c73-bf86-51d12d398ec1" />
 
 **Download the latest release [here](https://github.com/therenegar/launch/releases/latest)**
 
-**Requires** DOS 3.3, 80286, EGA or better. 1.2MB free disk space for install.
+**Requires** DOS 3.3, 80286, EGA or better. 220KB-1.5MB free disk space for install (depending on selected options).
 
-**Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS.
+**Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS and FreeCOM.
 
 <img width="720" height="600" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" />
 
@@ -26,7 +26,7 @@
 - Integrated [file searching](https://github.com/therenegar/launch/wiki/File-Open#file-search) including "Go Deep" mode for searching file contents as well.
 - Built in [Power Off/Reboot control](https://github.com/therenegar/launch/wiki/Shutdown) with retro Windows 95 power off experience.
 - 10 handy and modern text-mode [accessories](https://github.com/therenegar/launch/wiki/Accessories)
-    - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MKDOWN.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE) , [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE)
+    - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MKDOWN.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE) , [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE). And coming soon Interchange (modern to retro file format conversion) and Launch DB (SQLite for DOS).
 - 9 fun and addictive text-mode [games](https://github.com/therenegar/launch/wiki/Games)
     - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE), [Jell-Oh](https://github.com/therenegar/launch/wiki/!JELLOH.EXE), [Metro](https://github.com/therenegar/launch/wiki/!METRO.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
 - 14 awesome [screensavers](https://github.com/therenegar/launch/wiki/Screen-Savers) including a 7-segment digital clock, starry night skyline, bouncing DOS logo, disk defrag simulation, 3D pipes, bouncing 3D ball, paintball, and more!
@@ -42,7 +42,7 @@
 <a id="install"></a>
 ### <img alt="Installation" src="https://github.com/user-attachments/assets/a14320e8-f790-4a82-95d6-1cee146512c9" />
 
-Extract the release zip file or mount the floppy image and run
+Extract [the release](https://github.com/therenegar/launch/releases/) zip file or mount the floppy image (or image it to a real floppy disk) and run
 ```
 INSTALL.EXE
 ```
@@ -77,6 +77,8 @@ Configuration includes the menu, colors, screen savers, prompt customization, fo
 <a id="screen-savers"></a>
 ### <img alt="Screen Savers" src="https://github.com/user-attachments/assets/447f06ad-4597-45bc-b4cf-3f3debcc02a1" />
 
+Some interesting graphical displays that give the real early 90s vibe.
+
 Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Screen-Savers).
 
 <img width="360" height="300" alt="Clock" src="https://github.com/user-attachments/assets/fa3521ee-3c3f-4db6-9be6-c7f471258980" />
@@ -98,6 +100,8 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 <a id="accessories"></a>
 ### <img alt="Accessories" src="https://github.com/user-attachments/assets/59ceb839-9cc4-456e-8e5f-99d103b871cb" />
 
+Handy accessories with a goal of turning an old DOS PC into something useful in the modern day.
+
 **Learn more about [Accessories](https://github.com/therenegar/launch/wiki/Accessories).**
 
 <img width="360" height="300" alt="Calendar" src="https://github.com/user-attachments/assets/44aa11dc-9af2-46aa-bac9-14bcf57163fe" />
@@ -115,6 +119,8 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 <a id="games"></a>
 ### <img alt="Games" src="https://github.com/user-attachments/assets/ad644a58-0e3b-4f34-b6cb-8de93f67bdcc" />
 
+Fun games with some more modern ideas taken back in time, to push text mode DOS to the absolute limits.
+
 **Learn more about [Games](https://github.com/therenegar/launch/wiki/Games).**
 
 <img width="360" height="300" alt="boxes" src="https://github.com/user-attachments/assets/ac5d5edf-cf7d-4a45-ba55-305095763bf1" />
@@ -130,17 +136,24 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 <a id="tooling"></a>
 ### <img alt="Tooling" src="https://github.com/user-attachments/assets/e96b1ec4-fcfb-4368-b9e1-801024401611" />
 
+Everything is separated out to keep `!.EXE` as streamlined as possible, and make things completely optional.
+The shortcut key and menu generator are examples of tools that are completely optional, but work closely with `!.EXE` to add useful functionality.
+
 **Learn more about [Tooling](https://github.com/therenegar/launch/wiki/Tooling).**
 
 <a id="techinfo"></a>
 ### <img alt="Tech Info" src="https://github.com/user-attachments/assets/702756ee-38aa-4eb7-b39b-d7e15cbf0ca2" />
 
-**Read [Technical Information](https://github.com/therenegar/launch/wiki/Tech-Info).**
+Behind the UI, everything is plain text configuration. You can configure everything yourself with any text editor. 
 
-Launch is created on a 486DX4/100 machine, 32mb RAM, running IBM PC DOS 7.0. Coded using [Microsoft QuickC](https://en.wikipedia.org/wiki/QuickC) IDE and [FTE](https://fte.sourceforge.net/) (Folding Text Editor). Graphical glyphs created using [Fontraption](https://int10h.org/blog/2019/05/fontraption-vga-text-mode-font-editor/). Screen layout and composition done with [TheDraw](https://www.abandonwaredos.com/abandonware-game.php?abandonware=TheDraw+4&gid=3563).
+**Read [Technical Information](https://github.com/therenegar/launch/wiki/Tech-Info)** to learn more.
+
+Launch is created on a ASUSTeK 486DX4/100 machine running IBM PC DOS 7.0. 
+Coded using [Microsoft QuickC](https://en.wikipedia.org/wiki/QuickC) IDE and [FTE](https://fte.sourceforge.net/) (Folding Text Editor). 
+Graphical glyphs created using [Fontraption](https://int10h.org/blog/2019/05/fontraption-vga-text-mode-font-editor/). 
+Screen layout and composition done with [TheDraw](https://www.abandonwaredos.com/abandonware-game.php?abandonware=TheDraw+4&gid=3563).
 Compiled with Microsoft C/C++ Optimizing Compiler 7.00 from 1992 (Takes approx 30-45 minutes to build the whole shebang).<br/>
 Screenshots taken on this machine using [Screen Thief](http://www.win3x.org/win3board/viewtopic.php?t=2710&view=min).<br/>
-Builds transferred using FTP to a Linux host where a simple Python script integrates the build into (this) GIT repository- and automates creation of release zip/img files.
-
+Builds transferred using FTP to a Linux host where a simple Python script integrates the build into (this) GIT repository- and automates creation of release zip/img files. Automated regression testing executed with 86Box across 10 different DOS environments/hardware configs (still a work in progress itself).
 
 <img width="360" height="300" alt="About Launch!" src="https://github.com/user-attachments/assets/2bce7bf5-7204-4281-acae-6d80d574c567" />
