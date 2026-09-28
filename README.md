@@ -104,7 +104,7 @@ Handy accessories with a goal of turning an old DOS PC into something useful in 
 
 **Learn more about [Accessories](https://github.com/therenegar/launch/wiki/Accessories).**
 
-<img width="360" height="300" alt="Calendar" src="https://github.com/user-attachments/assets/44aa11dc-9af2-46aa-bac9-14bcf57163fe" />
+<img width="360" height="300" alt="Calendar"A lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- plus accessories and games, to create a modern and useful desktop environment. src="https://github.com/user-attachments/assets/44aa11dc-9af2-46aa-bac9-14bcf57163fe" />
 <img width="360" height="300" alt="Calculator" src="https://github.com/user-attachments/assets/c95a3cb5-7456-443b-830c-73fce099fdcb" />
 <img width="360" height="300" alt="DOS Fetch" src="https://github.com/user-attachments/assets/c24803c7-7576-4ece-8b02-01ae1d9753ec" />
 <img width="360" height="300" alt="Draw" src="https://github.com/user-attachments/assets/941d84df-a3fa-4343-a352-08eecfa3ed2c" />
@@ -147,6 +147,8 @@ The shortcut key and menu generator are examples of tools that are completely op
 Behind the UI, everything is plain text configuration. You can configure everything yourself with any text editor. 
 
 **Read [Technical Information](https://github.com/therenegar/launch/wiki/Tech-Info)** to learn more.
+
+----
 
 Launch is created on a ASUSTeK 486DX4/100 machine running IBM PC DOS 7.0. 
 Coded using [Microsoft QuickC](https://en.wikipedia.org/wiki/QuickC) IDE and [FTE](https://fte.sourceforge.net/) (Folding Text Editor). 
