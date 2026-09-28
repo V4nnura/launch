@@ -523,7 +523,7 @@ static int goto_dialog(void)
 
 int main(int argc,char **argv)
 {
-  int x,y,bx,by,key=0,mx=0,my=0,full=1,focus=-1,tx,ty,g;
+  int x,y,bx,by,key=0,mx=0,my=0,full=1,focus=0,tx,ty,g;
   unsigned mb=0;
   char msg[96];
   if(acc_help(argc,argv,"!JELLOH","A gravity block puzzle: merge every jelly of each colour together."))return 0;
@@ -549,17 +549,17 @@ int main(int argc,char **argv)
     }
     acc_wait(&key,&mx,&my,&mb);
 
-    if(key==256+0x3F){load_level(current_level);focus=-1;full=1;key=0;} /* F5 */
-    else if(key==256+0x73){change_level(-1);focus=-1;full=1;key=0;} /* Ctrl+Left */
-    else if(key==256+0x74){change_level(1);focus=-1;full=1;key=0;} /* Ctrl+Right */
-    else if(key==7){g=goto_dialog();if(g>=0){current_level=g;load_level(current_level);save_level();}acc_box(x,y,DLG_W,DLG_H,"Jell-Oh");focus=-1;full=1;key=0;} /* Ctrl+G */
+    if(key==256+0x3F){load_level(current_level);focus=0;full=1;key=0;} /* F5 */
+    else if(key==256+0x73){change_level(-1);focus=0;full=1;key=0;} /* Ctrl+Left */
+    else if(key==256+0x74){change_level(1);focus=0;full=1;key=0;} /* Ctrl+Right */
+    else if(key==7){g=goto_dialog();if(g>=0){current_level=g;load_level(current_level);save_level();}acc_box(x,y,DLG_W,DLG_H,"Jell-Oh");focus=0;full=1;key=0;} /* Ctrl+G */
 
     if((mb&1)&&!(mb&ACC_MOUSE_MOVED)){
       if(my==y+17){
         if(mx>=x+3&&mx<x+10){load_level(current_level);focus=1;full=1;key=0;}
         else if(mx>=x+12&&mx<x+18){change_level(-1);focus=2;full=1;key=0;}
         else if(mx>=x+19&&mx<x+25){change_level(1);focus=3;full=1;key=0;}
-        else if(mx>=x+26&&mx<x+36){g=goto_dialog();if(g>=0){current_level=g;load_level(current_level);save_level();}acc_box(x,y,DLG_W,DLG_H,"Jell-Oh");focus=-1;full=1;key=0;}
+        else if(mx>=x+26&&mx<x+36){g=goto_dialog();if(g>=0){current_level=g;load_level(current_level);save_level();}acc_box(x,y,DLG_W,DLG_H,"Jell-Oh");focus=0;full=1;key=0;}
         else if(mx>=x+DLG_W-10&&mx<x+DLG_W-4){focus=5;key=27;}
       }else if(mx>=bx&&mx<bx+board_w*2&&my>=by&&my<by+board_h){
         tx=(mx-bx)/2;ty=my-by;if(select_cell(tx,ty)){focus=0;draw_board(bx,by);}key=0;
@@ -573,7 +573,7 @@ int main(int argc,char **argv)
       if(focus==1){load_level(current_level);full=1;}
       else if(focus==2){change_level(-1);full=1;}
       else if(focus==3){change_level(1);full=1;}
-      else if(focus==4){g=goto_dialog();if(g>=0){current_level=g;load_level(current_level);save_level();}acc_box(x,y,DLG_W,DLG_H,"Jell-Oh");focus=-1;full=1;}
+      else if(focus==4){g=goto_dialog();if(g>=0){current_level=g;load_level(current_level);save_level();}acc_box(x,y,DLG_W,DLG_H,"Jell-Oh");focus=0;full=1;}
       else if(focus==5)key=27;
       if(key!=27)key=0;
     }else if(key!=27)key=0;
@@ -581,7 +581,7 @@ int main(int argc,char **argv)
     if(solved()){
       sprintf(msg,"Puzzle solved in %d moves!",moves);acc_notice("Jell-Oh",msg);
       current_level++;if(current_level>=level_count)current_level=0;save_level();load_level(current_level);
-      acc_box(x,y,DLG_W,DLG_H,"Jell-Oh");focus=-1;full=1;key=0;
+      acc_box(x,y,DLG_W,DLG_H,"Jell-Oh");focus=0;full=1;key=0;
     }
   }
   save_level();jelly_shapes(0);jelly_font(0);acc_end();return 0;

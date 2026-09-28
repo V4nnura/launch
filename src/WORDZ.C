@@ -146,7 +146,7 @@ static char grid[GH][GW];
 static unsigned char played[GH][GW],solved[WORDS];
 static signed char pathx[MAX_PATH],pathy[MAX_PATH];
 static unsigned char solx[WORDS][MAX_PATH],soly[WORDS][MAX_PATH],sollen[WORDS];
-static int path_len=0,cursor_x=0,cursor_y=0,puzzle_no=0,focus=-1,hint_word=0;
+static int path_len=0,cursor_x=0,cursor_y=0,puzzle_no=0,focus=0,hint_word=0;
 static unsigned long start_tick=0,pause_tick=0;
 static int timer_running=0,finished=0,mistakes=0,wordz_paused=0;
 static int animation_pending=1;

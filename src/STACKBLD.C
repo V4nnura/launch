@@ -8,10 +8,10 @@ Launch! for DOS ---------------------
 */
 /*
  * MAINTAINER NOTES - Launch! 3.73
- * File: STACKBLD.C
- * Role: Build copy of !STACK
- * Build/ownership: Derived from STACK.C.
- * Maintainer contract: Keep synchronized with STACK.C; note its unusually tight near-data budget.
+ * File: STACK.C
+ * Role: !STACK persistent card stack
+ * Build/ownership: Canonical Stack source; build copy is STACKBLD.C.
+ * Maintainer contract: Persistent cards, navigation, export/print, and full-screen card presentation.
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
@@ -345,7 +345,7 @@ static void stack_fullscreen(char *exported,char *message)
 int main(int argc,char **argv)
 {
   char counter[12],exported[ACC_PATH],message[ACC_PATH+32];
-  int x,y,px,cx=0,cy=0,top=0,tp=0,key=0,mx=0,my=0,focus=-1,title_edit=0,i,dirty=1,insert=1,ch;
+  int x,y,px,cx=0,cy=0,top=0,tp=0,key=0,mx=0,my=0,focus=0,title_edit=0,i,dirty=1,insert=1,ch;
   int oldcy,oldtop,base,quit=0;
   unsigned mb=0;
   if(acc_help(argc,argv,"!STACK","A persistent card stack of editable titled text cards."))return 0;

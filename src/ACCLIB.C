@@ -189,7 +189,7 @@ void acc_glyph_library(int logical_id,int code)
 #endif
 }
 
-static const unsigned char launchui_codes[41]={16,17,30,31,169,170,173,174,175,181,182,183,184,185,186,187,188,189,190,198,225,200,201,202,224,204,205,206,229,208,209,210,211,212,213,235,215,255,220,244,245};
+static const unsigned char launchui_codes[41]={16,17,30,31,169,170,173,174,175,181,182,183,184,185,186,187,188,189,190,198,225,200,201,202,224,204,205,206,229,208,209,210,211,212,213,235,215,255,203,244,245};
 int acc_glyph_is_custom(int code){int i;if(code==127||code==216||code==255||code==8||code==214||code==233||code==ACC_MAXIMIZE_L||code==ACC_MAXIMIZE_R)return 1;for(i=0;i<(int)sizeof(launchui_codes);i++)if((unsigned)code==(unsigned)launchui_codes[i])return 1;return 0;}
 static const unsigned char launchui_glyphs[41][32]={
   {0x00,0x00,0x00,0x00,0x30,0x38,0x3C,0x3E,0x3C,0x38,0x30,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
@@ -492,7 +492,8 @@ static int acc_button_icon(const char *text,int *a,int *b)
   if(strstr(text,"Prev")){*a=17;*b=-1;return 1;}
   if(strstr(text,"Next")){*a=16;*b=-1;return 1;}
   if(strstr(text,"Open")){*a=199;*b=230;return 1;}
-  if(strstr(text,"Save")||strstr(text,"Export")){*a=204;*b=181;return 1;}
+  if(strstr(text,"Export")){*a=207;*b=227;return 1;}
+  if(strstr(text,"Save")){*a=204;*b=181;return 1;}
   if(strstr(text,"Yes")||strstr(text," OK ")){*a=198;*b=225;return 1;}
   if(strstr(text,"Cancel")||strstr(text,"No")||strstr(text,"Close")){*a=close_glyph_l;*b=close_glyph_r;return 1;}
   if(strstr(text,"Exit")){*a=214;*b=233;return 1;}
@@ -506,7 +507,7 @@ static int acc_button_icon(const char *text,int *a,int *b)
   return 0;
 }
 static void acc_button_draw_state(int x,int y,const char *text,int selected,int enabled)
-{int i,oldw=(int)strlen(text),w=oldw,a=0,b=0,icon=acc_button_icon(text,&a,&b),left;unsigned short v;/* Application panels are commonly redrawn after acc_box(), which used to paint over the toolbar divider.  Redraw it immediately before any toolbar button so it is the final layer. */if(toolbar_box_h>=7 && y==toolbar_box_y+toolbar_box_h-3){acc_put(toolbar_box_x,toolbar_box_y+toolbar_box_h-4,179,ACC_BORDER);for(i=1;i<toolbar_box_w-1;i++)acc_put(toolbar_box_x+i,toolbar_box_y+toolbar_box_h-4,216,ACC_BORDER);acc_put(toolbar_box_x+toolbar_box_w-1,toolbar_box_y+toolbar_box_h-4,179,ACC_BORDER);}if(icon==2)w=9;else if(icon)w=(b<0)?5:6;/* Clear only the rendered button and its shadow.  Clearing strlen(text) here erased dialog borders when an icon replaced a longer label. */for(i=0;i<=w;i++){acc_put(x+i,y,' ',ACC_BG);acc_put(x+i,y+1,' ',ACC_BG);}for(i=1;i<=w;i++){v=*(unsigned short far *)MAKE_FP(0xB800,((y+1)*acc_cols+x+i)*2);acc_put(x+i,y+1,220,((v>>8)&0xF0));}v=*(unsigned short far *)MAKE_FP(0xB800,(y*acc_cols+x+w)*2);acc_put(x+w,y,245,((v>>8)&0xF0));v=*(unsigned short far *)MAKE_FP(0xB800,((y+1)*acc_cols+x+w)*2);acc_put(x+w,y+1,244,((v>>8)&0xF0));{int ba=enabled?ACC_CONTROL:ACC_ATTR(acc_appearance.controls_bg,(acc_appearance.controls_fg&7)|8);acc_fill(x,y,w,1,' ',ba);if(icon==2){left=x+2;acc_put(left,y,a,ba);acc_put(left+1,y,b,ba);acc_text(left+2,y,"Run",ba,3);}else if(icon){left=x+(b<0?2:(w-2)/2);acc_put(left,y,a,ba);if(b>=0)acc_put(left+1,y,b,ba);}else acc_text(x,y,text,ba,w);}if(selected&&enabled){int fa=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.main_title);acc_put(x,y,169,fa);acc_put(x+w-1,y,170,fa);}}
+{int i,oldw=(int)strlen(text),w=oldw,a=0,b=0,icon=acc_button_icon(text,&a,&b),left;unsigned short v;/* Application panels are commonly redrawn after acc_box(), which used to paint over the toolbar divider.  Redraw it immediately before any toolbar button so it is the final layer. */if(toolbar_box_h>=7 && y==toolbar_box_y+toolbar_box_h-3){acc_put(toolbar_box_x,toolbar_box_y+toolbar_box_h-4,179,ACC_BORDER);for(i=1;i<toolbar_box_w-1;i++)acc_put(toolbar_box_x+i,toolbar_box_y+toolbar_box_h-4,216,ACC_BORDER);acc_put(toolbar_box_x+toolbar_box_w-1,toolbar_box_y+toolbar_box_h-4,179,ACC_BORDER);}if(icon==2)w=9;else if(icon)w=(b<0)?5:6;/* Clear only the rendered button and its shadow.  Clearing strlen(text) here erased dialog borders when an icon replaced a longer label. */for(i=0;i<=w;i++){acc_put(x+i,y,' ',ACC_BG);acc_put(x+i,y+1,' ',ACC_BG);}for(i=1;i<=w;i++){v=*(unsigned short far *)MAKE_FP(0xB800,((y+1)*acc_cols+x+i)*2);acc_put(x+i,y+1,203,((v>>8)&0xF0));}v=*(unsigned short far *)MAKE_FP(0xB800,(y*acc_cols+x+w)*2);acc_put(x+w,y,245,((v>>8)&0xF0));v=*(unsigned short far *)MAKE_FP(0xB800,((y+1)*acc_cols+x+w)*2);acc_put(x+w,y+1,244,((v>>8)&0xF0));{int ba=enabled?ACC_CONTROL:ACC_ATTR(acc_appearance.controls_bg,(acc_appearance.controls_fg&7)|8);acc_fill(x,y,w,1,' ',ba);if(icon==2){left=x+2;acc_put(left,y,a,ba);acc_put(left+1,y,b,ba);acc_text(left+2,y,"Run",ba,3);}else if(icon){left=x+(b<0?2:(w-2)/2);acc_put(left,y,a,ba);if(b>=0)acc_put(left+1,y,b,ba);}else acc_text(x,y,text,ba,w);}if(selected&&enabled){int fa=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.controls_fg);acc_put(x,y,169,fa);acc_put(x+w-1,y,170,fa);}}
 void acc_button(int x,int y,const char *text,int selected)
 {int a,b;acc_button_draw_state(x,y,text,selected,1);if(acc_button_count<ACC_MAX_BUTTONS){acc_buttons[acc_button_count].x=x;acc_buttons[acc_button_count].y=y;acc_buttons[acc_button_count].text=text;acc_buttons[acc_button_count].selected=selected;acc_buttons[acc_button_count].width=((acc_button_icon(text,&a,&b)==2)?9:(acc_button_icon(text,&a,&b)?((b<0)?5:6):(int)strlen(text)));acc_button_count++;}}
 void acc_button_disabled(int x,int y,const char *text){acc_button_draw_state(x,y,text,0,0);}
@@ -521,7 +522,7 @@ void acc_press_button(int x,int y,const char *text)
   if(icon==2){left=x+2;acc_put(left,y,a,ACC_CONTROL);acc_put(left+1,y,b,ACC_CONTROL);acc_text(left+2,y,"Run",ACC_CONTROL,3);}
   else if(icon){left=x+(b<0?2:(w-2)/2);acc_put(left,y,a,ACC_CONTROL);if(b>=0)acc_put(left+1,y,b,ACC_CONTROL);}
   else acc_text(x,y,text,ACC_CONTROL,w);
-  {int fa=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.main_title);acc_put(x,y,169,fa);acc_put(x+w-1,y,170,fa);}
+  {int fa=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.controls_fg);acc_put(x,y,169,fa);acc_put(x+w-1,y,170,fa);}
   /* acc_wait() owns mouse visibility.  Do not issue nested INT 33h
      Show/Hide calls here: doing so unbalances the driver's visibility
      counter when a toolbar button is clicked and can leave the pointer

@@ -76,7 +76,7 @@ static int level=1,lives=3,target=12,flow_tiles=0,flow_x=-1,flow_y=0,flow_dir=1;
 static long score=0;
 static int flow_started=0,round_started=0,paused=0,qualified=0;
 static unsigned long round_start,last_step,pause_started;
-static int focus=-1;
+static int focus=0;
 static int ui_x,ui_y,ui_bx,ui_by;
 
 /* Direction indices are N,E,S,W. */

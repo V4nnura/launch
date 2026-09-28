@@ -8,10 +8,10 @@ Launch! for DOS ---------------------
 */
 /*
  * MAINTAINER NOTES - Launch! 3.73
- * File: BOXBLD.C
- * Role: Build copy of !BOXES
- * Build/ownership: Derived from BOXES.C.
- * Maintainer contract: Keep synchronized with BOXES.C.
+ * File: BOXES.C
+ * Role: !BOXES puzzle game
+ * Build/ownership: Canonical source; build copy is BOXBLD.C.
+ * Maintainer contract: Loads base and expansion BOXES*.LVL packs; level navigation must use discovered combined count.
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
@@ -408,7 +408,7 @@ static int boxes_goto_dialog(void)
 }
 int main(int argc,char **argv)
 {
-  int x,y,bx,by,key=0,mx=0,my=0,dirty=1,full=1,focus=-1;
+  int x,y,bx,by,key=0,mx=0,my=0,dirty=1,full=1,focus=0;
   int tx,ty,won_moves,won_best;
   unsigned mb=0;
   char msg[96];
@@ -498,7 +498,7 @@ int main(int argc,char **argv)
       else current_level=0;
       save_level();
       load_level(current_level);
-      focus=-1;
+      focus=0;
       full=1;
     }
   }

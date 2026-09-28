@@ -87,10 +87,10 @@ static int journal_save_dialog(char *out)
  int w=52,h=9,x=(acc_cols-w)/2,y=(acc_rows-h)/2,k=0,mx=0,my=0,pos=(int)strlen(out),f=0;unsigned mb=0;
  acc_modal_begin();
  for(;;){
-  acc_subbox(x,y,w,h,"Save Journal",1);acc_text(x+3,y+2,"Filename:",ACC_LABEL,10);
+  acc_subbox(x,y,w,h,"Export Journal",1);acc_text(x+3,y+2,"Filename:",ACC_LABEL,10);
   acc_fill(x+13,y+2,34,1,' ',f==0?ACC_SELECT:ACC_CONTROL);acc_text(x+13,y+2,out,f==0?ACC_SELECT:ACC_CONTROL,33);
   if(f==0)acc_caret_set(x+13+(pos<33?pos:32),y+2);else acc_caret_hide();
-  acc_button(x+3,y+6," Save ",f==1);acc_button(x+11,y+6," Cancel ",f==2);
+  acc_button(x+3,y+6," Export ",f==1);acc_button(x+11,y+6," Cancel ",f==2);
   acc_wait(&k,&mx,&my,&mb);
   if(k==27){acc_modal_end();return 0;}
   if((mb&1)&&my==y+2){f=0;k=0;}else if((mb&1)&&my==y+6&&mx>=x+3&&mx<x+9){f=1;k=13;}else if((mb&1)&&my==y+6&&mx>=x+11&&mx<x+19){f=2;k=13;}

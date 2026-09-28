@@ -408,7 +408,7 @@ static int boxes_goto_dialog(void)
 }
 int main(int argc,char **argv)
 {
-  int x,y,bx,by,key=0,mx=0,my=0,dirty=1,full=1,focus=-1;
+  int x,y,bx,by,key=0,mx=0,my=0,dirty=1,full=1,focus=0;
   int tx,ty,won_moves,won_best;
   unsigned mb=0;
   char msg[96];
@@ -498,7 +498,7 @@ int main(int argc,char **argv)
       else current_level=0;
       save_level();
       load_level(current_level);
-      focus=-1;
+      focus=0;
       full=1;
     }
   }

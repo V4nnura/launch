@@ -8,10 +8,10 @@ Launch! for DOS ---------------------
 */
 /*
  * MAINTAINER NOTES - Launch! 3.73
- * File: POPBLD.C
- * Role: Build copy of !POP
- * Build/ownership: Derived from POP.C.
- * Maintainer contract: Keep synchronized with POP.C.
+ * File: POP.C
+ * Role: !POP game
+ * Build/ownership: Canonical source; build copy is POPBLD.C.
+ * Maintainer contract: Uses shared glyphs/UI; intentional blink/intensity exceptions should stay documented.
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
@@ -42,7 +42,7 @@ static int selx=-1,sely=-1,sel_count=0;
 static long score=0,high_score=0,time_left=MAX_START_TICKS,start_ticks=MAX_START_TICKS;
 static int level=1;
 static unsigned long last_tick;
-static int cursor_x=0,cursor_y=0,focus=-1,pop_paused=0;
+static int cursor_x=0,cursor_y=0,focus=0,pop_paused=0;
 
 static const unsigned char pop16[2][32]={
   {0x00,0x00,0x03,0x0F,0x1C,0x1B,0x37,0x37,0x3F,0x3F,0x1F,0x1F,0x0F,0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},

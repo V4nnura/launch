@@ -61,6 +61,10 @@ static const unsigned char stack_export_b16[32]={0x00,0x00,0x1F,0x23,0x23,0x23,0
 static const unsigned char stack_export_b14[32]={0x00,0x1F,0x23,0x23,0x23,0x23,0x20,0x27,0x20,0x27,0x20,0x3F,0x1F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 #endif
 
+static const unsigned char export_icon_a16[32]={0x00,0x00,0x01,0x01,0x01,0x01,0x01,0x01,0x0F,0x07,0xC3,0xC1,0xC0,0x7F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+static const unsigned char export_icon_b16[32]={0x00,0x00,0x80,0x80,0x80,0x80,0x80,0x80,0xE0,0xC0,0x86,0x06,0x06,0xFC,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+static const unsigned char export_icon_a14[32]={0x00,0x01,0x01,0x01,0x01,0x01,0x01,0x0F,0x07,0xC3,0xC1,0xC0,0x7F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+static const unsigned char export_icon_b14[32]={0x00,0x80,0x80,0x80,0x80,0x80,0x80,0xE0,0xC0,0x86,0x06,0x06,0xFC,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 static int acc_dialog_x=-1,acc_dialog_y=-1,acc_dialog_w=0,acc_dialog_h=0;
 static int acc_focus_suppressed=0;
 static int acc_hover_button=-1,acc_hover_x=-1,acc_hover_y=-1,acc_hover_valid=0;
@@ -70,6 +74,7 @@ static void glyph36_refresh(void);
 static void game_digits_refresh(void);
 static void (*acc_idle_hook)(void)=0;
 static unsigned char maximize_old[2][32];static int maximize_saved=0;
+static unsigned char export_old[2][32];static int export_saved=0;
 static char acc_app[20];
 void acc_set_idle_hook(void (*fn)(void)){acc_idle_hook=fn;}
 static int acc_app_is(const char *name){return strstr(acc_app,name)!=0;}
@@ -98,6 +103,12 @@ void acc_mouse_reapply_cursor(void)
 static void glyph36_refresh(void)
 {
 #ifndef ACCLIB_MIN_GLYPHS
+  /* Export artwork is deliberately installed in CP437 207/227, never ASCII
+     i/j.  207 is in VGA's line-graphics extension range, so its rightmost
+     column extends into the ninth cell where the left icon half joins. */
+  if(!export_saved){acc_glyph_read(207,export_old[0]);acc_glyph_read(227,export_old[1]);export_saved=1;}
+  acc_glyph_write(207,acc_font_height()==14?export_icon_a14:export_icon_a16);
+  acc_glyph_write(227,acc_font_height()==14?export_icon_b14:export_icon_b16);
   return;
 #else
   /* !STACK omits the full glyph table to preserve DGROUP.  Refresh the
@@ -215,6 +226,7 @@ void acc_end(void)
   acc_caret_hide();
   game_digits_restore();
   maximize_restore();
+  if(export_saved){acc_glyph_write(207,export_old[0]);acc_glyph_write(227,export_old[1]);export_saved=0;}
   acc36_end_base();
 }
 
@@ -350,7 +362,7 @@ void acc_wait(int *key,int *x,int *y,unsigned *buttons)
 void acc_notice(const char *title,const char *message)
 {
   const char *p1=message,*p2=0,*p3=0,*n1=strchr(message,'\n'),*n2=0;
-  int l1,l2=0,l3=0,lines=1,maxlen,w,h,x,y,k=0,mx=0,my=0,i,j,bx,focus=-1;
+  int l1,l2=0,l3=0,lines=1,maxlen,w,h,x,y,k=0,mx=0,my=0,i,j,bx,focus=0;
   int keep=mouse_visible;
   int old_close_x=close_x,old_close_y=close_y,old_tbx=toolbar_box_x,old_tby=toolbar_box_y,old_tbw=toolbar_box_w,old_tbh=toolbar_box_h;
   int old_dx=acc_dialog_x,old_dy=acc_dialog_y,old_dw=acc_dialog_w,old_dh=acc_dialog_h;

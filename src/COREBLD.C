@@ -1054,7 +1054,7 @@ static PIPE_HEAD pipe_heads[5];
 static MYSTIFY_SHAPE mystify_shapes[2];
 static unsigned short skyline_top[640];
 static unsigned char skyline_colour[640];
-static NIGHT_PIXEL night_pixels[NIGHT_PIXEL_COUNT];
+static NIGHT_PIXEL far night_pixels[NIGHT_PIXEL_COUNT];
 static NIGHT_BEACON night_beacons[NIGHT_BEACON_COUNT];
 static HALFTONE_MASS halftone_masses[HALFTONE_MASSES];
 static unsigned char halftone_previous[HALFTONE_COLS*HALFTONE_ROWS];
@@ -1070,7 +1070,7 @@ unsigned saver_random(unsigned limit)
   return limit?(unsigned)((saver_random_state>>16)%limit):0;
 }
 
-static void night_pixel_draw(const NIGHT_PIXEL *pixel,int erase)
+static void night_pixel_draw(const NIGHT_PIXEL far *pixel,int erase)
 {
   unsigned char colour=erase?pixel->base:pixel->colour;
   if(pixel->base==0)ega_span(pixel->y,pixel->x,pixel->x,colour);
@@ -1090,7 +1090,7 @@ static void night_pixel_add(int x,int y,unsigned char colour,unsigned char base)
 
 static void night_pixels_decay(void)
 {
-  int i;NIGHT_PIXEL *pixel;
+  int i;NIGHT_PIXEL far *pixel;
   for(i=0;i<NIGHT_PIXEL_COUNT;i++){
     pixel=&night_pixels[i];
     if(pixel->x!=0xFFFF){
@@ -1585,7 +1585,7 @@ static void starry_saver_loop(unsigned start_x,unsigned start_y)
 {
   unsigned long last_tick=bios_ticks();int x=0,i,bx,bw,bh,top,wx,wy,phase=0;
   unsigned char building;
-  memset(night_pixels,0xFF,sizeof(night_pixels));
+  _fmemset(night_pixels,0xFF,sizeof(night_pixels));
   memset(night_beacons,0,sizeof(night_beacons));
   for(i=0;i<640;i++){skyline_top[i]=350;skyline_colour[i]=0;}
   while(!saver_input(start_x,start_y)){

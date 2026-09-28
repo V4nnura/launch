@@ -259,7 +259,7 @@ static int snake_goto_dialog(void)
 
 int main(int argc,char **argv)
 {
-  int w=70,h=22,x,y,ox,oy,key=0,mx=0,my=0,focus=-1,last_focus=-2,lastb=0,snake_paused=0;unsigned long last_tick,t;int tick_div=0,grow_ticks=0;
+  int w=70,h=22,x,y,ox,oy,key=0,mx=0,my=0,focus=0,last_focus=-2,lastb=0,snake_paused=0;unsigned long last_tick,t;int tick_div=0,grow_ticks=0;
   if(acc_help(argc,argv,"!SNAKE","A text-mode fruit-eating snake game inspired by Rattler Race."))return 0;
   if(!acc_begin(argv[0],"Snake",0))return 1;snake_font(1);if(acc_mouse_present){union REGS mr;memset(&mr,0,sizeof(mr));mr.x.ax=1;int86(0x33,&mr,&mr);}srand((unsigned)acc_ticks());x=(acc_cols-w)/2;y=(acc_rows-h)/2;ox=x+6;oy=y+4;score=0;lives=3;level=0;reset_round();acc_box(x,y,w,h,"Snake");draw_board(ox,oy);status_draw(x+4,y+2);last_tick=acc_ticks();
   while(key!=27){
