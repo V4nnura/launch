@@ -59,8 +59,7 @@ CTRL + ALT + .
 ```
 **Learn more about [the Menu](https://github.com/therenegar/launch/wiki/!.EXE).**
 
-<img width="720" alt="default-boot" src="https://github.com/user-attachments/assets/da13f54b-66d0-4f84-a8f5-0aa6ac7e95b8" />
-
+<img width="720" alt="Menu (at boot)" src="https://github.com/user-attachments/assets/34da7f78-e761-432e-859c-c5af78eacd07" />
 
 <a id="config"></a>
 ### <img alt="Config" src="https://github.com/user-attachments/assets/8b30b2a6-cb46-435e-b9e1-7fb47e5fc44e" />
@@ -73,8 +72,7 @@ Configuration includes the menu, colors, screen savers, prompt customization, fo
 
 **Learn more about [Configuration](https://github.com/therenegar/launch/wiki/Configuration).**
 
-<img width="720" alt="config-menu" src="https://github.com/user-attachments/assets/7ec8b314-e2a1-4789-b78d-a40492139413" />
-
+<img width="720" alt="Configuration" src="https://github.com/user-attachments/assets/e537e661-5e06-4c31-b3f4-b625f4dfd17f" />
 
 <a id="screen-savers"></a>
 ### <img alt="Screen Savers" src="https://github.com/user-attachments/assets/447f06ad-4597-45bc-b4cf-3f3debcc02a1" />
@@ -102,15 +100,17 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 
 **Learn more about [Accessories](https://github.com/therenegar/launch/wiki/Accessories).**
 
-<img width="360" height="300" alt="dfetch" src="https://github.com/user-attachments/assets/c24803c7-7576-4ece-8b02-01ae1d9753ec" />
-<img width="360" height="300" alt="mkdown" src="https://github.com/user-attachments/assets/60bec14c-4c19-4e75-9aa8-34c7d5aca165" />
-<img width="360" height="300" alt="note" src="https://github.com/user-attachments/assets/db8f2b47-496c-4dd8-b176-e5c29a1e749f" />
-<img width="360" height="300" alt="cal" src="https://github.com/user-attachments/assets/897c9fc6-c0b1-451f-b0a0-bc119ad0ef13" />
-<img width="360" height="300" alt="calc" src="https://github.com/user-attachments/assets/7d6fe761-b00c-421e-8ab7-a656cf2fa629" />
-<img width="360" height="300" alt="draw" src="https://github.com/user-attachments/assets/9acd69a1-72c0-4d83-83e7-83c6ef910009" />
-<img width="360" height="300" alt="todos" src="https://github.com/user-attachments/assets/400ab708-44c9-4c75-ba7c-cbcd9472afb5" />
-<img width="360" height="300" alt="journal" src="https://github.com/user-attachments/assets/273505f9-87ea-4354-9065-99e68b9994ed" />
-<img width="360" height="300" alt="typo" src="https://github.com/user-attachments/assets/00b4d154-1d18-4cc1-b79d-6859a6b1a5bf" />
+<img width="360" height="300" alt="Calendar" src="https://github.com/user-attachments/assets/44aa11dc-9af2-46aa-bac9-14bcf57163fe" />
+<img width="360" height="300" alt="Calculator" src="https://github.com/user-attachments/assets/c95a3cb5-7456-443b-830c-73fce099fdcb" />
+<img width="360" height="300" alt="DOS Fetch" src="https://github.com/user-attachments/assets/c24803c7-7576-4ece-8b02-01ae1d9753ec" />
+<img width="360" height="300" alt="Draw" src="https://github.com/user-attachments/assets/941d84df-a3fa-4343-a352-08eecfa3ed2c" />
+<img width="360" height="300" alt="Journal" src="https://github.com/user-attachments/assets/f0cc9962-3a04-4ca6-921f-d532f852885b" />
+<img width="360" height="300" alt="Markdown" src="https://github.com/user-attachments/assets/9f33f588-e579-402e-97ba-f2cb8913b419" />
+<img width="360" height="300" alt="Note" src="https://github.com/user-attachments/assets/65e8f34e-61c6-40fa-b2ac-785ef5c9f051" />
+
+<img width="360" height="300" alt="Stack" src="https://github.com/user-attachments/assets/5da2b0be-3d43-4684-bbba-30935e09aaac" />
+<img width="360" height="300" alt="Todos" src="https://github.com/user-attachments/assets/400ab708-44c9-4c75-ba7c-cbcd9472afb5" />
+<img width="360" height="300" alt="Typo" src="https://github.com/user-attachments/assets/00b4d154-1d18-4cc1-b79d-6859a6b1a5bf" />
 
 <a id="games"></a>
 ### <img alt="Games" src="https://github.com/user-attachments/assets/ad644a58-0e3b-4f34-b6cb-8de93f67bdcc" />
@@ -143,5 +143,4 @@ Screenshots taken on this machine using [Screen Thief](http://www.win3x.org/win3
 Builds transferred using FTP to a Linux host where a simple Python script integrates the build into (this) GIT repository- and automates creation of release zip/img files.
 
 
-<img width="720" height="600" alt="About Launch!" src="https://github.com/user-attachments/assets/cfb867d4-a228-4291-b720-ed73aaa4dac6" />
-
+<img width="360" height="300" alt="About Launch!" src="https://github.com/user-attachments/assets/2bce7bf5-7204-4281-acae-6d80d574c567" />
