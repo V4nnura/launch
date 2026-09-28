@@ -10,7 +10,8 @@
 
 **Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS.
 
-<img width="720" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/7e928087-c592-4ce9-9cd5-2ba3f794cdbe" />
+<img width="720" height="600" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" />
+
 <br/>
 <img height="75" alt="So. Many. Features." src="https://github.com/user-attachments/assets/0192af1f-a429-4d77-b570-05c9d66106e9" />
 
@@ -101,7 +102,7 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 
 **Learn more about [Accessories](https://github.com/therenegar/launch/wiki/Accessories).**
 
-<img width="360" height="300" alt="dfetch" src="https://github.com/user-attachments/assets/c75ac29e-e0b8-4605-806f-42b4c48a5b21" />
+<img width="360" height="300" alt="dfetch" src="https://github.com/user-attachments/assets/c24803c7-7576-4ece-8b02-01ae1d9753ec" />
 <img width="360" height="300" alt="mkdown" src="https://github.com/user-attachments/assets/60bec14c-4c19-4e75-9aa8-34c7d5aca165" />
 <img width="360" height="300" alt="note" src="https://github.com/user-attachments/assets/db8f2b47-496c-4dd8-b176-e5c29a1e749f" />
 <img width="360" height="300" alt="cal" src="https://github.com/user-attachments/assets/897c9fc6-c0b1-451f-b0a0-bc119ad0ef13" />
@@ -118,7 +119,7 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 
 <img width="360" height="300" alt="boxes" src="https://github.com/user-attachments/assets/ac5d5edf-cf7d-4a45-ba55-305095763bf1" />
 <img width="360" height="300" alt="plumb" src="https://github.com/user-attachments/assets/389a9c8f-4d8c-425f-8f12-90b4154b91fb" />
-<img width="360" height="300" alt="jello" src="https://github.com/user-attachments/assets/b3a35ac3-6020-4726-a528-b720c0ec1275" />
+<img width="360" height="300" alt="jelloh" src="https://github.com/user-attachments/assets/02d53dc8-e3cb-4605-873e-8ce7934f5995" />
 <img width="360" height="300" alt="metro" src="https://github.com/user-attachments/assets/23489e48-47db-47fe-927d-3f7f691c6c83" />
 <img width="360" height="300" alt="pop" src="https://github.com/user-attachments/assets/274239b0-7ad7-48d2-8079-f99820646b8d" />
 <img width="360" height="300" alt="snake" src="https://github.com/user-attachments/assets/8857dc7d-7e91-444c-8e33-7cd111fbdb8e" />
