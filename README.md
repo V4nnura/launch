@@ -10,7 +10,7 @@
 
 **Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS and FreeCOM.
 
-<img width="720" height="600" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" />
+<img width="720" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" />
 
 <br/>
 <img height="75" alt="So. Many. Features." src="https://github.com/user-attachments/assets/0192af1f-a429-4d77-b570-05c9d66106e9" />
@@ -51,7 +51,7 @@ INSTALL.EXE
 <img width="720" alt="Installation" src="https://github.com/user-attachments/assets/c884a62c-96cf-4d05-80f4-ba6495803f9a" />
 
 <a id="the-menu"></a>
-### <img height="100" alt="The menu" src="https://github.com/user-attachments/assets/eb20a623-f631-4b33-b340-90d470f6e7c1" />
+### <img alt="The menu" src="https://github.com/user-attachments/assets/eb20a623-f631-4b33-b340-90d470f6e7c1" />
 
 At the **command prompt**, display your menu by pressing the keyboard shortcut which by default is set to:
 ```
