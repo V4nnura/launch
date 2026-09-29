@@ -39,7 +39,7 @@
     - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE), [Jell-Oh](https://github.com/therenegar/launch/wiki/!JELLOH.EXE), [Metro](https://github.com/therenegar/launch/wiki/!METRO.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
 - 14 awesome [screensavers](https://github.com/therenegar/launch/wiki/Screen-Savers) including a 7-segment digital clock, starry night skyline, bouncing DOS logo, disk defrag simulation, 3D pipes, bouncing 3D ball, paintball, and more!
 - Various [Command Prompt styles](https://github.com/therenegar/launch/wiki/Configuration#prompt) to choose from to uplift your C:\
-- 30 Custom [VGA display fonts](https://github.com/therenegar/launch/wiki/Fonts) to change the look of your whole DOS environment.
+- 30+ Custom [EGA & VGA display fonts](https://github.com/therenegar/launch/wiki/Fonts) to change the look of your whole DOS environment.
 - Maximum compatibility across DOS versions (back to DOS 3.3) on real or emulated hardware/virtual machines.
 - No libraries or dependencies including ANSI. Custom UI toolkit written in C. Fast and simple.
 - Extremely minimal memory footprint. All resident components can be disabled to have zero memory impact if desired.
