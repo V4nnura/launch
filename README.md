@@ -12,7 +12,7 @@
 
 <img width="720" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" />
 
-### Integrated Windows 3.0/3.11 support
+### Integrated Windows 3.x support
 
 <img width="64" height="64" alt="LAUNCH" src="https://github.com/user-attachments/assets/30eb94f8-efc0-4bec-9365-c6c1ee753448" />
 <img width="64" height="64" alt="LAUNCH16" src="https://github.com/user-attachments/assets/86d4e6e4-0457-4c08-9a8a-6f6b2fc4c399" />
