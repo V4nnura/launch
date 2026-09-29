@@ -13,6 +13,9 @@
 <img height="96" alt="Windows 3.0 compatible" src="https://github.com/user-attachments/assets/21c03855-d01c-4085-9e6b-6a4342669763" />
 &nbsp;&nbsp;&nbsp;
 <img height="96" alt="Windows 3.1 compatible" src="https://github.com/user-attachments/assets/579e8219-4c83-446d-ad47-2bf3c02d1c74" />
+<br/> 
+Integrated Windows 3.x development underway.
+
 
 &nbsp;
 <br/>
