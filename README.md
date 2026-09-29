@@ -43,7 +43,7 @@
 - Maximum compatibility across DOS versions (back to DOS 3.3) on real or emulated hardware/virtual machines.
 - No libraries or dependencies including ANSI. Custom UI toolkit written in C. Fast and simple.
 - Extremely minimal memory footprint. All resident components can be disabled to have zero memory impact if desired.
-- Got Windows 3.0/3.1/3.11 installed? Launch! has full [Win 3.x integration](https://github.com/therenegar/launch/wiki/!WIN16.EXE); the DOS menu can be run windowed, or you can run a native Win16 Launch! Menu.
+- Full and optional [Win 3.x integration](https://github.com/therenegar/launch/wiki/!WIN16.EXE); the DOS menu can be run windowed, or you can run a native Win16 Launch! Menu.
 
 **[Check out the wiki](https://github.com/therenegar/launch/wiki) for detailed information and documentation.**
 
