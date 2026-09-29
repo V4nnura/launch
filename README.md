@@ -57,7 +57,6 @@ INSTALL.EXE
 ```
 **Read more about [Installation](https://github.com/therenegar/launch/wiki/INSTALL.EXE).**
 
-<img width="640" height="350" alt="Installation" src="https://github.com/user-attachments/assets/b66c3f08-9218-496c-a191-92b4259c6d38" />
 <img width="640" height="350" alt="Installation" src="https://github.com/user-attachments/assets/7f290034-c6cf-4f55-bd39-c6495659f716" />
 
 <a id="the-menu"></a>
