@@ -10,17 +10,16 @@
 
 **Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS and FreeCOM.
 
-<img height="96" alt="Windows 3.0 compatible" src="https://github.com/user-attachments/assets/21c03855-d01c-4085-9e6b-6a4342669763" />
-&nbsp;&nbsp;&nbsp;
-<img height="96" alt="Windows 3.1 compatible" src="https://github.com/user-attachments/assets/579e8219-4c83-446d-ad47-2bf3c02d1c74" />
-<br/> 
-Integrated Windows 3.x development underway.
-
-
-&nbsp;
-<br/>
-
 <img width="720" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" />
+
+### Integrated Windows 3.0/3.11 support
+
+<img height="64" alt="Windows 3.0 compatible" src="https://github.com/user-attachments/assets/21c03855-d01c-4085-9e6b-6a4342669763" />
+&nbsp;&nbsp;&nbsp;
+<img height="64" alt="Windows 3.1 compatible" src="https://github.com/user-attachments/assets/579e8219-4c83-446d-ad47-2bf3c02d1c74" />
+<br/>
+<img width="400" alt="Windows - Launch for DOS" src="https://github.com/user-attachments/assets/f85c6106-3052-4bb5-9076-00a4971c4a17" />
+<img width="400" alt="Windows - Launch 16" src="https://github.com/user-attachments/assets/f33c0ec5-a1e4-4534-affd-ebf45fa7827e" />
 
 <br/>
 <img height="75" alt="So. Many. Features." src="https://github.com/user-attachments/assets/0192af1f-a429-4d77-b570-05c9d66106e9" />
@@ -44,7 +43,8 @@ Integrated Windows 3.x development underway.
 - 30 Custom [VGA display fonts](https://github.com/therenegar/launch/wiki/Fonts) to change the look of your whole DOS environment.
 - Maximum compatibility across DOS versions (back to DOS 3.3) on real or emulated hardware/virtual machines.
 - No libraries or dependencies including ANSI. Custom UI toolkit written in C. Fast and simple.
-- Extremely minimal memory footprint. All resident components can be disabled to have zero memory impact if desired. 
+- Extremely minimal memory footprint. All resident components can be disabled to have zero memory impact if desired.
+- Got Windows 3.0/3.1/3.11 installed? Launch! has full [Win 3.x integration](https://github.com/therenegar/launch/wiki/!WIN16.EXE); the DOS menu can be run windowed, or you can run a native Win16 Launch! Menu.
 
 **[Check out the wiki](https://github.com/therenegar/launch/wiki) for detailed information and documentation.**
 
@@ -58,7 +58,8 @@ INSTALL.EXE
 ```
 **Read more about [Installation](https://github.com/therenegar/launch/wiki/INSTALL.EXE).**
 
-<img width="720" alt="Installation" src="https://github.com/user-attachments/assets/c884a62c-96cf-4d05-80f4-ba6495803f9a" />
+<img width="640" height="350" alt="Installation" src="https://github.com/user-attachments/assets/b66c3f08-9218-496c-a191-92b4259c6d38" />
+<img width="640" height="350" alt="Installation" src="https://github.com/user-attachments/assets/7f290034-c6cf-4f55-bd39-c6495659f716" />
 
 <a id="the-menu"></a>
 ### <img alt="The menu" src="https://github.com/user-attachments/assets/eb20a623-f631-4b33-b340-90d470f6e7c1" />
