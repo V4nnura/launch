@@ -189,7 +189,7 @@ void acc_glyph_library(int logical_id,int code)
 #endif
 }
 
-static const unsigned char launchui_codes[41]={16,17,30,31,169,170,173,174,175,181,182,183,184,185,186,187,188,189,190,198,225,200,201,202,224,204,205,206,229,208,209,210,211,212,213,235,215,255,203,244,245};
+static const unsigned char launchui_codes[41]={16,17,30,31,169,170,173,174,175,181,182,183,184,185,186,187,188,189,190,198,236,200,201,202,224,204,205,206,229,208,209,210,211,212,213,235,215,255,203,244,245};
 int acc_glyph_is_custom(int code){int i;if(code==127||code==216||code==255||code==8||code==214||code==233||code==ACC_MAXIMIZE_L||code==ACC_MAXIMIZE_R)return 1;for(i=0;i<(int)sizeof(launchui_codes);i++)if((unsigned)code==(unsigned)launchui_codes[i])return 1;return 0;}
 static const unsigned char launchui_glyphs[41][32]={
   {0x00,0x00,0x00,0x00,0x30,0x38,0x3C,0x3E,0x3C,0x38,0x30,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
@@ -494,7 +494,7 @@ static int acc_button_icon(const char *text,int *a,int *b)
   if(strstr(text,"Open")){*a=199;*b=230;return 1;}
   if(strstr(text,"Export")){*a=207;*b=227;return 1;}
   if(strstr(text,"Save")){*a=204;*b=181;return 1;}
-  if(strstr(text,"Yes")||strstr(text," OK ")){*a=198;*b=225;return 1;}
+  if(strstr(text,"Yes")||strstr(text," OK ")){*a=198;*b=236;return 1;}
   if(strstr(text,"Cancel")||strstr(text,"No")||strstr(text,"Close")){*a=close_glyph_l;*b=close_glyph_r;return 1;}
   if(strstr(text,"Exit")){*a=214;*b=233;return 1;}
   if(strstr(text,"Run")&&!strstr(text,"Preview")){*a=202;*b=224;return 2;}

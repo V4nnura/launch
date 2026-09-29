@@ -32,12 +32,12 @@ Launch! for DOS ---------------------
 
 static const char *files[]={
   "!.EXE","!KEY.COM","!KEYDB.COM","!KEY286.COM","!MNUGEN.EXE","AUTOGEN.DAT",
-  "PWROFF.BMP","FONT.DAT","PROMPTS.CFG","COLORS.CFG","CAL.ICS","!CAL.EXE",
+  "PWROFF.BMP","FONT.DAT","FONT14.DAT","PROMPTS.CFG","COLORS.CFG","CAL.ICS","!CAL.EXE",
   "!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MKDOWN.EXE","!NOTE.EXE","!STACK.EXE",
   "!DFETCH.EXE","!TODOS.EXE","!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL",
   "!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE",
   "WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLY.LVL",
-  0
+  "!WIN16.EXE","LAUNCH.ICO","LAUNCH16.ICO","LAUNCH.GRP",0
 };
 
 
@@ -176,7 +176,7 @@ int main(void)
   FILE *in,*out;char name[13],source[64];unsigned long data_start,total_raw=0,total_cmp=0;
   int i,base_count=0,count,ok=1;
   while(files[base_count])base_count++;
-  collect_sample_dir("DRAW");collect_sample_dir("MKDOWN");
+  collect_sample_dir("DRAW");collect_sample_dir("MKDOWN");collect_sample_dir("DB");
   count=base_count+sample_count;
   if(count>MAX_FILES){puts("PACKDAT: too many archive members");return 1;}
   out=fopen("INSTALL.DAT","w+b");

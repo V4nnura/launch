@@ -118,10 +118,11 @@ static void glyph36_refresh(void)
   acc_glyph_write(187,h==14?stack_add_b14:stack_add_b16);
   acc_glyph_write(209,h==14?stack_delete_a14:stack_delete_a16);
   acc_glyph_write(188,h==14?stack_delete_b14:stack_delete_b16);
-  /* Floppy source halves are logical 10/26; logical 26 is the extending
-     left half, logical 10 is the right half. */
-  acc_glyph_write(204,h==14?stack_export_b14:stack_export_b16);
-  acc_glyph_write(181,h==14?stack_export_a14:stack_export_a16);
+  /* !STACK also uses the common Export button.  Its reduced glyph build
+     must install the same relocated Export artwork as every other accessory. */
+  if(!export_saved){acc_glyph_read(207,export_old[0]);acc_glyph_read(227,export_old[1]);export_saved=1;}
+  acc_glyph_write(207,h==14?export_icon_a14:export_icon_a16);
+  acc_glyph_write(227,h==14?export_icon_b14:export_icon_b16);
 #endif
 }
 

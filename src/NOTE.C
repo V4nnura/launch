@@ -601,7 +601,7 @@ int main(int argc,char**argv)
    else if(focus==9){if(!note_any_dirty())done=1;else{choice=note_confirm_close();if(choice==1){note_discard=1;done=1;}else if(choice==2&&note_save_all_dirty())done=1;else{acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);}}}key=0;continue;
   }
   if(focus!=1){if(key==27){if(!note_any_dirty())done=1;else{choice=note_confirm_close();if(choice==1){note_discard=1;done=1;}else if(choice==2&&note_save_all_dirty())done=1;else{acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);}}}key=0;continue;}
-  oldcy=cy;oldtop=top;{int oldpos=cy*note_edit_width+cx,shift=note_shift_down(),ep=external_page_index();if(key==24||key==22||key==256+83||key==8||key==13||(key>=32&&key<=255)||(key>=513&&key<=767)){if(ep>=0)external_dirty[ep]=1;else persistent_dirty=1;}
+  oldcy=cy;oldtop=top;{int oldpos=cy*note_edit_width+cx,shift=note_shift_down(),ep=external_page_index();if(key==24||key==22||key==256+83||key==8||key==13||(key>=32&&key<=255)||(key>=513&&key<=767)){if(ep>=0)external_dirty[ep]=1;else persistent_dirty=1;oldtop=-1;}
    if(key==3){note_copy_selection();key=0;}
    else if(key==256+0x77){cy=0;cx=0;note_selection_clear();}
    else if(key==256+0x75){cy=NL-1;while(cy>0&&note_used(cy)==0)cy--;cx=note_used(cy);if(cx>=note_edit_width)cx=note_edit_width-1;note_selection_clear();}

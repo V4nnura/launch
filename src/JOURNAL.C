@@ -365,10 +365,10 @@ int main(int argc,char**argv)
    else if(key==256+73){cy-=NV;if(cy<2)cy=2;journal_selection_move(oldpos,journal_pos(cx,cy),shift);}
    else if(key==256+81){cy+=NV;if(cy>=NL)cy=NL-1;journal_selection_move(oldpos,journal_pos(cx,cy),shift);}
    else if(key==256+82){journal_selection_clear();insert=!insert;}
-   else if(key==256+83&&editable(cy)){if(journal_has_selection()){journal_delete_selection(&cx,&cy);oldtop=-1;}else if(cx-4>=journal_used(cy))journal_join_next(&cx,&cy);else{base=cy*NW+cx;memmove(note+base,note+base+1,NW-cx-1);note[cy*NW+NW-1]=' ';}}
-   else if(key==8){if(journal_has_selection()){journal_delete_selection(&cx,&cy);oldtop=-1;}else if(cx>4){cx--;base=cy*NW+cx;memmove(note+base,note+base+1,NW-cx-1);note[cy*NW+NW-1]=' ';}else journal_join_previous(&cx,&cy);}
-   else if(key==13&&cy<NL-1){if(journal_has_selection()){journal_delete_selection(&cx,&cy);oldtop=-1;}journal_split_line(&cx,&cy);journal_selection_clear();}
-   else if(key>=32&&key<=255&&editable(cy)){if(journal_has_selection()){journal_delete_selection(&cx,&cy);oldtop=-1;}journal_insert_one(&cx,&cy,key,insert);journal_selection_clear();}
+   else if(key==256+83&&editable(cy)){oldtop=-1;if(journal_has_selection()){journal_delete_selection(&cx,&cy);oldtop=-1;}else if(cx-4>=journal_used(cy))journal_join_next(&cx,&cy);else{base=cy*NW+cx;memmove(note+base,note+base+1,NW-cx-1);note[cy*NW+NW-1]=' ';}}
+   else if(key==8){oldtop=-1;if(journal_has_selection()){journal_delete_selection(&cx,&cy);oldtop=-1;}else if(cx>4){cx--;base=cy*NW+cx;memmove(note+base,note+base+1,NW-cx-1);note[cy*NW+NW-1]=' ';}else journal_join_previous(&cx,&cy);}
+   else if(key==13&&cy<NL-1){oldtop=-1;if(journal_has_selection()){journal_delete_selection(&cx,&cy);oldtop=-1;}journal_split_line(&cx,&cy);journal_selection_clear();}
+   else if(key>=32&&key<=255&&editable(cy)){oldtop=-1;if(journal_has_selection()){journal_delete_selection(&cx,&cy);oldtop=-1;}journal_insert_one(&cx,&cy,key,insert);journal_selection_clear();}
    else if(key==27)break;else key=0;
   }
   if(journal_sel_repaint){oldtop=-1;journal_sel_repaint=0;}

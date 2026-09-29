@@ -1,0 +1,17 @@
+/* Launch! 3.75 - !LDB Launch Database. SQLite DOS CLI front-end. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include "ACCLIB.H"
+#define PATHLEN 127
+#define SQLLEN 480
+static char db[PATHLEN+1]="",sql[SQLLEN+1]="SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;";
+static char rows[16][74];static int rowcount=0,focus=0;
+static void qquote(FILE *f,const char *s){fputc('"',f);while(*s){if(*s=='"')fputc('"',f);fputc(*s++,f);}fputc('"',f);}
+static int run_sql(const char *statement){FILE *f,*r;char cmd[330],line[160];rowcount=0;f=fopen("LDB.$QL","w");if(!f)return 0;fputs(".headers on\n.mode column\n.width 14 18 18 18\n",f);fputs(statement,f);if(statement[0]&&statement[strlen(statement)-1]!=';')fputc(';',f);fputc('\n',f);fclose(f);sprintf(cmd,"SQLITE3.EXE ");{FILE *b=fopen("LDB.$BT","w");if(!b)return 0;fputs("@echo off\nSQLITE3.EXE ",b);qquote(b,db);fputs(" < LDB.$QL > LDB.$OUT\n",b);fclose(b);}if(system("LDB.$BT")!=0){remove("LDB.$BT");remove("LDB.$QL");return 0;}r=fopen("LDB.$OUT","r");if(r){while(rowcount<16&&fgets(line,sizeof(line),r)){line[strcspn(line,"\r\n")]=0;strncpy(rows[rowcount],line,73);rows[rowcount][73]=0;rowcount++;}fclose(r);}remove("LDB.$BT");remove("LDB.$QL");remove("LDB.$OUT");return 1;}
+static void draw(void){int i;acc_clear(ACC_BG);acc_box(2,1,76,23,"Launch Database");acc_text(5,3,"Database:",ACC_LABEL,10);acc_text(16,3,db[0]?db:"(enter SQLite database filename)",focus==0?ACC_SELECT:ACC_CONTROL,56);acc_text(5,5,"SQL Query",ACC_HEADING,20);acc_text(5,6,sql,focus==1?ACC_SELECT:ACC_CONTROL,68);acc_text(5,8,"Results",ACC_HEADING,20);for(i=0;i<12;i++)acc_text(5,9+i,i<rowcount?rows[i]:"",ACC_TEXT,68);acc_button(5,21,"Tables",focus==2);acc_button(17,21,"Run",focus==3);acc_button(27,21,"Add",focus==4);acc_button(37,21,"Delete",focus==5);acc_button(50,21,"Print",focus==6);acc_button(62,21,"Close",focus==7);}
+static void input(char *buf,int max,int y){int k,n=(int)strlen(buf);for(;;){draw();acc_text(16,y,buf,ACC_SELECT,56);k=acc_key();if(k==13||k==27)break;if(k==8&&n){buf[--n]=0;continue;}if(k>=32&&k<127&&n<max){buf[n++]=(char)k;buf[n]=0;}}}
+static void print_rows(void){FILE *p=fopen("LPT1","w");int i;if(!p){acc_notice("Launch Database","Unable to open LPT1.");return;}fprintf(p,"Launch Database - %s\n\nSQL: %s\n\n",db,sql);for(i=0;i<rowcount;i++)fprintf(p,"%s\n",rows[i]);fputc('\f',p);fclose(p);}
+static void prompt_sql(const char *preset){strncpy(sql,preset,SQLLEN);sql[SQLLEN]=0;focus=1;input(sql,SQLLEN,6);}
+int main(int argc,char **argv){int k;if(acc_help(argc,argv,"!LDB","Browse and query SQLite databases."))return 0;if(argc>1){strncpy(db,argv[1],PATHLEN);db[PATHLEN]=0;}if(!acc_begin(argv[0],"Launch Database",0))return 1;for(;;){draw();k=acc_key();if(k==27)break;if(k==9){focus=(focus+1)%8;continue;}if(k==13){if(focus==0)input(db,PATHLEN,3);else if(focus==1)input(sql,SQLLEN,6);else if(focus==2){strcpy(sql,"SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;");if(db[0]&&!run_sql(sql))acc_notice("Launch Database","SQLite3.EXE was not found or query failed.");}else if(focus==3){if(!db[0])acc_notice("Launch Database","Enter a database filename first.");else if(!run_sql(sql))acc_notice("Launch Database","SQLite query failed.");}else if(focus==4)prompt_sql("INSERT INTO table_name (column) VALUES ('value');");else if(focus==5)prompt_sql("DELETE FROM table_name WHERE rowid=1;");else if(focus==6)print_rows();else if(focus==7)break;}}acc_end();return 0;}

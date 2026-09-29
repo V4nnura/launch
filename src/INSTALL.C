@@ -286,6 +286,15 @@ static void status_icon(int indent,int colour,int symbol)
   putchar(' ');
 }
 static void question_icon(int indent){status_icon(indent,1,'?');}
+/* Windows 3.x installer prompt mark: two CP437 lower-half blocks. */
+static void windows_icon(int indent)
+{
+  char b[2];int i;b[0]=(char)220;b[1]=0;
+  for(i=0;i<indent;i++)putchar(' ');
+  colour_text(b,0x49); /* bright blue foreground on red */
+  colour_text(b,0x2E); /* bright yellow foreground on green */
+  putchar(' ');
+}
 
 static int read_key_immediate(void)
 {
@@ -381,6 +390,14 @@ static int ask_yes(const char *prompt,int default_yes,int indent)
 {
   char answer[16];
   question_icon(indent);printf("%s ",prompt);choice_default(default_yes);
+  if(!fgets(answer,sizeof(answer),stdin))return default_yes;
+  if(answer[0]=='\r' || answer[0]=='\n' || !answer[0])return default_yes;
+  return toupper(answer[0])=='Y';
+}
+static int ask_windows_yes(const char *prompt,int default_yes,int indent)
+{
+  char answer[16];
+  windows_icon(indent);printf("%s ",prompt);choice_default(default_yes);
   if(!fgets(answer,sizeof(answer),stdin))return default_yes;
   if(answer[0]=='\r' || answer[0]=='\n' || !answer[0])return default_yes;
   return toupper(answer[0])=='Y';
@@ -656,19 +673,20 @@ static void remove_unselected_components(const char *install,int accessories,int
 {
   static const char *acc[]={"CAL.ICS","!CAL.EXE","!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MKDOWN.EXE","!NOTE.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
   static const char *gm[]={"!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL",0};
-  int i;if(!accessories)for(i=0;acc[i];i++)remove_named(install,acc[i]);if(!games)for(i=0;gm[i];i++)remove_named(install,gm[i]);if(!fonts)remove_named(install,"FONT.DAT");if(!menu_generator){remove_named(install,"!MNUGEN.EXE");remove_named(install,"AUTOGEN.DAT");}if(!shortcut_key)remove_named(install,"!KEY.COM");
+  int i;if(!accessories)for(i=0;acc[i];i++)remove_named(install,acc[i]);if(!games)for(i=0;gm[i];i++)remove_named(install,gm[i]);if(!fonts){remove_named(install,"FONT.DAT");remove_named(install,"FONT14.DAT");}if(!menu_generator){remove_named(install,"!MNUGEN.EXE");remove_named(install,"AUTOGEN.DAT");}if(!shortcut_key)remove_named(install,"!KEY.COM");
 }
 
 static int selected_member(const char *name,int shortcut_build,int accessories,
                            int games,int fonts,int menu_generator,int sample_docs,const char **dest_name)
 {
   *dest_name=name;
-  if(!stricmp(name,"!.EXE")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
-  if(fonts&&!stricmp(name,"FONT.DAT"))return 1;
+  if(!stricmp(name,"!.EXE")||!stricmp(name,"WINSETUP.EXE")||!stricmp(name,"!WIN16.EXE")||!stricmp(name,"LAUNCH.ICO")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
+  if(fonts&&vga_display&&!stricmp(name,"FONT.DAT"))return 1;
+  if(fonts&&!vga_display&&!stricmp(name,"FONT14.DAT"))return 1;
   if(menu_generator&&(!stricmp(name,"!MNUGEN.EXE")||!stricmp(name,"AUTOGEN.DAT")))return 1;
   if(accessories&&component_member(name,1))return 1;
   if(games&&component_member(name,2))return 1;
-  if(sample_docs&&((strlen(name)>4&&!stricmp(name+strlen(name)-4,".BMP")&&stricmp(name,"PWROFF.BMP"))||(strlen(name)>3&&!stricmp(name+strlen(name)-3,".MD"))))return 1;
+  if(sample_docs&&((strlen(name)>4&&!stricmp(name+strlen(name)-4,".BMP")&&stricmp(name,"PWROFF.BMP"))||(strlen(name)>3&&!stricmp(name+strlen(name)-3,".MD"))||(strlen(name)>3&&!stricmp(name+strlen(name)-3,".DB"))))return 1;
   if(shortcut_build<0)return 0;
   if(!stricmp(name,"!KEY.COM")){
     if(shortcut_build!=0)return 0;*dest_name="!KEY.COM";return 1;
@@ -723,6 +741,7 @@ static int extract_install_files(const char *archive,const char *install,int sho
     if(selected){
       if(sample_docs&&strlen(dest_name)>4&&!stricmp(dest_name+strlen(dest_name)-4,".BMP")&&stricmp(dest_name,"PWROFF.BMP")){sprintf(destination,"%s\\SAMPLES\\DRAW",install);make_directories(destination);sprintf(destination,"%s\\SAMPLES\\DRAW\\%s",install,dest_name);}
       else if(sample_docs&&strlen(dest_name)>3&&!stricmp(dest_name+strlen(dest_name)-3,".MD")){sprintf(destination,"%s\\SAMPLES\\MKDOWN",install);make_directories(destination);sprintf(destination,"%s\\SAMPLES\\MKDOWN\\%s",install,dest_name);}
+      else if(sample_docs&&strlen(dest_name)>3&&!stricmp(dest_name+strlen(dest_name)-3,".DB")){sprintf(destination,"%s\\SAMPLES\\%s",install,dest_name);}
       else sprintf(destination,"%s\\%s",install,dest_name);
       out=fopen(destination,"wb");
       if(!out){fclose(in);error_icon(0);printf("Cannot create %s\n",destination);return 0;}
@@ -755,6 +774,112 @@ static int extract_install_files(const char *archive,const char *install,int sho
 }
 
 
+
+/* Launch! 3.75 Windows 3.x integration.  The DOS installer records the
+   Windows location and creates a conservative legacy PIF which Windows 3.x
+   can open directly.  A Win16 DDE helper source is also installed for the
+   Program Manager group-registration step. */
+static int write_windows_config(const char *install,int enabled,const char *winpath)
+{
+  char path[PATH_SIZE];FILE *f;
+  sprintf(path,"%s\\LAUNCH.CFG",install);
+  f=fopen(path,"at");if(!f)return 0;
+  fprintf(f,"WinInst=%d\n",enabled?1:0);
+  fprintf(f,"WinPath=%s\n",winpath&&*winpath?winpath:"C:\\WINDOWS");
+  return fclose(f)==0;
+}
+
+static int valid_windows3_path(const char *path)
+{
+  char p[PATH_SIZE];
+  sprintf(p,"%s\\WIN.COM",path);if(!exists(p))return 0;
+  sprintf(p,"%s\\PROGMAN.EXE",path);if(!exists(p))return 0;
+  return 1;
+}
+
+static void pif_put_word(unsigned char *p,unsigned off,unsigned v)
+{ p[off]=(unsigned char)(v&255);p[off+1]=(unsigned char)((v>>8)&255); }
+
+static int write_launch_pif(const char *install)
+{
+  unsigned char pif[0x171];unsigned i,sum=0;char path[PATH_SIZE],exe[64];FILE *f;
+  memset(pif,0,sizeof(pif));
+  strncpy((char*)pif+2,"Launch!",29);
+  pif_put_word(pif,0x20,640);pif_put_word(pif,0x22,128);
+  sprintf(exe,"%s\\!.EXE",install);strncpy((char*)pif+0x24,exe,62);
+  pif[0x63]=1;
+  if(install[0]&&install[1]==':')pif[0x64]=(unsigned char)(toupper(install[0])-'A');
+  strncpy((char*)pif+0x65,install,63);
+  pif[0xE5]=0;pif[0xE6]=1;pif[0xE7]=0;pif[0xE8]=0xFF;pif[0xE9]=25;pif[0xEA]=80;
+  /* Classic PIF checksum: byte 1 chosen so the complete 0x171-byte sum is 0. */
+  pif[1]=0;for(i=0;i<sizeof(pif);i++)sum=(sum+pif[i])&255;pif[1]=(unsigned char)((256-sum)&255);
+  sprintf(path,"%s\\LAUNCH.PIF",install);f=fopen(path,"wb");if(!f)return 0;
+  if(fwrite(pif,1,sizeof(pif),f)!=sizeof(pif)){fclose(f);return 0;}return fclose(f)==0;
+}
+
+static int write_win_group_request(const char *install,const char *winpath)
+{
+  char path[PATH_SIZE];FILE *f;
+  /* Consumed by the Win16 WINSETUP.EXE helper under Windows 3.x.
+     Absolute paths make the operation independent of the Windows working directory. */
+  sprintf(path,"%s\\WINSETUP.CFG",install);f=fopen(path,"wt");if(!f)return 0;
+  fprintf(f,"Group=Launch!\nPIF=%s\\LAUNCH.PIF\nIcon=%s\\LAUNCH.ICO\nWorkDir=%s\nWinPath=%s\n",install,install,install,winpath);
+  return fclose(f)==0;
+}
+
+static int contains_icase(const char *hay,const char *needle)
+{
+  int n=(int)strlen(needle);const char *p;if(!n)return 1;
+  for(p=hay;*p;p++)if(!strnicmp(p,needle,n))return 1;
+  return 0;
+}
+
+/* Add WINSETUP.EXE to [windows] run= as a one-shot Windows 3.x setup task.
+   Existing run= contents are preserved verbatim and WINSETUP removes only
+   itself after Program Manager confirms all DDE commands succeeded. */
+static int schedule_winsetup(const char *install,const char *winpath)
+{
+  char ini[PATH_SIZE],tmp[PATH_SIZE],self[PATH_SIZE];
+  static char line[512],copy[512];
+  FILE *in,*out;int in_windows=0,saw_windows=0,saw_run=0,inserted=0;
+  char *p,*eq;
+  sprintf(ini,"%s\\WIN.INI",winpath);sprintf(tmp,"%s\\WIN.$$$",winpath);
+  sprintf(self,"%s\\WINSETUP.EXE",install);
+  in=fopen(ini,"rt");if(!in)return 0;
+  out=fopen(tmp,"wt");if(!out){fclose(in);return 0;}
+  while(fgets(line,sizeof(line),in)){
+    strcpy(copy,line);p=copy;while(*p==' '||*p=='\t')p++;
+    if(*p=='['){
+      if(in_windows&&!saw_run){fprintf(out,"run=%s\n",self);saw_run=1;inserted=1;}
+      in_windows=!strnicmp(p,"[windows]",9);if(in_windows)saw_windows=1;
+    }
+    if(in_windows&&!strnicmp(p,"run",3)){
+      eq=strchr(p,'=');
+      if(eq){
+        saw_run=1;
+        if(!contains_icase(eq+1,self)){
+          char *e=line+strlen(line);while(e>line&&(e[-1]=='\r'||e[-1]=='\n'))*--e=0;
+          fprintf(out,"%s%s%s\n",line,(*(eq+1)&&*(eq+1)!='\r'&&*(eq+1)!='\n')?" ":"",self);
+          inserted=1;continue;
+        }else inserted=1;
+      }
+    }
+    fputs(line,out);
+  }
+  if(in_windows&&!saw_run){fprintf(out,"run=%s\n",self);inserted=1;}
+  if(!saw_windows){fprintf(out,"\n[windows]\nrun=%s\n",self);inserted=1;}
+  if(fclose(in)!=0||fclose(out)!=0){remove(tmp);return 0;}
+  if(!inserted){remove(tmp);return 0;}
+  {
+    char bak[PATH_SIZE];
+    sprintf(bak,"%s\\WIN.LCH",winpath);remove(bak);
+    if(rename(ini,bak)!=0){remove(tmp);return 0;}
+    if(rename(tmp,ini)!=0){rename(bak,ini);remove(tmp);return 0;}
+    remove(bak);
+  }
+  return 1;
+}
+
 int main(int argc,char **argv)
 {
   static char install[PATH_SIZE],source_dir[PATH_SIZE],archive[PATH_SIZE];
@@ -767,10 +892,11 @@ int main(int argc,char **argv)
   int cpu_ok,display_ok,vga_display,menu_result;
   const char *display_name;
   int add_path=0,add_shortcut=0,show_menu=0,autoexec_changed=0;
+  int win_inst=0;char win_path[PATH_SIZE];
   (void)argc;
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.73 Installation");
+  colour_text("Launch!",12);puts(" 3.75 Installation");
   installer_title_rule();
   puts("");
   cpu_ok=cpu_at_least_286();display_name=display_adapter(&display_ok);vga_display=!strncmp(display_name,"VGA",3);if((!cpu_ok||!display_ok)&&!hardware_warning())return 1;
@@ -843,10 +969,32 @@ int main(int argc,char **argv)
   sprintf(launch_exe,"%s\\!.EXE",install);
   if(!extract_install_files(archive,install,shortcut_build,accessories,games,fonts,menu_generator,sample_docs))return 1;
   remove_unselected_components(install,accessories,games,fonts,menu_generator,shortcut_key);
-  if(!upgrade&&!write_initial_font_config(install,(fonts&&vga_display)?6:0)){error_icon(0);puts("Files were copied, but the initial font configuration could not be created.");return 1;}
+  /* A machine gets exactly one built-in font catalogue.  Also remove an
+     opposite-format catalogue left behind by an earlier installation. */
+  if(fonts){if(vga_display)remove_named(install,"FONT14.DAT");else remove_named(install,"FONT.DAT");}
+  if(!upgrade&&!write_initial_font_config(install,(fonts&&display_ok)?6:0)){error_icon(0);puts("Files were copied, but the initial font configuration could not be created.");return 1;}
   if(!apply_component_config(install,screensavers,fonts)){
     error_icon(0);puts("Files were copied, but the selected component configuration could not be applied.");return 1;
   }
+  strcpy(win_path,"C:\\WINDOWS");
+  puts("");win_inst=ask_windows_yes("Do you have Microsoft Windows 3.x installed?",0,0);
+  if(win_inst){
+    char entered[PATH_SIZE];
+    puts("");
+    for(;;){
+      question_icon(0);printf("Windows installation path [");colour_text("C:\\WINDOWS",10);printf("]: ");
+      if(!fgets(entered,sizeof(entered),stdin))return 1;strip_line(entered);
+      if(*entered)strncpy(win_path,entered,sizeof(win_path)-1);win_path[sizeof(win_path)-1]=0;
+      n=(int)strlen(win_path);while(n>3&&(win_path[n-1]=='\\'||win_path[n-1]=='/'))win_path[--n]=0;
+      if(valid_windows3_path(win_path))break;
+      error_icon(0);printf("%s does not appear to contain Windows 3.x (WIN.COM/PROGMAN.EXE not found).\n",win_path);
+    }
+    if(!write_launch_pif(install)){error_icon(0);puts("Windows detected, but LAUNCH.PIF could not be created.");return 1;}
+    if(!write_win_group_request(install,win_path)){error_icon(0);puts("Windows detected, but WINSETUP.CFG could not be created.");return 1;}
+    if(!schedule_winsetup(install,win_path)){error_icon(0);puts("Windows detected, but WINSETUP.EXE could not be added to WIN.INI startup.");return 1;}
+  }
+  if(!write_windows_config(install,win_inst,win_path)){error_icon(0);puts("Could not save Windows integration settings.");return 1;}
+
   /* Keep the /INITMENU helper environment deliberately tiny.  The Microsoft C
      startup code copies the inherited DOS environment into the child near heap;
      a large development AUTOEXEC environment can otherwise make the already-large

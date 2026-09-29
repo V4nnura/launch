@@ -4,7 +4,7 @@ REM   / /   / __ `/ / / / __ \/ ___/ __ \/ /
 REM  / /___/ /_/ / /_/ / / / /__/ / / /_/  
 REM /_____/\__,_/\__,_/_/ /_/\___/_/ /_(_)   
 REM Launch! for DOS ---------------------
-REM MAINTAINER NOTES - Launch! 3.74
+REM MAINTAINER NOTES - Launch! 3.75
 REM File: BUILD.BAT
 REM Role: Primary DOS build script
 REM Build/ownership: Builds complete suite or named component and captures transcript in BUILD.LOG.
@@ -56,6 +56,11 @@ IF "%1"=="!WORDZ" GOTO WORDZ
 IF "%1"=="!TYPO" GOTO TYPO
 IF "%1"=="!METRO" GOTO METRO
 IF "%1"=="!JELLOH" GOTO JELLOH
+IF "%1"=="WINSETUP" GOTO WINSETUP
+IF "%1"=="!WIN16" GOTO WIN16
+IF "%1"=="WIN16" GOTO WIN16
+IF "%1"=="WIN" GOTO WINONLY
+IF "%1"=="INSTALL" GOTO INSTALLONLY
 IF "%1"=="!cal" GOTO CAL
 IF "%1"=="!calc" GOTO CALC
 IF "%1"=="!draw" GOTO DRAW
@@ -76,6 +81,11 @@ IF "%1"=="!wordz" GOTO WORDZ
 IF "%1"=="!typo" GOTO TYPO
 IF "%1"=="!metro" GOTO METRO
 IF "%1"=="!jelloh" GOTO JELLOH
+IF "%1"=="winsetup" GOTO WINSETUP
+IF "%1"=="!win16" GOTO WIN16
+IF "%1"=="win16" GOTO WIN16
+IF "%1"=="win" GOTO WINONLY
+IF "%1"=="install" GOTO INSTALLONLY
 ECHO Unknown component: %1
 GOTO FAIL
 :CORE
@@ -142,6 +152,38 @@ CL /AS /Os /Gs /W3 /Fe!METRO.EXE METROBLD.C ACCLIBX.C
 GOTO CHECK
 :JELLOH
 CL /AS /Os /Gs /W3 /Fe!JELLOH.EXE JELLOHBLD.C ACCLIBX.C
+GOTO CHECK
+
+:WINONLY
+REM Build native Windows companion and refresh installer/package only.
+CL /c /AM /GA /W3 WIN16.C
+IF ERRORLEVEL 1 GOTO FAIL
+LINK WIN16.OBJ,!WIN16.EXE,NUL,LIBW MLIBCEW,WIN16.DEF;
+IF ERRORLEVEL 1 GOTO FAIL
+GOTO INSTALLONLY
+:INSTALLONLY
+REM Rebuild installer and INSTALL.DAT without rebuilding the DOS suite.
+CL /AS /Os /Gs /W3 /FeINSTALL.EXE INSTBLD.C
+IF ERRORLEVEL 1 GOTO FAIL
+CL /AS /Os /Gs /W3 PACKDAT.C
+IF ERRORLEVEL 1 GOTO FAIL
+PACKDAT.EXE
+IF ERRORLEVEL 1 GOTO FAIL
+ECHO Built Windows/installer package
+GOTO END
+
+:WIN16
+REM Native Windows 3.x Launch! menu companion.
+CL /c /AM /GA /W3 WIN16.C
+IF ERRORLEVEL 1 GOTO FAIL
+LINK WIN16.OBJ,!WIN16.EXE,NUL,LIBW MLIBCEW,WIN16.DEF;
+GOTO CHECK
+:WINSETUP
+REM Win16 helper: MSC 7.0 + Windows 3.x SDK, medium model.
+REM Proven build recipe for the SDK runtime supplied as MLIBCEW.LIB.
+CL /c /AM /GA /W3 WINSETUP.C
+IF ERRORLEVEL 1 GOTO FAIL
+LINK WINSETUP.OBJ,WINSETUP.EXE,NUL,LIBW MLIBCEW,WINSETUP.DEF;
 GOTO CHECK
 :CHECK
 IF ERRORLEVEL 1 GOTO FAIL
@@ -210,6 +252,9 @@ IF ERRORLEVEL 1 GOTO FAIL
 CALL BUILD !METRO
 IF ERRORLEVEL 1 GOTO FAIL
 CALL BUILD !JELLOH
+IF ERRORLEVEL 1 GOTO FAIL
+IF ERRORLEVEL 1 GOTO FAIL
+CALL BUILD !WIN16
 IF ERRORLEVEL 1 GOTO FAIL
 PACKDAT.EXE
 IF ERRORLEVEL 1 GOTO FAIL
