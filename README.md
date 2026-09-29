@@ -10,6 +10,13 @@
 
 **Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS and FreeCOM.
 
+<img height="96" alt="Windows 3.0 compatible" src="https://github.com/user-attachments/assets/21c03855-d01c-4085-9e6b-6a4342669763" />
+&nbsp;&nbsp;&nbsp;
+<img height="96" alt="Windows 3.1 compatible" src="https://github.com/user-attachments/assets/579e8219-4c83-446d-ad47-2bf3c02d1c74" />
+
+&nbsp;
+<br/>
+
 <img width="720" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" />
 
 <br/>
