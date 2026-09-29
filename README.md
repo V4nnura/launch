@@ -12,9 +12,7 @@
 
 <img width="640" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" /><br/>
 <img width="640" alt="Monochrome Launch!" src="https://github.com/user-attachments/assets/9a698840-9f08-4cb7-8cb0-abf281e37a8b" />
-
-### Integrated Windows 3.x support
-
+<br/>
 <img width="64" height="64" alt="LAUNCH" src="https://github.com/user-attachments/assets/30eb94f8-efc0-4bec-9365-c6c1ee753448" />
 <img width="64" height="64" alt="LAUNCH16" src="https://github.com/user-attachments/assets/86d4e6e4-0457-4c08-9a8a-6f6b2fc4c399" />
 <br/>
