@@ -11,15 +11,14 @@
 **Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS and FreeCOM.
 
 <img width="640" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" /><br/>
-<img width="640" alt="Monochrome Launch!" src="https://github.com/user-attachments/assets/9a698840-9f08-4cb7-8cb0-abf281e37a8b" />
-<br/>
+<img width="640" alt="Monochrome Launch!" src="https://github.com/user-attachments/assets/9a698840-9f08-4cb7-8cb0-abf281e37a8b" /><br/>
+<img width="640" alt="Windows - Launch for DOS" src="https://github.com/user-attachments/assets/f85c6106-3052-4bb5-9076-00a4971c4a17" /><br/>
+<img width="640" alt="Windows - Launch 16" src="https://github.com/user-attachments/assets/f33c0ec5-a1e4-4534-affd-ebf45fa7827e" /><br/>
 <img width="64" height="64" alt="LAUNCH" src="https://github.com/user-attachments/assets/30eb94f8-efc0-4bec-9365-c6c1ee753448" />
 <img width="64" height="64" alt="LAUNCH16" src="https://github.com/user-attachments/assets/86d4e6e4-0457-4c08-9a8a-6f6b2fc4c399" />
-<br/>
-<img width="400" alt="Windows - Launch for DOS" src="https://github.com/user-attachments/assets/f85c6106-3052-4bb5-9076-00a4971c4a17" />
-<img width="400" alt="Windows - Launch 16" src="https://github.com/user-attachments/assets/f33c0ec5-a1e4-4534-affd-ebf45fa7827e" />
 
-<br/>
+----
+
 <img height="75" alt="So. Many. Features." src="https://github.com/user-attachments/assets/0192af1f-a429-4d77-b570-05c9d66106e9" />
 
 - Displays a hierarchical folder based menu, modally over the top of the existing console contents.
