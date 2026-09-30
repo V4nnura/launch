@@ -11,7 +11,6 @@
 **Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS and FreeCOM.
 
 <img width="640" alt="Menu (post boot)" src="https://github.com/user-attachments/assets/1ef29b23-0c63-43a0-b460-1d41a6af45ed" />
-<img width="640" alt="Monochrome Launch!" src="https://github.com/user-attachments/assets/9a698840-9f08-4cb7-8cb0-abf281e37a8b" /><br/>
 <img width="640" alt="Launch! WIN16" src="https://github.com/user-attachments/assets/c5e4e298-2750-4fce-9588-02c05dd8993a" />
 <img width="640" alt="Launch! for DOS under WIN16" src="https://github.com/user-attachments/assets/04e120bd-7fbd-48c1-9a18-9e2476e9e024" />
 <br/>
