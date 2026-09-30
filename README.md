@@ -1,6 +1,6 @@
 # <img alt="Launch! for DOS" src="https://github.com/user-attachments/assets/8f4207ab-15d2-47df-80a3-a44701e03f83" />
 
-> A lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- plus accessories and games, to create a modern and useful desktop environment.
+> A free lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- plus accessories and games, to create a modern and useful desktop environment.
 
 <img height="75" alt="Go get it!" src="https://github.com/user-attachments/assets/deef3126-a840-4c73-bf86-51d12d398ec1" />
 
