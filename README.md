@@ -157,7 +157,7 @@ Behind the UI, everything is plain text configuration. You can configure everyth
 
 ----
 
-Launch is created on a ASUSTeK 486DX4/100 machine running IBM PC DOS 7.0. 
+Launch is created on a custom build ASUSTeK 486DX4/100 machine running IBM PC DOS 7.0. 
 Coded using [Microsoft QuickC](https://en.wikipedia.org/wiki/QuickC) IDE and [FTE](https://fte.sourceforge.net/) (Folding Text Editor). 
 Graphical glyphs created using [Fontraption](https://int10h.org/blog/2019/05/fontraption-vga-text-mode-font-editor/). 
 Screen layout and composition done with [TheDraw](https://www.abandonwaredos.com/abandonware-game.php?abandonware=TheDraw+4&gid=3563).
