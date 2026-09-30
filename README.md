@@ -84,7 +84,7 @@ Configuration includes the menu, colors, screen savers, prompt customization, fo
 <a id="screen-savers"></a>
 ### <img alt="Screen Savers" src="https://github.com/user-attachments/assets/447f06ad-4597-45bc-b4cf-3f3debcc02a1" />
 
-Some interesting graphical displays that give the real early 90s vibe.
+Some interesting graphical displays that give the real early 90s vibes.
 
 Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Screen-Savers).
 
