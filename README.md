@@ -65,7 +65,7 @@ INSTALL.EXE
 
 At the **command prompt**, display your menu by pressing the keyboard shortcut which by default is set to:
 ```
-CTRL + ALT + .
+CTRL + ALT + \
 ```
 **Learn more about [the Menu](https://github.com/therenegar/launch/wiki/!.EXE).**
 
