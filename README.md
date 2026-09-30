@@ -8,6 +8,8 @@
 
 **Requires** DOS 3.3, 80286, EGA or better. 220KB-1.5MB free disk space for install (depending on selected options).
 
+[!86.EXE](https://github.com/therenegar/launch/wiki/!86.EXE) provides a "tiny" experience but supports 8088/8086 PCs along with MDA and CGA displays.
+
 **Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS and FreeCOM.
 
 <img width="640" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cd688f5b-2dd4-4688-8342-2b1e4d032547" /><br/>
