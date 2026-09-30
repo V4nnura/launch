@@ -4,7 +4,7 @@ REM   / /   / __ `/ / / / __ \/ ___/ __ \/ /
 REM  / /___/ /_/ / /_/ / / / /__/ / / /_/  
 REM /_____/\__,_/\__,_/_/ /_/\___/_/ /_(_)   
 REM Launch! for DOS ---------------------
-REM MAINTAINER NOTES - Launch! 3.75
+REM MAINTAINER NOTES - Launch! 3.76
 REM File: BUILD.BAT
 REM Role: Primary DOS build script
 REM Build/ownership: Builds complete suite or named component and captures transcript in BUILD.LOG.
@@ -168,7 +168,11 @@ GOTO CHECK
 REM Build native Windows companion and refresh installer/package only.
 CL /c /AM /GA /W3 WIN16.C
 IF ERRORLEVEL 1 GOTO FAIL
+RC /r WIN16.RC
+IF ERRORLEVEL 1 GOTO FAIL
 LINK WIN16.OBJ,!WIN16.EXE,NUL,LIBW MLIBCEW,WIN16.DEF;
+IF ERRORLEVEL 1 GOTO FAIL
+RC WIN16.RES !WIN16.EXE
 IF ERRORLEVEL 1 GOTO FAIL
 GOTO INSTALLONLY
 :INSTALLONLY
@@ -186,7 +190,11 @@ GOTO END
 REM Native Windows 3.x Launch! menu companion.
 CL /c /AM /GA /W3 WIN16.C
 IF ERRORLEVEL 1 GOTO FAIL
+RC /r WIN16.RC
+IF ERRORLEVEL 1 GOTO FAIL
 LINK WIN16.OBJ,!WIN16.EXE,NUL,LIBW MLIBCEW,WIN16.DEF;
+IF ERRORLEVEL 1 GOTO FAIL
+RC WIN16.RES !WIN16.EXE
 GOTO CHECK
 :WINSETUP
 REM Win16 helper: MSC 7.0 + Windows 3.x SDK, medium model.

@@ -1,9 +1,9 @@
-;     __                           __    __
-;    / /   ____ ___  ______  _____/ /_  / /
-;   / /   / __ `/ / / / __ \/ ___/ __ \/ / 
-;  / /___/ /_/ / /_/ / / / /__/ / / /_/  
-; /_____/\__,_/\__,_/_/ /_/\___/_/ /_(_)   
-; Launch! for DOS ---------------------
+#     __                           __    __
+#    / /   ____ ___  ______  _____/ /_  / /
+#   / /   / __ `/ / / / __ \/ ___/ __ \/ / 
+#  / /___/ /_/ / /_/ / / / /__/ / / /_/  
+# /_____/\__,_/\__,_/_/ /_/\___/_/ /_(_)   
+# Launch! for DOS ---------------------
 /*
  * MAINTAINER NOTES - Launch! 3.73
  * File: !KEY.ASM
@@ -37,7 +37,7 @@ old21:          .word 0,0
 old28:          .word 0,0
 old2f:          .word 0,0
 shell_psp:      .word 0
-hot_scan:       .byte 0x34             /* period */
+hot_scan:       .byte 0x2b             /* backslash */
 hot_mods:       .byte 0x06             /* Ctrl + Alt */
 hot_extended:   .byte 0                /* key uses an E0 prefix */
 raw_mods:       .byte 0
@@ -436,6 +436,23 @@ int28_handler:
     push es
     pushf
     call far ptr cs:[old28]
+.ifdef CPU286_BUILD
+    /* The 286 build deliberately does not hook INT 16h.  All queued text is
+     * fed only from DOS's INT 28h idle context, after confirming that the
+     * command processor is current.  This keeps the TSR completely out of
+     * the BIOS keyboard read path while still allowing a command longer than
+     * the small BIOS type-ahead ring to be delivered in successive chunks. */
+    cmp byte ptr cs:[macro_active],0
+    je int28_286_no_active_macro
+    mov ah,0x51
+    int 0x21
+    cmp bx,word ptr cs:[shell_psp]
+    jne int28_done
+    call fill_keyboard_buffer
+    cmp byte ptr cs:[macro_active],0
+    jne int28_done
+int28_286_no_active_macro:
+.endif
     cmp byte ptr cs:[pending],0
     jne int28_have_pending
     cmp byte ptr cs:[idle_enabled],0
@@ -564,7 +581,9 @@ int2f_handler:
     pop si
     pop cx
     pop ax
+.ifndef CPU286_BUILD
     call fill_keyboard_buffer
+.endif
     xor al,al
     iret
 22: cmp ax,0xd5b4
@@ -572,12 +591,14 @@ int2f_handler:
     mov byte ptr cs:[idle_enabled],bl
     mov word ptr cs:[idle_timeout],cx
     mov word ptr cs:[idle_timeout+2],dx
+    push es
     mov ax,0x40
     mov es,ax
     mov ax,word ptr es:[0x6c]
     mov word ptr cs:[idle_last],ax
     mov ax,word ptr es:[0x6e]
     mov word ptr cs:[idle_last+2],ax
+    pop es
     xor al,al
     iret
 10: jmp far ptr cs:[old2f]
@@ -717,10 +738,12 @@ installer:
     mov word ptr [old15],bx
     mov word ptr [old15+2],es
 .endif
+.ifndef CPU286_BUILD
     mov ax,0x3516
     int 0x21
     mov word ptr [old16],bx
     mov word ptr [old16+2],es
+.endif
 .ifndef CPU286_BUILD
     mov ax,0x3521
     int 0x21
@@ -747,9 +770,11 @@ installer:
     mov ax,0x2515
     int 0x21
 .endif
+.ifndef CPU286_BUILD
     mov dx,offset int16_handler
     mov ax,0x2516
     int 0x21
+.endif
     mov dx,offset int28_handler
     mov ax,0x2528
     int 0x21
@@ -1043,10 +1068,12 @@ unload_shortcut:
     call check_15
     jc unload_unsafe
 .endif
+.ifndef CPU286_BUILD
     mov ax,0x3516
     int 0x21
     call check_16
     jc unload_unsafe
+.endif
 .ifndef CPU286_BUILD
     mov ax,0x3521
     int 0x21
@@ -1070,9 +1097,11 @@ unload_shortcut:
     mov bx,offset old15
     call restore_vector
 .endif
+.ifndef CPU286_BUILD
     mov al,0x16
     mov bx,offset old16
     call restore_vector
+.endif
     mov al,0x28
     mov bx,offset old28
     call restore_vector
@@ -1838,7 +1867,7 @@ msg_help:
     .ascii "       !KEY /UNLOAD\r\n"
     .ascii "       !KEY /?\r\n\r\n"
 .endif
-    .ascii "Default: CTRL+ALT+.\r\n"
+    .ascii "Default: CTRL+ALT+\\\r\n"
     .ascii "/KEY accepts CTRL, ALT, SHIFT, F1-F12, WIN/LWIN/RWIN/MENU,\r\n"
     .ascii "a character, or hexadecimal\r\n"
     .ascii "Set-1 make codes separated by +. Modifier codes are 1D (Ctrl),\r\n"
@@ -1846,11 +1875,11 @@ msg_help:
     .ascii "Examples:\r\n"
 .ifdef DOSBOX_BUILD
     .ascii "  !KEYDB /KEY=CTRL+ALT+L\r\n"
-    .ascii "  !KEYDB /KEY=1D+38+34\r\n\r\n"
+    .ascii "  !KEYDB /KEY=1D+38+2B\r\n\r\n"
     .ascii "The hotkey types ! and relies on the Launch! directory being on PATH.\r\n"
 .else
     .ascii "  !KEY /KEY=CTRL+ALT+L\r\n"
-    .ascii "  !KEY /KEY=1D+38+34\r\n\r\n"
+    .ascii "  !KEY /KEY=1D+38+2B\r\n\r\n"
     .ascii "The hotkey types ! and relies on the Launch! directory being on PATH.\r\n"
 .endif
 

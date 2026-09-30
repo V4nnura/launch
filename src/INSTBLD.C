@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.75 installer - Microsoft C/C++ 7.0, DOS small model. */
+/* Launch! 3.76 installer - Microsoft C/C++ 7.0, DOS small model. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -471,7 +471,7 @@ static int cpu_is_286(void){unsigned before,after;
 #endif
 }
 static const char *display_adapter(int *suitable){union REGS r;memset(&r,0,sizeof(r));r.x.ax=0x1A00;int86(0x10,&r,&r);if(r.h.al==0x1A){*suitable=1;return"VGA or compatible";}memset(&r,0,sizeof(r));r.h.ah=0x12;r.h.bl=0x10;int86(0x10,&r,&r);if(r.h.bl!=0x10){*suitable=1;return"EGA or compatible";}*suitable=0;return"CGA/MDA compatible";}
-static int write_initial_font_config(const char *install,int font_id){char path[PATH_SIZE];FILE*f;sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"wt");if(!f)return 0;fprintf(f,"TITLEBAR_FG=15\nTITLEBAR_BG=7\nFONT_ID=%d\n",font_id);return fclose(f)==0;}
+static int write_initial_font_config(const char *install,int font_id){char path[PATH_SIZE];FILE*f;sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"wt");if(!f)return 0;fprintf(f,"suiteTitle=Launch!\nTITLEBAR_FG=15\nTITLEBAR_BG=7\nFONT_ID=%d\n",font_id);return fclose(f)==0;}
 static int hardware_warning(void){char answer[16];error_icon(0);fputs("This system's hardware doesn't meet minimum recommended requirements. Proceed ",stdout);choice_default(0);if(!fgets(answer,sizeof(answer),stdin))return 0;return toupper(answer[0])=='Y';}
 
 static unsigned char far *bios_byte(unsigned offset)
@@ -813,7 +813,7 @@ static int extract_install_files(const char *archive,const char *install,int sho
 
 
 
-/* Launch! 3.75 Windows 3.x integration.  The DOS installer records the
+/* Launch! 3.76 Windows 3.x integration.  The DOS installer records the
    Windows location and creates a conservative legacy PIF which Windows 3.x
    can open directly.  A Win16 DDE helper source is also installed for the
    Program Manager group-registration step. */
@@ -845,7 +845,8 @@ static int write_launch_pif(const char *install)
   strncpy((char*)pif+2,"Launch!",29);
   pif_put_word(pif,0x20,640);pif_put_word(pif,0x22,128);
   sprintf(exe,"%s\\!.EXE",install);strncpy((char*)pif+0x24,exe,62);
-  pif[0x63]=1;
+  /* PIF header flags: 0x10 = Close Window on Exit. */
+  pif[0x63]=0x10;
   if(install[0]&&install[1]==':')pif[0x64]=(unsigned char)(toupper(install[0])-'A');
   strncpy((char*)pif+0x65,install,63);
   pif[0xE5]=0;pif[0xE6]=1;pif[0xE7]=0;pif[0xE8]=0xFF;pif[0xE9]=25;pif[0xEA]=80;
@@ -992,7 +993,7 @@ int main(int argc,char **argv)
   (void)argc;
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.75 Installation");
+  colour_text("Launch!",12);puts(" 3.76 Installation");
   installer_title_rule();
   puts("");
   cpu_ok=cpu_at_least_286();display_name=display_adapter(&display_ok);vga_display=!strncmp(display_name,"VGA",3);if((!cpu_ok||!display_ok)&&!hardware_warning())return 1;
@@ -1081,7 +1082,7 @@ int main(int argc,char **argv)
   /* Visually separate configuration from the copy/install phase. */
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.75 Installation");
+  colour_text("Launch!",12);puts(" 3.76 Installation");
   installer_title_rule();
   puts("\n Please wait while files are extracted and copied...");fflush(stdout);
 
@@ -1128,7 +1129,7 @@ int main(int argc,char **argv)
     puts("");add_path=ask_yes("Add Launch! to PATH?",1,5);
     puts("");add_shortcut=shortcut_key?ask_yes("Enable keyboard shortcut?",1,5):0;
     if(add_shortcut){
-      printf("\n     The keyboard shortcut is set to ");colour_text("CTRL+ALT+.",10);puts("");
+      printf("\n     The keyboard shortcut is set to ");colour_text("CTRL+ALT+\\",10);puts("");
       puts("");if(ask_yes("Change the shortcut key/s?",0,5))capture_shortcut(key_spec);
     }
     puts("");show_menu=ask_yes("Show menu after startup?",0,5);

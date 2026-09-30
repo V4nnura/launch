@@ -47,6 +47,7 @@ static const unsigned char stack_exit_r14[32]={0x00,0xC0,0x40,0x40,0x10,0x70,0xF
 ACC_APPEARANCE acc_appearance={1,11,15,7,12,14,15,10,15,3,0,7,7,0,1,1,1,1,1,10,0,1,1,1,0,0};
 int acc_cols=80,acc_rows=25,acc_mouse_present=0;
 char acc_directory[ACC_PATH];
+char acc_suite_title[24]="Launch!";
 static unsigned short saved_screen[80*50];
 static int saved_mode,saved_page,saved_cursor_start,saved_cursor_end;
 static int saved_cursor_x,saved_cursor_y;
@@ -399,10 +400,12 @@ int acc_exists(const char *path){FILE *f=fopen(path,"rb");if(!f)return 0;fclose(
 static void acc_load_config(void)
 {
   char name[ACC_PATH],line[128],*eq,*key;int value,title_fg_set=0,title_bg_set=0;FILE *f;unsigned char *field=0;
-  sprintf(name,"%sLAUNCH.CFG",acc_directory);f=fopen(name,"r");if(!f)return;
+  strcpy(acc_suite_title,"Launch!");sprintf(name,"%sLAUNCH.CFG",acc_directory);f=fopen(name,"r");if(!f)return;
   while(fgets(line,sizeof(line),f)){
     key=line;while(*key&&isspace(*key))key++;if(!*key||*key==';'||*key=='#')continue;
-    eq=strchr(key,'=');if(!eq)continue;*eq++=0;value=atoi(eq);field=0;
+    eq=strchr(key,'=');if(!eq)continue;*eq++=0;
+    if(!stricmp(key,"suiteTitle")){char *e=eq+strlen(eq);while(e>eq&&isspace((unsigned char)e[-1]))*--e=0;while(*eq&&isspace((unsigned char)*eq))eq++;if(*eq){strncpy(acc_suite_title,eq,sizeof(acc_suite_title)-1);acc_suite_title[sizeof(acc_suite_title)-1]=0;}continue;}
+    value=atoi(eq);field=0;
     if(!stricmp(key,"BACKGROUND"))field=&acc_appearance.background;
     else if(!stricmp(key,"BORDER"))field=&acc_appearance.border;
     else if(!stricmp(key,"TITLEBAR_FG"))field=&acc_appearance.titlebar_fg;
@@ -448,15 +451,16 @@ void acc_box(int x,int y,int w,int h,const char *title)
   for(i=0;i<w;i++)acc_put(x+i,y,211,top_border);
   acc_put(x,y+h-1,192,ACC_BORDER);acc_put(x+w-1,y+h-1,217,ACC_BORDER);for(i=1;i<w-1;i++)acc_put(x+i,y+h-1,196,ACC_BORDER);for(i=1;i<h-1;i++){acc_put(x,y+i,179,ACC_BORDER);acc_put(x+w-1,y+i,179,ACC_BORDER);}
   if(title&&*title){
-    int launch_len=7,avail=w-12;
-    if(avail<0)avail=0;
+    int launch_len=(int)strlen(acc_suite_title),avail=w-12,title_x;
+    if(avail<0)avail=0;if(launch_len>avail)launch_len=avail;
     title_len=(int)strlen(title);
     if(title_len>avail-launch_len)title_len=avail-launch_len;
     if(title_len<0)title_len=0;
     acc_put(x+2,y,' ',heading_attr);
-    acc_text(x+3,y,"Launch!",ACC_ATTR(acc_appearance.titlebar_bg,acc_appearance.main_title),7);
-    if(title_len){acc_put(x+10,y,' ',heading_attr);acc_text(x+11,y,title,heading_attr,title_len);}
-    acc_put(x+11+title_len,y,' ',heading_attr);
+    acc_text(x+3,y,acc_suite_title,ACC_ATTR(acc_appearance.titlebar_bg,acc_appearance.main_title),launch_len);
+    title_x=x+4+launch_len;
+    if(title_len){acc_put(x+3+launch_len,y,' ',heading_attr);acc_text(title_x,y,title,heading_attr,title_len);}
+    acc_put(title_x+title_len,y,' ',heading_attr);
     if(!stricmp(title,"Markdown")||!stricmp(title,"Note")||!stricmp(title,"Pixel Draw")||!stricmp(title,"To-Dos")){
       acc_put(x+w-8,y,ACC_MAXIMIZE_L,heading_attr);
       acc_put(x+w-7,y,ACC_MAXIMIZE_R,heading_attr);

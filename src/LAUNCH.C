@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.75 - modal command menu for DOS
+/* Launch! 3.76 - modal command menu for DOS
  * Microsoft C/C++ 7.0, medium model (.EXE), 286/EGA or later.
  */
 #include <dos.h>
@@ -63,6 +63,8 @@ static APPEARANCE light_standard_snapshot;
 /* Silent Windows 3.x integration settings (not exposed in Config UI). */
 static int win_inst_cfg=0;
 static char win_path_cfg[MAX_CMD]="C:\\WINDOWS";
+#define SUITE_TITLE_MAX 24
+static char suite_title[SUITE_TITLE_MAX]="Launch!";
 /* Shared hotkey target: 0 = !.EXE, 1 = !86.EXE. */
 static int shortcut_target_light=0;
 
@@ -126,6 +128,7 @@ typedef struct {
   unsigned char change_dir;
   unsigned char prompt_params;
   unsigned char add_path;
+  unsigned char windows_program;
 } NODE;
 
 /* Preassembled 8086 burst-injection helper.  The final 384 bytes are its queue. */
@@ -178,6 +181,7 @@ static char collections_file[MAX_CMD];
 static char program_dir[MAX_CMD];
 static int font_is_vga(void);
 static int font_is_ega(void);
+static int command_is_windows_program(const char *command);
 static int font_preview(unsigned char id);
 static int font_preview_ega(unsigned char id);
 static int font_read_ega(unsigned char id,unsigned segment);
@@ -560,7 +564,7 @@ static int appearance_value(APPEARANCE *a,const char *key,int value)
 static int load_appearance(void)
 {
   FILE *f;static char line[80];char *p,*q,*end;long value;APPEARANCE loaded;int title_fg_set=0,title_bg_set=0;
-  appearance=default_appearance;
+  appearance=default_appearance;strcpy(suite_title,"Launch!");
   f=fopen(appearance_file,"rt");if(!f)return 1;
   loaded=default_appearance;
   while(fgets(line,sizeof(line),f)){
@@ -570,6 +574,11 @@ static int load_appearance(void)
     /* Windows integration keys are intentionally silent configuration items.
        They are strings/flags rather than appearance fields, but live in the
        same file so future core features can use them. */
+    if(!stricmp(p,"suiteTitle")){
+      if(!*q)strcpy(suite_title,"Launch!");
+      else {strncpy(suite_title,q,SUITE_TITLE_MAX-1);suite_title[SUITE_TITLE_MAX-1]=0;}
+      continue;
+    }
     if(!stricmp(p,"WinInst")){
       value=strtol(q,&end,10);end=trim(end);
       if(!*q || *end || value<0 || value>1){fclose(f);return 0;}
@@ -964,6 +973,7 @@ static int load_config(const char *name)
         if(node<0){valid=0;break;}
         nodes[node].press_enter=(unsigned char)enter;nodes[node].change_dir=(unsigned char)cd;
         nodes[node].prompt_params=(unsigned char)prompt;nodes[node].add_path=(unsigned char)addpath;
+        nodes[node].windows_program=(unsigned char)command_is_windows_program(q);
       } else {valid=0;break;}
     }
     else if(!strnicmp(p,"FOLDER=",7)){
@@ -1372,8 +1382,10 @@ static const unsigned char launchui_codes[41]={16,17,30,31,169,170,173,174,175,1
 #define UI_PARENT_R  232
 #define UI_EXIT_L    214
 #define UI_EXIT_R    233
-static const unsigned char launchui_extra_codes[8]={UI_OPEN_L,UI_OPEN_R,UI_SEARCH_L,UI_SEARCH_R,UI_PARENT_L,UI_PARENT_R,UI_EXIT_L,UI_EXIT_R};
-static const unsigned char launchui_extra_logical[8]={89,90,91,92,61,62,93,94};
+#define UI_WINDOWS_PROGRAM 225
+static const unsigned char launchui_extra_codes[9]={UI_OPEN_L,UI_OPEN_R,UI_SEARCH_L,UI_SEARCH_R,UI_PARENT_L,UI_PARENT_R,UI_EXIT_L,UI_EXIT_R,UI_WINDOWS_PROGRAM};
+/* Source character position 63 maps to launch_glyph[] index 62 because MAKEGLYP.PY stores source positions 1..106. */
+static const unsigned char launchui_extra_logical[9]={89,90,91,92,61,62,93,94,63};
 /* Browser runtime slots are referenced by the EGA BIOS overlay helpers
    below, so declare them here before first use (MSC 7.0 requires this). */
 static const unsigned char launchui_browser_codes[6]={193,183,221,184,197,186};
@@ -1421,7 +1433,7 @@ static void ega14_overlay_ui_bios(void)
   const unsigned char far *src;int i;
   for(i=0;i<(int)sizeof(launchui_codes);i++)ega14_glyph_write(launchui_codes[i],launch_glyph14[i]);
   for(i=0;i<6;i++){src=i?launch_glyph14[49+i]:legacy_browser_file_l14;ega14_glyph_write(launchui_browser_codes[i],src);}
-  for(i=0;i<8;i++)ega14_glyph_write(launchui_extra_codes[i],launch_glyph14[launchui_extra_logical[i]-1]);
+  for(i=0;i<9;i++)ega14_glyph_write(launchui_extra_codes[i],launch_glyph14[launchui_extra_logical[i]-1]);
   ega14_glyph_write(216,launch_glyph14[55]);
   if(ega_mouse_override_active)ega14_glyph_write(127,(const unsigned char far *)ega_mouse_override_glyph);
   if(ega_target_override_active)ega14_glyph_write(8,(const unsigned char far *)ega_target_override_glyph);
@@ -1474,7 +1486,7 @@ static unsigned char far launchui_old[41][32];
 /* 194 is the single-line down-T used by Configuration tabs and must never
    be substituted.  Use 221 for the executable icon's extending left half. */
 static unsigned char far launchui_browser_old[6][32];
-static unsigned char far launchui_extra_old[8][32];
+static unsigned char far launchui_extra_old[9][32];
 static unsigned char far launchui_divider_old[32];
 static int launchui_active=0;
 
@@ -1513,7 +1525,7 @@ static int ega14_build_and_load(int with_ui)
       src=i?launch_glyph14[49+i]:legacy_browser_file_l14;
       for(j=0;j<14;j++)dst[(unsigned)launchui_browser_codes[i]*14U+j]=src[j];
     }
-    for(i=0;i<8;i++){
+    for(i=0;i<9;i++){
       src=launch_glyph14[launchui_extra_logical[i]-1];
       for(j=0;j<14;j++)dst[(unsigned)launchui_extra_codes[i]*14U+j]=src[j];
     }
@@ -1550,7 +1562,7 @@ static void launchui_install(void)
   font_plane_open(&old);
   for(i=0;i<(int)sizeof(launchui_codes);i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_codes[i]*32);for(j=0;j<32;j++){launchui_old[i][j]=font[j];font[j]=glyphs[i*32+j];}}
   for(i=0;i<6;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_browser_codes[i]*32);for(j=0;j<32;j++){launchui_browser_old[i][j]=font[j];font[j]=i?glyphs[(49+i)*32+j]:fileglyph[j];}}
-  for(i=0;i<8;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_extra_codes[i]*32);for(j=0;j<32;j++){launchui_extra_old[i][j]=font[j];font[j]=glyphs[(launchui_extra_logical[i]-1)*32+j];}}
+  for(i=0;i<9;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_extra_codes[i]*32);for(j=0;j<32;j++){launchui_extra_old[i][j]=font[j];font[j]=glyphs[(launchui_extra_logical[i]-1)*32+j];}}
   font=(unsigned char far *)MAKE_FP(0xA000,216*32);for(j=0;j<32;j++){launchui_divider_old[j]=font[j];font[j]=glyphs[55*32+j];}
   font_plane_close(&old);launchui_active=1;
 }
@@ -1565,7 +1577,7 @@ static void launchui_rebase(void)
   font_plane_open(&old);
   for(i=0;i<(int)sizeof(launchui_codes);i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_codes[i]*32);for(j=0;j<32;j++){launchui_old[i][j]=font[j];font[j]=glyphs[i*32+j];}}
   for(i=0;i<6;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_browser_codes[i]*32);for(j=0;j<32;j++){launchui_browser_old[i][j]=font[j];font[j]=i?glyphs[(49+i)*32+j]:fileglyph[j];}}
-  for(i=0;i<8;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_extra_codes[i]*32);for(j=0;j<32;j++){launchui_extra_old[i][j]=font[j];font[j]=glyphs[(launchui_extra_logical[i]-1)*32+j];}}
+  for(i=0;i<9;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_extra_codes[i]*32);for(j=0;j<32;j++){launchui_extra_old[i][j]=font[j];font[j]=glyphs[(launchui_extra_logical[i]-1)*32+j];}}
   font=(unsigned char far *)MAKE_FP(0xA000,216*32);for(j=0;j<32;j++)font[j]=glyphs[55*32+j];
   font_plane_close(&old);
 }
@@ -1581,7 +1593,7 @@ static void launchui_restore(void)
   }
   font_plane_open(&old);
   font=(unsigned char far *)MAKE_FP(0xA000,216*32);for(j=0;j<32;j++)font[j]=launchui_divider_old[j];
-  for(i=0;i<8;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_extra_codes[i]*32);for(j=0;j<32;j++)font[j]=launchui_extra_old[i][j];}
+  for(i=0;i<9;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_extra_codes[i]*32);for(j=0;j<32;j++)font[j]=launchui_extra_old[i][j];}
   for(i=0;i<6;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_browser_codes[i]*32);for(j=0;j<32;j++)font[j]=launchui_browser_old[i][j];}
   for(i=0;i<(int)sizeof(launchui_codes);i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_codes[i]*32);for(j=0;j<32;j++)font[j]=launchui_old[i][j];}
   font_plane_close(&old);launchui_active=0;
@@ -2333,6 +2345,7 @@ static int save_appearance(void)
   remove(appearance_temp_file);
   f=fopen(appearance_temp_file,"wt");if(!f)return 0;
   if(fputs("; Launch! 3.5 appearance settings\n",f)==EOF)ok=0;
+  if(ok && fprintf(f,"suiteTitle=%s\n",suite_title)<0)ok=0;
   if(ok && fprintf(f,"BACKGROUND=%u\nBORDER=%u\nTITLEBAR_FG=%u\nTITLEBAR_BG=%u\nMAIN_TITLE=%u\nTITLES=%u\n"
       "FOLDERS=%u\nLAUNCHERS=%u\nSELECTED_FG=%u\nSELECTED_BG=%u\n"
       "CONTROLS_FG=%u\nCONTROLS_BG=%u\nLABELS=%u\nMENU_TOP=%u\n"
@@ -3002,6 +3015,55 @@ static int choose_type(void)
   }
 }
 
+/* Resolve the executable portion of a launcher command and identify native
+   Windows NE executables.  This is deliberately derived at load/edit time
+   rather than persisted in LAUNCH.MNU, keeping the menu format compatible. */
+static void windows_command_token(const char *command,char *token,int max)
+{
+  const char *p=command;int n=0;
+  while(*p==' '||*p=='\t')p++;
+  if(*p=='\"'){
+    p++;while(*p&&*p!='\"'&&n<max-1)token[n++]=*p++;
+  }else while(*p&&*p!=' '&&*p!='\t'&&n<max-1)token[n++]=*p++;
+  token[n]=0;
+}
+
+static int resolve_windows_executable(const char *command,char *path)
+{
+  char token[MAX_CMD],tryname[MAX_CMD];FILE *f;char *dot,*slash,*other;
+  windows_command_token(command,token,sizeof(token));path[0]=0;if(!token[0])return 0;
+  strcpy(tryname,token);
+  f=fopen(tryname,"rb");if(f){fclose(f);strcpy(path,tryname);return 1;}
+  slash=strrchr(token,'\\');other=strrchr(token,'/');if(other&&(!slash||other>slash))slash=other;
+  dot=strrchr(token,'.');
+  if(!dot || (slash&&dot<slash)){
+    if(strlen(token)+4<sizeof(tryname)){
+      strcpy(tryname,token);strcat(tryname,".EXE");
+      f=fopen(tryname,"rb");if(f){fclose(f);strcpy(path,tryname);return 1;}
+    }
+  }else strcpy(tryname,token);
+  if(!strchr(tryname,'\\')&&!strchr(tryname,'/')&&!strchr(tryname,':')){
+    _searchenv(tryname,"PATH",path);if(path[0])return 1;
+    if(win_inst_cfg && strlen(win_path_cfg)+strlen(tryname)+2<MAX_CMD){
+      sprintf(path,"%s\\%s",win_path_cfg,tryname);f=fopen(path,"rb");if(f){fclose(f);return 1;}path[0]=0;
+    }
+  }
+  return 0;
+}
+
+static int command_is_windows_program(const char *command)
+{
+  char path[MAX_CMD];FILE *f;unsigned char sig[2],b[4],target;long neoff;
+  if(!resolve_windows_executable(command,path))return 0;
+  f=fopen(path,"rb");if(!f)return 0;
+  if(fread(sig,1,2,f)!=2||sig[0]!='M'||sig[1]!='Z'){fclose(f);return 0;}
+  if(fseek(f,0x3c,SEEK_SET)||fread(b,1,4,f)!=4){fclose(f);return 0;}
+  neoff=(long)b[0]|((long)b[1]<<8)|((long)b[2]<<16)|((long)b[3]<<24);
+  if(fseek(f,neoff,SEEK_SET)||fread(sig,1,2,f)!=2||sig[0]!='N'||sig[1]!='E'){fclose(f);return 0;}
+  if(fseek(f,neoff+0x36L,SEEK_SET)||fread(&target,1,1,f)!=1){fclose(f);return 0;}fclose(f);
+  return target==2||target==4;
+}
+
 static void field_line(int x,int y,const char *label,const char *value,
                        int focused,int hovered,int pos,int width)
 {
@@ -3043,6 +3105,10 @@ static int item_form(int folder,char *name,char *exe,char *params,
     field_line(x+3,y+2,"Name:",name,focus==0,hover==0,pos[0],folder?30:42);
     if(!folder){
       field_line(x+3,y+4,"Command:",exe,focus==1,hover==1,pos[1],42);
+      /* The source UI glyph at character position 63 identifies a launcher
+         whose executable is a native Windows program. */
+      cell(x+58,y+4,' ',C_INPUT_LABEL);
+      cell(x+59,y+4,(!no_glyph_mode&&command_is_windows_program(exe))?UI_WINDOWS_PROGRAM:' ',C_INPUT_LABEL);
       field_line(x+3,y+6,"Parameters:",params,focus==2,hover==2,pos[2],28);
       textout(x+47,y+6,"Prompt?",(focus==3||hover==3)?C_SELECTED:C_INPUT_LABEL,7);
       if(no_glyph_mode){
@@ -3637,7 +3703,7 @@ static void config_toolbar_geometry(int x,TOOLBAR_RECT *okb,TOOLBAR_RECT *cancel
 static void draw_config_page(int x,int y,int tab,int focus,int hover,int full)
 {
   int f=focus-CONFIG_CONTROL_BASE,h=hover-CONFIG_CONTROL_BASE,i;
-  if(full){dialog_box(x,y,66,20,"Launch! Configuration");textout(x+3,y,"Launch!",ATTR(appearance.titlebar_bg,appearance.main_title),7);}
+  if(full){char cap[48];sprintf(cap,"%s Configuration",suite_title);dialog_box(x,y,66,20,cap);textout(x+3,y,suite_title,ATTR(appearance.titlebar_bg,appearance.main_title),(int)strlen(suite_title));}
   draw_config_tabs(x,y+1,tab,focus,hover);
   if(tab==0){
 #ifdef LIGHT86
@@ -3789,7 +3855,7 @@ static void config_about_box(void)
   bx=x+3;subdialog_box(x,y,w,h,"About Launch!");
   textout(x+3,y+2,"(C)Copyright 2026 Ben Renegar",C_INPUT_LABEL,34);
   textout(x+3,y+3,"www.benrenegar.com",C_INPUT_LABEL,34);
-  textout(x+3,y+6,"Version 3.75 - 2026-09-29",C_INPUT_LABEL,34);
+  textout(x+3,y+6,"Version 3.76 - 2026-09-30",C_INPUT_LABEL,34);
   for(;;){
     draw_button(bx,y+h-3,"  OK  ",6,focus==0);
     wait_input(&k,&mx,&my,&mb);
@@ -4042,9 +4108,9 @@ static int configure_appearance(void)
         int reset_ok=1;
         {TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(breset.x,y+17,"  Reset  ",breset.w);}reset_choice=config_reset_box();
         if(reset_choice==1||reset_choice==3){
-          before_reset=appearance;mouse_pointer_restore();appearance=default_appearance;
+          {char before_title[SUITE_TITLE_MAX];strcpy(before_title,suite_title);before_reset=appearance;mouse_pointer_restore();appearance=default_appearance;strcpy(suite_title,"Launch!");
           if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;mouse_pointer_install();}
-          else {appearance=before_reset;font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}
+          else {appearance=before_reset;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
         }
         if((reset_choice==2||reset_choice==3)&&!default_menu_file(1)){notice_box("Reset Error","Could not rebuild LAUNCH.MNU.");reset_ok=0;}
         if(reset_ok&&reset_choice==1)notice_box("Reset","Configuration has been reset to default.");
@@ -4159,9 +4225,9 @@ static int configure_appearance(void)
       int reset_ok=1;
       reset_choice=config_reset_box();
       if(reset_choice==1||reset_choice==3){
-        before_reset=appearance;mouse_pointer_restore();appearance=default_appearance;
+        {char before_title[SUITE_TITLE_MAX];strcpy(before_title,suite_title);before_reset=appearance;mouse_pointer_restore();appearance=default_appearance;strcpy(suite_title,"Launch!");
         if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;mouse_pointer_install();}
-        else {appearance=before_reset;font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}
+        else {appearance=before_reset;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
       }
       if((reset_choice==2||reset_choice==3)&&!default_menu_file(1)){notice_box("Reset Error","Could not rebuild LAUNCH.MNU.");reset_ok=0;}
       if(reset_ok&&reset_choice==1)notice_box("Reset","Configuration has been reset to default.");
@@ -4215,6 +4281,7 @@ static int add_dialog(int parent,int depth)
   if(node<0){notice_box("Menu Full","The menu database is full.");return 0;}
   nodes[node].press_enter=(unsigned char)press_enter;nodes[node].change_dir=(unsigned char)change_dir;
   nodes[node].prompt_params=(unsigned char)prompt_params;nodes[node].add_path=(unsigned char)add_path;
+  if(!folder)nodes[node].windows_program=(unsigned char)command_is_windows_program(nodes[node].command);
   added_visible_node=place_overflow(parent,depth,node);
   if(added_visible_node<0)return 0;
   return 1;
@@ -4258,6 +4325,7 @@ static int edit_dialog(int node)
     nodes[node].press_enter=(unsigned char)press_enter;
     nodes[node].change_dir=(unsigned char)change_dir;
     nodes[node].prompt_params=(unsigned char)prompt_params;nodes[node].add_path=(unsigned char)add_path;
+    nodes[node].windows_program=(unsigned char)command_is_windows_program(nodes[node].command);
   }
   return 1;
 }
@@ -4741,7 +4809,7 @@ static int explore_dialog(void)
     if(selected>=explore_count)selected=explore_count?explore_count-1:-1;
     if(selected>=0 && selected<top)top=(selected/page)*page;
     if(selected>=0 && selected>=top+page)top=(selected/page)*page;
-    if(redraw){render_begin();dialog_box(x,y,76,21,"Launch! Explore & Run");textout(x+3,y,"Launch!",ATTR(appearance.titlebar_bg,appearance.main_title),7);
+    if(redraw){char cap[56];render_begin();sprintf(cap,"%s Explore & Run",suite_title);dialog_box(x,y,76,21,cap);textout(x+3,y,suite_title,ATTR(appearance.titlebar_bg,appearance.main_title),(int)strlen(suite_title));
     explore_selection_field(x+2,y+2,path,selected);
     cell(x,y+3,195,C_BORDER);cell(x+75,y+3,180,C_BORDER);
     for(i=1;i<75;i++)cell(x+i,y+3,196,C_BORDER);
@@ -5503,7 +5571,7 @@ static int collections_dialog(void)
   if(collection_count){openfile_load(path,collections[0].ext);selected=explore_count?0:-1;}else explore_count=0;
   for(;;){
     page=openfile_result_mode?EXPLORE_ROWS:EXPLORE_ROWS*3;
-    if(redraw){render_begin();if(redraw==1){dialog_box(x,y,78,21,"Launch! File Open");textout(x+3,y,"Launch!",ATTR(appearance.titlebar_bg,appearance.main_title),7);}
+    if(redraw){char cap[56];render_begin();if(redraw==1){sprintf(cap,"%s File Open",suite_title);dialog_box(x,y,78,21,cap);textout(x+3,y,suite_title,ATTR(appearance.titlebar_bg,appearance.main_title),(int)strlen(suite_title));}
       draw_button(x+2,y+2,"  Add  ",8,focus==10||hover_control==10);
       /* File Types is a 13-row scrolling pane.  The selected type carries a
          right-pointing marker in the final label cell to associate it with
@@ -5885,13 +5953,16 @@ static int menu(const char *open_to)
            new, shorter panel. */
         restore_screen();
         if(appearance.show_sysbar)draw_sysbar();
-        menu_box(0,qy,MENU_WIDTH,qh,"Launch!",C_ROOT_TITLE,1);
+        menu_box(0,qy,MENU_WIDTH,qh,suite_title,C_ROOT_TITLE,1);
         if(qn){
           int first=0,visible=qh-5;
           if(!qfocus&&qsel>=visible)first=qsel-visible+1;
           for(i=0;i<visible&&first+i<qn;i++){
             node=qlist[first+i];
-            textout(1,qy+2+i,nodes[node].title,(!qfocus&&first+i==qsel)?C_SELECTED:C_ITEM,18);
+            if(!no_glyph_mode&&nodes[node].windows_program){
+              textout(1,qy+2+i,nodes[node].title,(!qfocus&&first+i==qsel)?C_SELECTED:C_ITEM,17);
+              cell(18,qy+2+i,UI_WINDOWS_PROGRAM,(!qfocus&&first+i==qsel)?C_SELECTED:C_ITEM);
+            }else textout(1,qy+2+i,nodes[node].title,(!qfocus&&first+i==qsel)?C_SELECTED:C_ITEM,18);
           }
         } else textout(1,qy+2,strlen(qtext)>=2?"No matches":"Type to search",C_EMPTY,18);
         for(i=1;i<MENU_WIDTH-1;i++)cell(i,qinput_y-1,196,C_BORDER);
@@ -5942,7 +6013,7 @@ static int menu(const char *open_to)
         panel_y[i]=y;panel_h[i]=h;
         x=i*MENU_WIDTH;
         if(x+MENU_WIDTH>screen_cols) x=screen_cols-MENU_WIDTH;
-        menu_box(x,y,MENU_WIDTH,h,(i==0)?"Launch!":0,
+        menu_box(x,y,MENU_WIDTH,h,(i==0)?suite_title:0,
                  (i==0)?C_ROOT_TITLE:C_TITLE,i==0);
         for(j=0;j<tn && j<h-2;j++){
           int item_y;
@@ -5964,6 +6035,9 @@ static int menu(const char *open_to)
             textout(x+1,item_y,nodes[node].title,(j==sel[i])?C_SELECTED:C_FOLDER,16);
             cell(x+17,item_y,' ',(j==sel[i])?C_SELECTED:C_FOLDER);
             cell(x+18,item_y,16,(j==sel[i])?C_SELECTED:C_FOLDER);
+          } else if(!no_glyph_mode&&nodes[node].windows_program){
+            textout(x+1,item_y,nodes[node].title,(j==sel[i])?C_SELECTED:C_ITEM,17);
+            cell(x+18,item_y,UI_WINDOWS_PROGRAM,(j==sel[i])?C_SELECTED:C_ITEM);
           } else textout(x+1,item_y,nodes[node].title,(j==sel[i])?C_SELECTED:C_ITEM,18);
         }
         if(!tn)textout(x+1,y+(i==0?2:1),"Empty",C_EMPTY,18);
@@ -6198,6 +6272,10 @@ static void build_macro(int node,const char *command,char *text)
       }
     }
   }
+  /* Native Windows programs remain stored in LAUNCH.MNU exactly as their
+     executable command.  DOS launches them through Windows on demand; the
+     Win16 companion executes the same stored command directly. */
+  if(!windows_session && command_is_windows_program(command))macro_append(text,"WIN.COM ");
   macro_append(text,command);
   if(node<0 || nodes[node].press_enter)macro_append(text,"\r");
 }
@@ -6790,7 +6868,7 @@ static void shortcut_format_spec(const char *spec,char *display)
     }
     token=strtok(0,"+");
   }
-  if(!*display)strcpy(display,"CTRL+ALT+.");
+  if(!*display)strcpy(display,"CTRL+ALT+\\");
 }
 
 static void shortcut_refresh(void)
@@ -6929,12 +7007,12 @@ static void shortcut_idle_sync(void)
 static void show_help(void)
 {
 #ifdef LIGHT86
-  puts("Launch! 86 Light 3.75 - lightweight command menu for DOS\n");
+  puts("Launch! 86 Light 3.76 - lightweight command menu for DOS\n");
   puts("Usage: !86 [menu.mnu] [/CONFIG | /OPENTO=folder | /?]\n");
   puts("Menu management: Ctrl+A Add, Ctrl+D Delete, Ctrl+E Edit, Ctrl+Up/Down Move, Ctrl+S Sort");
 #else
 
-  puts("Launch! 3.75 - a lightweight command menu for DOS\n");
+  puts("Launch! 3.76 - a lightweight command menu for DOS\n");
   puts("Usage: ! [menu.mnu] [/CONFIG | /EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
   puts("Menu management shortcuts:");
   puts("  Ctrl+A        Add a folder, launcher or separator");

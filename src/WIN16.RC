@@ -1,0 +1,113 @@
+#include <windows.h>
+
+#define IDD_RUN             1000
+#define IDD_LAUNCHER        1001
+#define IDD_FOLDER          1002
+#define IDD_CONFIRM         1003
+#define IDD_EXITWIN         1004
+#define IDD_MESSAGE         1005
+#define IDI_SLEEP           1100
+#define IDI_CONFIRM         1101
+#define IDI_ERROR           1102
+#define IDI_SUCCESS         1103
+
+#define RUN_EDIT              20
+#define RUN_BROWSE             23
+#define RUN_MIN                24
+
+#define ITEM_NAME              40
+#define ITEM_COMMAND           41
+#define ITEM_PARAMS            42
+#define ITEM_PROMPT            43
+#define ITEM_ENTER             44
+#define ITEM_CHDIR             45
+#define ITEM_ADDPATH           46
+#define ITEM_BROWSE            49
+
+#define CONFIRM_TEXT           70
+#define CONFIRM_ICON           71
+#define MESSAGE_TEXT           72
+#define MESSAGE_ICON           73
+
+
+IDI_SLEEP        ICON   "SLEEP.ICO"
+IDI_CONFIRM      ICON   "CONFIRM.ICO"
+IDI_ERROR        ICON   "ERROR.ICO"
+IDI_SUCCESS      ICON   "SUCCESS.ICO"
+
+IDD_RUN DIALOG 0, 0, 250, 84
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Run"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Command Line:", -1,       7,  8,  80,  8
+    EDITTEXT        RUN_EDIT,                   7, 20, 176, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    CONTROL         "Run &Minimized", RUN_MIN, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 43, 92, 10
+    DEFPUSHBUTTON   "OK", IDOK,               190,  7,  52, 14
+    PUSHBUTTON      "Cancel", IDCANCEL,       190, 27,  52, 14
+    PUSHBUTTON      "&Browse...", RUN_BROWSE, 190, 47,  52, 14
+END
+
+IDD_LAUNCHER DIALOG 0, 0, 260, 142
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Launcher"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Name:", -1,                  7,  9,  52,  8
+    EDITTEXT        ITEM_NAME,                     66,  7, 184, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "&Command:", -1,               7, 30,  52,  8
+    EDITTEXT        ITEM_COMMAND,                  66, 28, 126, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Browse...", ITEM_BROWSE,    198, 27,  52, 14
+    LTEXT           "&Parameters:", -1,            7, 51,  52,  8
+    EDITTEXT        ITEM_PARAMS,                   66, 49, 116, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    CONTROL         "&Prompt?", ITEM_PROMPT, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 188, 50, 62, 10
+    CONTROL         "Provide &Enter after launcher command", ITEM_ENTER, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 66, 70, 177, 10
+    CONTROL         "&Change directory first", ITEM_CHDIR, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 66, 86, 134, 10
+    CONTROL         "&Add to PATH for execution", ITEM_ADDPATH, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 66, 102, 150, 10
+    DEFPUSHBUTTON   "OK", IDOK,                  145, 120,  50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL,          200, 120,  50, 14
+END
+
+IDD_FOLDER DIALOG 0, 0, 260, 60
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Folder"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Name:", -1,                  7, 11,  52,  8
+    EDITTEXT        ITEM_NAME,                     66,  9, 184, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "OK", IDOK,                  145, 38,  50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL,          200, 38,  50, 14
+END
+
+IDD_CONFIRM DIALOG 0, 0, 238, 68
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Launch!"
+FONT 8, "MS Sans Serif"
+BEGIN
+    CONTROL         "", CONFIRM_ICON, "STATIC", SS_ICON | WS_CHILD | WS_VISIBLE, 8, 9, 32, 32
+    LTEXT           "", CONFIRM_TEXT,             48, 12, 180, 24
+    PUSHBUTTON      "Yes", IDYES,                127, 46,  48, 14
+    DEFPUSHBUTTON   "No", IDNO,                  181, 46,  48, 14
+END
+
+IDD_EXITWIN DIALOG 0, 0, 238, 68
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Exit Windows"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_SLEEP, CONFIRM_ICON,       8,  9, 32, 32
+    LTEXT           "", CONFIRM_TEXT,             48, 12, 180, 24
+    PUSHBUTTON      "Yes", IDYES,                127, 46,  48, 14
+    DEFPUSHBUTTON   "No", IDNO,                  181, 46,  48, 14
+END
+
+
+IDD_MESSAGE DIALOG 0, 0, 238, 68
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Launch!"
+FONT 8, "MS Sans Serif"
+BEGIN
+    CONTROL         "", MESSAGE_ICON, "STATIC", SS_ICON | WS_CHILD | WS_VISIBLE, 8, 9, 32, 32
+    LTEXT           "", MESSAGE_TEXT,             48, 12, 180, 24
+    DEFPUSHBUTTON   "OK", IDOK,                  181, 46,  48, 14
+END

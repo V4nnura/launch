@@ -1,4 +1,4 @@
-/* Launch! 3.75 - !STARTUP Startup Editor. */
+/* Launch! 3.76 - !STARTUP Startup Editor. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.75
+ * MAINTAINER NOTES - Launch! 3.76
  * File: FONTRES.H
  * Role: Embedded VGA/EGA persistent font resident
  * Build/ownership: Generated from FONTTSR.ASM.

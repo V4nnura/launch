@@ -1,4 +1,4 @@
-/* Launch! 3.75 - !LDB Launch Database. SQLite DOS CLI front-end. */
+/* Launch! 3.76 - !LDB Launch Database. SQLite DOS CLI front-end. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

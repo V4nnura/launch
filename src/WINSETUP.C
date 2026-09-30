@@ -1,4 +1,4 @@
-/* Launch! 3.75 - Windows 3.x Program Manager registration helper.
+/* Launch! 3.76 - Windows 3.x Program Manager registration helper.
    Microsoft C/C++ 7.0 + Windows 3.x SDK, Win16 medium model.
    Compatible target: Windows 3.0, 3.1 and 3.11/WfW. */
 #include <windows.h>

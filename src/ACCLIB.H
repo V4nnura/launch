@@ -38,6 +38,7 @@ typedef struct {
 extern ACC_APPEARANCE acc_appearance;
 extern int acc_cols,acc_rows,acc_mouse_present;
 extern char acc_directory[ACC_PATH];
+extern char acc_suite_title[24];
 
 #define ACC_BG ACC_ATTR(acc_appearance.background,acc_appearance.background)
 #define ACC_BORDER ACC_ATTR(acc_appearance.background,acc_appearance.border)
