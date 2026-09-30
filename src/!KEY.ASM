@@ -152,12 +152,11 @@ int09_db_discard:
 .else
 .ifdef CPU286_BUILD
     /*
-     * Record the BIOS ring tail before chaining.  The previous 286 path
-     * blindly subtracted two from the post-BIOS tail.  After the first
-     * injected launch macro that assumption can remove the wrong entry,
-     * corrupt the ring, leak a translated '\' to the command line and
-     * eventually wedge keyboard input.  Only remove the one entry that this
-     * IRQ actually appended.
+     * 286 safety rule: observe the BIOS ring buffer, but never rewrite its
+     * head/tail from inside IRQ 09h.  Some AT BIOS/keyboard combinations do
+     * not tolerate a TSR rewinding the tail after the BIOS handler returns.
+     * Leave the BIOS-owned entry intact and remove its translated character
+     * later with a Backspace in the launch macro.
      */
     push ax
     push es
@@ -201,7 +200,7 @@ int09_db_discard:
     mov ah,byte ptr es:[bx+1]          /* entry created by this IRQ */
     cmp ah,byte ptr cs:[hot_scan]
     jne int09_done
-    mov word ptr es:[0x1c],bx          /* discard only that hotkey entry */
+    /* Leave BDA 0040:001C untouched on 286. */
     cmp byte ptr cs:[pending],0
     jne int09_done                     /* swallow typematic/re-entry safely */
     cmp byte ptr cs:[macro_active],0
@@ -393,7 +392,15 @@ fill_keyboard_buffer:
 
 /* INT 21h/AH=4Bh remains active for the duration of a child program.  Reset
  * inactivity only after EXEC returns, so time spent outside the command
- * processor never accrues toward the screen-saver timeout. */
+ * processor never accrues toward the screen-saver timeout.
+ *
+ * IMPORTANT: the 286 build deliberately does NOT install this hook.  The
+ * legacy call-old/RETF-2 wrapper returns with the flags produced by the
+ * synthetic PUSHF used to call DOS, whose IF bit is clear at INT 21 entry.
+ * On the tested real AT this leaves hardware interrupts disabled after EXEC,
+ * which exactly explains the dead keyboard after any child (even a manually
+ * started !.EXE).  The 286 TSR therefore uses only the proven IRQ09/INT16/
+ * INT28/INT2F path and leaves DOS EXEC completely untouched. */
 int21_handler:
     cmp ah,0x4b
     jne int21_chain
@@ -703,7 +710,8 @@ installer:
      * chaining our INT 15h filter there can leave the controller/BIOS state
      * wedged after the hotkey.  The post-BIOS INT 09h path below is sufficient
      * on real 286 hardware: it lets the original BIOS service the keyboard,
-     * then removes the matched hotkey from the BIOS ring buffer. */
+     * then observes the exact entry produced by that IRQ without rewriting the
+     * BIOS head/tail pointers. */
     mov ax,0x3515
     int 0x21
     mov word ptr [old15],bx
@@ -713,10 +721,12 @@ installer:
     int 0x21
     mov word ptr [old16],bx
     mov word ptr [old16+2],es
+.ifndef CPU286_BUILD
     mov ax,0x3521
     int 0x21
     mov word ptr [old21],bx
     mov word ptr [old21+2],es
+.endif
     mov ax,0x3528
     int 0x21
     mov word ptr [old28],bx
@@ -746,9 +756,11 @@ installer:
     mov dx,offset int2f_handler
     mov ax,0x252f
     int 0x21
+.ifndef CPU286_BUILD
     mov dx,offset int21_handler
     mov ax,0x2521
     int 0x21
+.endif
     pop ds
 
     call show_installed_message
@@ -803,7 +815,11 @@ build_launch_path:
     loop 8b
     jmp build_path_bad
 10: add bx,4                         /* double NUL and following count word */
+.ifdef CPU286_BUILD
+    mov byte ptr [launch_macro],0x08   /* erase translated hotkey character */
+.else
     mov byte ptr [launch_macro],0x1b
+.endif
     mov di,offset launch_macro+1
     xor bp,bp
     mov cx,127
@@ -829,7 +845,11 @@ build_launch_path:
      * authenticate that exact file.  It is replaced by "!" before residency. */
     mov di,bp
     mov si,offset launch_name
+.ifdef LIGHT_TARGET
+    mov cx,7
+.else
     mov cx,5
+.endif
     push ds                           /* REP MOVSB writes through ES:DI */
     pop es
     rep movsb
@@ -842,7 +862,11 @@ build_launch_path:
 build_short_path:
     mov di,offset launch_macro+1
     mov si,offset launch_short_name
+.ifdef LIGHT_TARGET
+    mov cx,3
+.else
     mov cx,1
+.endif
     push ds
     pop es
     rep movsb
@@ -1023,10 +1047,12 @@ unload_shortcut:
     int 0x21
     call check_16
     jc unload_unsafe
+.ifndef CPU286_BUILD
     mov ax,0x3521
     int 0x21
     call check_21
     jc unload_unsafe
+.endif
     mov ax,0x3528
     int 0x21
     call check_28
@@ -1053,9 +1079,11 @@ unload_shortcut:
     mov al,0x2f
     mov bx,offset old2f
     call restore_vector
+.ifndef CPU286_BUILD
     mov al,0x21
     mov bx,offset old21
     call restore_vector
+.endif
     mov es,word ptr [resident_seg]
     mov ah,0x49
     int 0x21
@@ -1719,9 +1747,17 @@ word_f10:       .asciz "F10"
 word_f11:       .asciz "F11"
 word_f12:       .asciz "F12"
 word_unload:    .asciz "UNLOAD"
+.ifdef LIGHT_TARGET
+launch_name:    .ascii "!86.EXE"
+.else
 launch_name:    .ascii "!.EXE"
+.endif
 auth_signature: .ascii "LAUNCH!35-AUTHv1"
+.ifdef LIGHT_TARGET
+launch_short_name: .ascii "!86"
+.else
 launch_short_name: .ascii "!"
+.endif
 resident_seg:   .word 0
 
 character_table:
@@ -1765,7 +1801,11 @@ msg_invalid_launch:
 .ifdef DOSBOX_BUILD
     .ascii "!KEYDB: sibling !.EXE is not a genuine Launch! 3.5 build.\r\n$"
 .else
+.ifdef LIGHT_TARGET
+    .ascii "!KEY: sibling !86.EXE is not a genuine Launch! 3.5 build.\r\n$"
+.else
     .ascii "!KEY: sibling !.EXE is not a genuine Launch! 3.5 build.\r\n$"
+.endif
 .endif
 msg_unloaded:
 .ifdef DOSBOX_BUILD

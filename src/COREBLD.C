@@ -57,9 +57,14 @@ typedef struct {
 
 static const APPEARANCE default_appearance={1,11,15,7,12,14,15,10,15,3,0,7,7,0,1,1,1,1,0,1,10,0,1,6,0,0,0};
 static APPEARANCE appearance={1,11,15,7,12,14,15,10,15,3,0,7,7,0,1,1,1,1,0,1,10,0,1,6,0,0,0};
+#ifdef LIGHT86
+static APPEARANCE light_standard_snapshot;
+#endif
 /* Silent Windows 3.x integration settings (not exposed in Config UI). */
 static int win_inst_cfg=0;
 static char win_path_cfg[MAX_CMD]="C:\\WINDOWS";
+/* Shared hotkey target: 0 = !.EXE, 1 = !86.EXE. */
+static int shortcut_target_light=0;
 
 static void (interrupt far *setkey_old_int09)();
 static volatile unsigned char setkey_scan,setkey_e0,setkey_mods;
@@ -175,6 +180,8 @@ static int font_is_vga(void);
 static int font_is_ega(void);
 static int font_preview(unsigned char id);
 static int font_preview_ega(unsigned char id);
+static int font_read_ega(unsigned char id,unsigned segment);
+static void font_bios_load_ega(unsigned font_segment,unsigned font_offset);
 static int font_commit(unsigned char id);
 static void font_restore(void);
 static void launchui_install(void);
@@ -186,6 +193,7 @@ static int shortcut_loadhigh_supported(void);
 static int shortcut_unload(void);
 static int shortcut_activate(void);
 static void shortcut_idle_sync(void);
+static int shortcut_write_target(void);
 static int children(int parent,int *list);
 static void delete_tree(int node);
 static char write_path[MAX_CMD];
@@ -198,6 +206,9 @@ static int mouse_glyph_saved;
 static unsigned char mouse_old_glyph[32];
 static int mouse_target_saved;
 static unsigned char mouse_old_target[32];
+static unsigned char ega_mouse_override_glyph[14];
+static unsigned char ega_target_override_glyph[14];
+static int ega_mouse_override_active=0,ega_target_override_active=0;
 static int dialog_close_x=-1,dialog_close_y=-1;
 static char remove_item_name[MAX_TITLE];
 static int remove_item_colour=0;
@@ -213,7 +224,13 @@ static char config_shortcut_combination[64];
 #define BUILTIN_CONFIG (-4)
 #define MINUTE_TICKS 1092UL
 #define MOUSE_MOVED 0x8000U
+#ifdef LIGHT86
+#define CONFIG_TAB_COUNT 2
+#define SHORTCUT_TAB 1
+#else
 #define CONFIG_TAB_COUNT 6
+#define SHORTCUT_TAB 5
+#endif
 #define CONFIG_CONTROL_BASE 6
 
 typedef struct {
@@ -561,6 +578,12 @@ static int load_appearance(void)
     if(!stricmp(p,"WinPath")){
       if(!*q || strlen(q)>=sizeof(win_path_cfg)){fclose(f);return 0;}
       strcpy(win_path_cfg,q);continue;
+    }
+    if(!stricmp(p,"ShortcutTarget")){
+      if(!stricmp(q,"LIGHT")||!stricmp(q,"!86"))shortcut_target_light=1;
+      else if(!stricmp(q,"STANDARD")||!stricmp(q,"!"))shortcut_target_light=0;
+      else {fclose(f);return 0;}
+      continue;
     }
     value=strtol(q,&end,10);end=trim(end);
     if(!*q || *end || !appearance_value(&loaded,p,(int)value)){fclose(f);return 0;}
@@ -1351,6 +1374,11 @@ static const unsigned char launchui_codes[41]={16,17,30,31,169,170,173,174,175,1
 #define UI_EXIT_R    233
 static const unsigned char launchui_extra_codes[8]={UI_OPEN_L,UI_OPEN_R,UI_SEARCH_L,UI_SEARCH_R,UI_PARENT_L,UI_PARENT_R,UI_EXIT_L,UI_EXIT_R};
 static const unsigned char launchui_extra_logical[8]={89,90,91,92,61,62,93,94};
+/* Browser runtime slots are referenced by the EGA BIOS overlay helpers
+   below, so declare them here before first use (MSC 7.0 requires this). */
+static const unsigned char launchui_browser_codes[6]={193,183,221,184,197,186};
+static const unsigned char far legacy_browser_file_l16[32]={0x00,0x07,0x0C,0x1C,0x3D,0x20,0x2F,0x20,0x2F,0x20,0x20,0x20,0x1F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+static const unsigned char far legacy_browser_file_l14[32]={0x07,0x0C,0x1C,0x3D,0x20,0x2F,0x20,0x2F,0x20,0x20,0x20,0x1F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 
 static int launchui_ega14(void)
 {
@@ -1381,6 +1409,22 @@ static void ega14_glyph_write(int code,const unsigned char far *glyph)
 #else
   (void)code;(void)glyph;
 #endif
+}
+
+/* Standard EGA is a BIOS ROM-font selection, not a FONT14.DAT slot.
+   Do not use AX=1130h to copy a VGA-style ROM font pointer on a genuine EGA.
+   Load the BIOS 8x14 font first, then overlay only Launch!'s reserved UI
+   characters using the same AH=11h single-glyph path that Launch! historically
+   used successfully on EGA. */
+static void ega14_overlay_ui_bios(void)
+{
+  const unsigned char far *src;int i;
+  for(i=0;i<(int)sizeof(launchui_codes);i++)ega14_glyph_write(launchui_codes[i],launch_glyph14[i]);
+  for(i=0;i<6;i++){src=i?launch_glyph14[49+i]:legacy_browser_file_l14;ega14_glyph_write(launchui_browser_codes[i],src);}
+  for(i=0;i<8;i++)ega14_glyph_write(launchui_extra_codes[i],launch_glyph14[launchui_extra_logical[i]-1]);
+  ega14_glyph_write(216,launch_glyph14[55]);
+  if(ega_mouse_override_active)ega14_glyph_write(127,(const unsigned char far *)ega_mouse_override_glyph);
+  if(ega_target_override_active)ega14_glyph_write(8,(const unsigned char far *)ega_target_override_glyph);
 }
 
 static void ega14_rom_read(int code,unsigned char far *glyph)
@@ -1429,25 +1473,64 @@ static unsigned char far launchui_old[41][32];
    (box corners) or 219 (solid block used by message icons). */
 /* 194 is the single-line down-T used by Configuration tabs and must never
    be substituted.  Use 221 for the executable icon's extending left half. */
-static const unsigned char launchui_browser_codes[6]={193,183,221,184,197,186};
-static const unsigned char far legacy_browser_file_l16[32]={0x00,0x07,0x0C,0x1C,0x3D,0x20,0x2F,0x20,0x2F,0x20,0x20,0x20,0x1F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
-static const unsigned char far legacy_browser_file_l14[32]={0x07,0x0C,0x1C,0x3D,0x20,0x2F,0x20,0x2F,0x20,0x20,0x20,0x1F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 static unsigned char far launchui_browser_old[6][32];
 static unsigned char far launchui_extra_old[8][32];
 static unsigned char far launchui_divider_old[32];
 static int launchui_active=0;
 
+static int ega14_build_and_load(int with_ui)
+{
+  unsigned segment;unsigned char far *dst;const unsigned char far *src;
+  unsigned fseg,foff;int i,j;
+  if(_dos_allocmem(224,&segment)!=0)return 0;
+  dst=(unsigned char far *)MAKE_FP(segment,0);
+  if(appearance.font_id){
+    if(!font_read_ega(appearance.font_id,segment)){_dos_freemem(segment);return 0;}
+  } else {
+#ifndef __GNUC__
+    _asm {
+      push bp
+      push es
+      mov ax,1130h
+      mov bh,2
+      int 10h
+      mov ax,es
+      mov fseg,ax
+      mov foff,bp
+      pop es
+      pop bp
+    }
+    movedata(fseg,foff,segment,0,3584);
+#else
+    _dos_freemem(segment);return 0;
+#endif
+  }
+  if(with_ui){
+    for(i=0;i<(int)sizeof(launchui_codes);i++){
+      src=launch_glyph14[i];for(j=0;j<14;j++)dst[(unsigned)launchui_codes[i]*14U+j]=src[j];
+    }
+    for(i=0;i<6;i++){
+      src=i?launch_glyph14[49+i]:legacy_browser_file_l14;
+      for(j=0;j<14;j++)dst[(unsigned)launchui_browser_codes[i]*14U+j]=src[j];
+    }
+    for(i=0;i<8;i++){
+      src=launch_glyph14[launchui_extra_logical[i]-1];
+      for(j=0;j<14;j++)dst[(unsigned)launchui_extra_codes[i]*14U+j]=src[j];
+    }
+    src=launch_glyph14[55];for(j=0;j<14;j++)dst[216U*14U+j]=src[j];
+  }
+  if(ega_mouse_override_active)for(j=0;j<14;j++)dst[127U*14U+j]=ega_mouse_override_glyph[j];
+  if(ega_target_override_active)for(j=0;j<14;j++)dst[8U*14U+j]=ega_target_override_glyph[j];
+  font_bios_load_ega(segment,0);_dos_freemem(segment);return 1;
+}
+
 static void ega14_apply_launchui(void)
 {
-  int i;
-  for(i=0;i<(int)sizeof(launchui_codes);i++)
-    ega14_glyph_write(launchui_codes[i],launch_glyph14[i]);
-  for(i=0;i<6;i++)
-    ega14_glyph_write(launchui_browser_codes[i],i?launch_glyph14[49+i]:legacy_browser_file_l14);
-  for(i=0;i<8;i++)
-    ega14_glyph_write(launchui_extra_codes[i],launch_glyph14[launchui_extra_logical[i]-1]);
-  ega14_glyph_write(216,launch_glyph14[55]);
-  ega14_select_block0();
+  /* EGA is loaded atomically as one complete 256-character 8x14 font.
+     Do not issue per-character AH=11h calls: on real EGA BIOSes those calls
+     can change the active character-map state and leave Launch!'s live screen
+     displaying the wrong glyph bank. */
+  (void)ega14_build_and_load(1);
 }
 /* Modify the active EGA/VGA character-generator RAM in place.  On genuine
    EGA, loading one character through INT 10h/AH=11 can switch to a user font
@@ -1459,10 +1542,8 @@ static void launchui_install(void)
   const unsigned char far *fileglyph;int i,j,ega=launchui_ega14();
   if(launchui_active)return;
   if(ega){
-    /* font_commit() has already loaded the complete selected 8x14 font.
-       Standard is first copied from the EGA ROM so one-glyph BIOS writes
-       cannot leave the untouched character slots undefined. */
-    if(appearance.font_id==0)ega14_rom_reset();
+    /* Build one complete 256-character EGA font image containing the
+       selected base font plus Launch! UI glyphs, then load it atomically. */
     ega14_apply_launchui();launchui_active=1;return;
   }
   glyphs=(const unsigned char far *)launch_glyph16;fileglyph=legacy_browser_file_l16;
@@ -1511,14 +1592,14 @@ static void mouse_glyph_write(const unsigned char *glyph)
   FONT_REGS old;unsigned char far *font;int i;
   /* EGA character RAM must never be opened with the VGA sequencer/graphics-
      controller plane recipe.  That corrupts the live EGA text display. */
-  if(launchui_ega14()){ega14_glyph_write(127,(const unsigned char far *)glyph);return;}
+  if(launchui_ega14()){for(i=0;i<14;i++)ega_mouse_override_glyph[i]=glyph[i];ega_mouse_override_active=1;ega14_apply_launchui();return;}
   font_plane_open(&old);font=(unsigned char far *)MAKE_FP(0xA000,127*32);for(i=0;i<32;i++)font[i]=glyph[i];font_plane_close(&old);
 }
 
 static void mouse_target_write(const unsigned char *glyph)
 {
   FONT_REGS old;unsigned char far *font;int i;
-  if(launchui_ega14()){ega14_glyph_write(8,(const unsigned char far *)glyph);return;}
+  if(launchui_ega14()){for(i=0;i<14;i++)ega_target_override_glyph[i]=glyph[i];ega_target_override_active=1;ega14_apply_launchui();return;}
   font_plane_open(&old);font=(unsigned char far *)MAKE_FP(0xA000,8*32);for(i=0;i<32;i++)font[i]=glyph[i];font_plane_close(&old);
 }
 
@@ -1531,6 +1612,15 @@ static void mouse_pointer_install(void)
   FONT_REGS old;unsigned char far *font;
   unsigned char arrow[32];unsigned char far *height_ptr;
   union REGS r;int i,height,source;
+  /* /NOGLYPH and !86 must never alter the adapter character generator.
+     Use the mouse driver's ordinary text cursor masks instead.  This is
+     especially important on EGA, where rebuilding the 8x14 font merely to
+     draw a mouse pointer can reactivate Launch! UI glyph slots. */
+  if(no_glyph_mode){
+    if(mouse_glyph_saved||mouse_target_saved)mouse_pointer_restore();
+    memset(&r,0,sizeof(r));r.x.ax=0x000A;r.x.bx=0;r.x.cx=0xFFFF;r.x.dx=0x7700;
+    int86(0x33,&r,&r);return;
+  }
   if(appearance.mouse_cursor){
     if(mouse_glyph_saved||mouse_target_saved)mouse_pointer_restore();
     memset(&r,0,sizeof(r));r.x.ax=0x000A;r.x.bx=0;
@@ -1539,8 +1629,7 @@ static void mouse_pointer_install(void)
     int86(0x33,&r,&r);return;
   }
   if(!mouse_glyph_saved){
-    if(launchui_ega14())ega14_rom_read(127,mouse_old_glyph);
-    else {font_plane_open(&old);font=(unsigned char far *)MAKE_FP(0xA000,127*32);for(i=0;i<32;i++)mouse_old_glyph[i]=font[i];font_plane_close(&old);}
+    if(!launchui_ega14()){font_plane_open(&old);font=(unsigned char far *)MAKE_FP(0xA000,127*32);for(i=0;i<32;i++)mouse_old_glyph[i]=font[i];font_plane_close(&old);}
     mouse_glyph_saved=1;
   }
   memset(arrow,0,sizeof(arrow));height_ptr=(unsigned char far *)MAKE_FP(0x40,0x85);height=*height_ptr;if(height<8||height>32)height=16;
@@ -1552,6 +1641,7 @@ static void mouse_pointer_install(void)
 static void mouse_pointer_restore(void)
 {
   union REGS r;if(!mouse_glyph_saved&&!mouse_target_saved)return;
+  if(launchui_ega14()){ega_mouse_override_active=0;ega_target_override_active=0;if(launchui_active)ega14_apply_launchui();mouse_glyph_saved=0;mouse_target_saved=0;return;}
   if(mouse_glyph_saved)mouse_glyph_write(mouse_old_glyph);
   if(mouse_target_saved)mouse_target_write(mouse_old_target);
   memset(&r,0,sizeof(r));r.x.ax=0x000A;r.x.bx=0;
@@ -2258,14 +2348,24 @@ static int save_appearance(void)
       appearance.show_collections,appearance.show_explore,appearance.show_power,
       appearance.show_time,appearance.show_sysbar,appearance.font_id,appearance.font_persist,
       appearance.mouse_cursor)<0)ok=0;
-  if(ok && fprintf(f,"WinInst=%d\nWinPath=%s\n",win_inst_cfg?1:0,win_path_cfg)<0)ok=0;
+  if(ok && fprintf(f,"WinInst=%d\nWinPath=%s\nShortcutTarget=%s\n",win_inst_cfg?1:0,win_path_cfg,shortcut_target_light?"LIGHT":"STANDARD")<0)ok=0;
   if(fclose(f)!=0)ok=0;
   if(!ok){remove(appearance_temp_file);return 0;}
   remove(appearance_file);
   if(rename(appearance_temp_file,appearance_file)!=0)return 0;
+  if(!shortcut_write_target())return 0;
   if(!windows_session)shortcut_idle_sync();
   return 1;
 }
+
+#ifdef LIGHT86
+static int save_light_appearance(void)
+{
+  APPEARANCE light=appearance,full=light_standard_snapshot;int ok;
+  full.menu_top=light.menu_top;full.show_time=light.show_time;full.show_sysbar=light.show_sysbar;full.hour_12=light.hour_12;
+  appearance=full;ok=save_appearance();light_standard_snapshot=appearance;appearance=light;return ok;
+}
+#endif
 
 static int update_backup(void);
 static int save_config(void);
@@ -2444,7 +2544,7 @@ typedef struct { int x,w; } TOOLBAR_RECT;
 static TOOLBAR_RECT toolbar_left_button(int *cursor,const char *label,int normal_width)
 { TOOLBAR_RECT r;r.x=*cursor;r.w=toolbar_button_width(label,normal_width);*cursor=r.x+r.w+1;return r; }
 static TOOLBAR_RECT toolbar_right_button(int dx,int dw,const char *label,int normal_width)
-{ TOOLBAR_RECT r;r.w=toolbar_button_width(label,normal_width);r.x=dx+dw-2-r.w;return r; }
+{ TOOLBAR_RECT r;r.w=toolbar_button_width(label,normal_width);r.x=dx+dw-3-r.w;return r; }
 static int toolbar_hit(TOOLBAR_RECT r,int mx,int my,int row)
 { return my==row&&mx>=r.x&&mx<r.x+r.w; }
 static int toolbar_left_separator(int *cursor)
@@ -2917,7 +3017,7 @@ static void check_line(int x,int y,const char *label,int checked,int focused)
   int at=ATTR(appearance.background,appearance.controls_bg);
   if(no_glyph_mode){
     /* Text-only checkbox contract used by /NOGLYPH and future !86/CGA UI. */
-    cell(x,y,'[',at);cell(x+1,y,checked?'X':' ',at);cell(x+2,y,']',at);
+    cell(x,y,'[',at);cell(x+1,y,checked?254:' ',at);cell(x+2,y,']',at);
     textout(x+4,y,label,focused?C_SELECTED:C_INPUT_LABEL,33);
   }else{
     cell(x,y,checked?213:212,at);cell(x+1,y,checked?190:189,at);
@@ -2945,9 +3045,14 @@ static int item_form(int folder,char *name,char *exe,char *params,
       field_line(x+3,y+4,"Command:",exe,focus==1,hover==1,pos[1],42);
       field_line(x+3,y+6,"Parameters:",params,focus==2,hover==2,pos[2],28);
       textout(x+47,y+6,"Prompt?",(focus==3||hover==3)?C_SELECTED:C_INPUT_LABEL,7);
-      cell(x+55,y+6,*prompt_params?213:212,ATTR(appearance.background,appearance.controls_bg));
-      cell(x+56,y+6,*prompt_params?190:189,ATTR(appearance.background,appearance.controls_bg));
-      cell(x+57,y+6,' ',C_MENU_BACKGROUND);
+      if(no_glyph_mode){
+        int cat=ATTR(appearance.background,appearance.controls_bg);
+        cell(x+55,y+6,'[',cat);cell(x+56,y+6,*prompt_params?254:' ',cat);cell(x+57,y+6,']',cat);
+      }else{
+        cell(x+55,y+6,*prompt_params?213:212,ATTR(appearance.background,appearance.controls_bg));
+        cell(x+56,y+6,*prompt_params?190:189,ATTR(appearance.background,appearance.controls_bg));
+        cell(x+57,y+6,' ',C_MENU_BACKGROUND);
+      }
     }
     if(!folder){
       check_line(x+16,y+8,"Provide \021\331 after launcher command",*press_enter,focus==4||hover==4);
@@ -3164,27 +3269,32 @@ static void cycle_control(int x,int y,const char *value,int focused)
 
 static void draw_config_tabs(int x,int y,int active,int focus,int hover)
 {
-  static const int edge[7]={3,10,19,32,41,48,59};
-  static const char *name[6]={"Menu","Colors","ScrnSavers","Prompt","Font","Shortcut"};
+#ifdef LIGHT86
+  static const int edge[3]={3,12,25};
+  static const char *name[2]={"Menu","Shortcut"};
   int i,j,focused,base,text_attr;
-
-  /* Six compact tabs, one character of breathing room around labels. */
   cell(x+edge[0],y,218,C_BORDER);
-  for(i=0;i<6;i++){
+  for(i=0;i<2;i++){
     for(j=edge[i]+1;j<edge[i+1];j++)cell(x+j,y,196,C_BORDER);
-    cell(x+edge[i+1],y,i==5?191:194,C_BORDER);
+    cell(x+edge[i+1],y,i==1?191:194,C_BORDER);
   }
   for(j=1;j<65;j++)cell(x+j,y+1,196,C_BORDER);
-  for(i=0;i<7;i++)cell(x+edge[i],y+1,179,C_BORDER);
-  for(i=0;i<6;i++){
-    focused=(focus==i||hover==i);
-    base=focused?C_SELECTED:ATTR(appearance.background,appearance.labels);
-    text_attr=focused?C_SELECTED:
-      (active==i?ATTR(appearance.background,appearance.titles):
-                 ATTR(appearance.background,appearance.labels));
+  for(i=0;i<3;i++)cell(x+edge[i],y+1,179,C_BORDER);
+  for(i=0;i<2;i++){
+    focused=(focus==i||hover==i);base=focused?C_SELECTED:ATTR(appearance.background,appearance.labels);
+    text_attr=focused?C_SELECTED:(active==i?ATTR(appearance.background,appearance.titles):ATTR(appearance.background,appearance.labels));
     for(j=edge[i]+1;j<edge[i+1];j++)cell(x+j,y+1,' ',base);
     textout(x+edge[i]+2,y+1,name[i],text_attr,(int)strlen(name[i]));
   }
+#else
+  static const int edge[7]={3,10,19,32,41,48,59};
+  static const char *name[6]={"Menu","Colors","ScrnSavers","Prompt","Font","Shortcut"};
+  int i,j,focused,base,text_attr;
+  cell(x+edge[0],y,218,C_BORDER);
+  for(i=0;i<6;i++){for(j=edge[i]+1;j<edge[i+1];j++)cell(x+j,y,196,C_BORDER);cell(x+edge[i+1],y,i==5?191:194,C_BORDER);}
+  for(j=1;j<65;j++)cell(x+j,y+1,196,C_BORDER);for(i=0;i<7;i++)cell(x+edge[i],y+1,179,C_BORDER);
+  for(i=0;i<6;i++){focused=(focus==i||hover==i);base=focused?C_SELECTED:ATTR(appearance.background,appearance.labels);text_attr=focused?C_SELECTED:(active==i?ATTR(appearance.background,appearance.titles):ATTR(appearance.background,appearance.labels));for(j=edge[i]+1;j<edge[i+1];j++)cell(x+j,y+1,' ',base);textout(x+edge[i]+2,y+1,name[i],text_attr,(int)strlen(name[i]));}
+#endif
 }
 
 /* Keep the font-preview renderer out of the already tight LAUNCH_TEXT
@@ -3214,12 +3324,17 @@ static void draw_character_preview(int x,int y)
 #pragma code_seg("CONFIG_TEXT")
 static int config_count(int tab)
 {
+#ifdef LIGHT86
+  if(tab==0)return 4;
+  if(tab==SHORTCUT_TAB)return 3;
+#else
   if(tab==0)return 8; /* Menu */
   if(tab==1)return 14; /* Colors */
   if(tab==2)return appearance.screensaver==1?4:3; /* Savers */
   if(tab==3)return 2; /* Prompt style + Set */
   if(tab==4)return font_custom_supported()?2:0; /* Font */
-  if(tab==5)return 2; /* Shortcut */
+  if(tab==SHORTCUT_TAB)return 3; /* Shortcut */
+#endif
   return 0;
 }
 
@@ -3237,6 +3352,12 @@ static unsigned char *config_field(int tab,int item,int *limit)
     case 13:return &appearance.labels;
   }
   if(tab==0){
+#ifdef LIGHT86
+    if(item==0){*limit=1;return &appearance.menu_top;}
+    if(item==1){*limit=1;return &appearance.show_time;}
+    if(item==2){*limit=1;return &appearance.show_sysbar;}
+    if(item==3){*limit=1;return &appearance.hour_12;}
+#else
     if(item==0){*limit=1;return &appearance.menu_top;}
     if(item==1){*limit=1;return &appearance.show_collections;}
     if(item==2){*limit=1;return &appearance.show_explore;}
@@ -3245,7 +3366,9 @@ static unsigned char *config_field(int tab,int item,int *limit)
     if(item==5){*limit=1;return &appearance.show_sysbar;}
     if(item==6){*limit=1;return &appearance.hour_12;}
     if(item==7){*limit=2;return &appearance.mouse_cursor;}
+#endif
   }
+#ifndef LIGHT86
   if(tab==2){
     if(item==0){*limit=14;return &appearance.screensaver;}
     if(appearance.screensaver==1){
@@ -3259,6 +3382,7 @@ static unsigned char *config_field(int tab,int item,int *limit)
     if(item==0){*limit=total_fonts()>0?total_fonts()-1:0;return &appearance.font_id;}
     if(item==1){*limit=1;return &appearance.font_persist;}
   }
+#endif
   return 0;
 }
 
@@ -3277,9 +3401,11 @@ static void change_config_value(int tab,int item,int direction)
     appearance.screensaver=screensaver_id_from_ui(value);return;
   }
   field=config_field(tab,item,&limit);if(!field)return;
-  if((tab==0 && item>=1 && item<=3) || (tab==4 && item==1)){
-    *field=!*field;return;
-  }
+#ifdef LIGHT86
+  if(tab==0 && (item==1||item==2)){*field=!*field;return;}
+#else
+  if((tab==0 && item>=1 && item<=3) || (tab==4 && item==1)){*field=!*field;return;}
+#endif
   value=(int)*field+direction;if(value<0)value=limit;if(value>limit)value=0;
   *field=(unsigned char)value;
   if(tab==4 && item==0){mouse_pointer_restore();font_preview(appearance.font_id);mouse_pointer_install();}
@@ -3514,6 +3640,12 @@ static void draw_config_page(int x,int y,int tab,int focus,int hover,int full)
   if(full){dialog_box(x,y,66,20,"Launch! Configuration");textout(x+3,y,"Launch!",ATTR(appearance.titlebar_bg,appearance.main_title),7);}
   draw_config_tabs(x,y+1,tab,focus,hover);
   if(tab==0){
+#ifdef LIGHT86
+    textout(x+5,y+4,"Menu position:",C_INPUT_LABEL,18);cycle_control(x+25,y+4,appearance.menu_top?"Top":"Bottom",f==0||h==0);
+    check_line(x+25,y+7,"Show time",appearance.show_time,f==1||h==1);
+    textout(x+5,y+9,"Time format:",C_INPUT_LABEL,18);cycle_control(x+25,y+9,appearance.hour_12?"12-hour":"24-hour",f==3||h==3);
+    textout(x+5,y+11,"SysBar:",C_INPUT_LABEL,18);check_line(x+25,y+11,"Show on menu open",appearance.show_sysbar,f==2||h==2);
+#else
     textout(x+5,y+4,"Menu position:",C_INPUT_LABEL,18);
     cycle_control(x+25,y+4,appearance.menu_top?"Top":"Bottom",f==0||h==0);
     textout(x+5,y+6,"System menu items:",C_INPUT_LABEL,18);
@@ -3526,7 +3658,10 @@ static void draw_config_page(int x,int y,int tab,int focus,int hover,int full)
     textout(x+5,y+12,"Mouse cursor:",C_INPUT_LABEL,18);
     cycle_control(x+25,y+12,mouse_cursor_names[appearance.mouse_cursor],f==7||h==7);
     textout(x+5,y+14,"SysBar:",C_INPUT_LABEL,18);check_line(x+25,y+14,"Show on menu open",appearance.show_sysbar,f==5||h==5);
-  } else if(tab==1){
+#endif
+  }
+#ifndef LIGHT86
+  else if(tab==1){
     static const char *labels[10]={"Panels","Border","Titlebar","Accent","Titles","Folders","Launchers","Selected items","Controls","Labels"};
     int scheme=colour_scheme_index();
     textout(x+5,y+4,"Color scheme",C_INPUT_LABEL,18);
@@ -3565,12 +3700,14 @@ static void draw_config_page(int x,int y,int tab,int focus,int hover,int full)
     textout(x+5,y+4,font_is_ega()?"EGA display font":"VGA display font",C_INPUT_LABEL,18);cycle_control(x+25,y+4,font_name_at((int)appearance.font_id<total_fonts()?(int)appearance.font_id:0),f==0||h==0);
     check_line(x+25,y+6,"Persist",appearance.font_persist,f==1||h==1);draw_character_preview(x+5,y+9);
   } else if(tab==4)textout(x+7,y+9,"Font customization requires a VGA display adapter",C_INPUT_LABEL,52);
-  else {
+#endif
+  if(tab==SHORTCUT_TAB){
     textout(x+5,y+5,"Keyboard shortcut status:",C_INPUT_LABEL,25);textout(x+31,y+5,config_shortcut_active?"Active":"Inactive",C_ITEM,12);
     if(config_shortcut_active)draw_button(x+45,y+5,"  Unload  ",10,f==0||h==0);else draw_button(x+45,y+5,"  Activate  ",12,f==0||h==0);
     textout(x+5,y+8,"Current combination:",C_INPUT_LABEL,25);textout(x+31,y+8,config_shortcut_combination,C_ITEM,28);
     textout(x+5,y+11,"Set new combination:",C_INPUT_LABEL,25);draw_button(x+31,y+11,"  Choose  ",10,f==1||h==1);
-    if(config_shortcut_changed)textout(x+5,y+14,"Shortcut combination changed. Restart to take effect.",C_INPUT_LABEL,54);
+    textout(x+5,y+13,"Launch! target:",C_INPUT_LABEL,25);cycle_control(x+31,y+13,shortcut_target_light?"Tiny (!86)":"Standard (!)",f==2||h==2);
+    if(config_shortcut_changed)textout(x+5,y+15,"Shortcut target changed, reboot to apply.",C_INPUT_LABEL,45);
   }
   {TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);
    toolbar_divider(x,y+16,66);
@@ -3580,6 +3717,24 @@ static void draw_config_page(int x,int y,int tab,int focus,int hover,int full)
 
 static int config_hit(int x,int y,int tab,int mx,int my)
 {
+#ifdef LIGHT86
+  if((my==y+1||my==y+2)){if(mx>x+3&&mx<x+12)return 0;if(mx>x+12&&mx<x+25)return 1;}
+  if(tab==0){
+    if(my==y+4&&mx>=x+25&&mx<x+40)return CONFIG_CONTROL_BASE;
+    if(my==y+7&&mx>=x+25&&mx<x+63)return CONFIG_CONTROL_BASE+1;
+    if(my==y+13&&mx>=x+25&&mx<x+63)return CONFIG_CONTROL_BASE+2;
+    if(my==y+9&&mx>=x+25&&mx<x+40)return CONFIG_CONTROL_BASE+3;
+    if(my==y+11&&mx>=x+25&&mx<x+40)return CONFIG_CONTROL_BASE+4;
+  } else if(tab==SHORTCUT_TAB){
+    if(my==y+5&&mx>=x+45&&mx<(config_shortcut_active?x+55:x+57))return CONFIG_CONTROL_BASE;
+    if(my==y+11&&mx>=x+31&&mx<x+41)return CONFIG_CONTROL_BASE+1;
+    if(my==y+13&&mx>=x+31&&mx<x+48)return CONFIG_CONTROL_BASE+2;
+  }
+  {TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);
+   if(toolbar_hit(bok,mx,my,y+17))return 20;if(toolbar_hit(bcancel,mx,my,y+17))return 21;
+   if(toolbar_hit(breset,mx,my,y+17))return 22;if(toolbar_hit(bhelp,mx,my,y+17))return 23;}
+  return -1;
+#else
   static const int left[6]={3,10,19,32,41,48},right[6]={10,19,32,41,48,59};int i;
   if(my==y+1||my==y+2)for(i=0;i<6;i++)if(mx>x+left[i]&&mx<x+right[i])return i;
   if(tab==0){
@@ -3611,15 +3766,18 @@ static int config_hit(int x,int y,int tab,int mx,int my)
   } else if(tab==4&&font_custom_supported()){
     if(my==y+4&&mx>=x+25&&mx<x+40)return CONFIG_CONTROL_BASE;
     if(my==y+6&&mx>=x+25&&mx<x+36)return CONFIG_CONTROL_BASE+1;
-  } else if(tab==5){
+  } else if(tab==SHORTCUT_TAB){
     if(my==y+5&&mx>=x+45&&mx<(config_shortcut_active?x+55:x+57))return CONFIG_CONTROL_BASE;
     if(my==y+11&&mx>=x+31&&mx<x+41)return CONFIG_CONTROL_BASE+1;
+    if(my==y+13&&mx>=x+31&&mx<x+48)return CONFIG_CONTROL_BASE+2;
   }
   {TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);
    if(toolbar_hit(bok,mx,my,y+17))return 20;if(toolbar_hit(bcancel,mx,my,y+17))return 21;
    if(toolbar_hit(breset,mx,my,y+17))return 22;if(toolbar_hit(bhelp,mx,my,y+17))return 23;}
   return -1;
+#endif
 }
+
 
 
 #pragma code_seg()
@@ -3770,15 +3928,9 @@ static void config_select_control(int tab,int item,int x,int y)
        stable so Markdown mappings and saved configuration remain valid. */
     n=total_fonts();if(n>64)n=64;font_map[0]=0;
     if(n>1){
-      if(font_is_ega()){
-        for(i=1;i<n;i++)font_map[i]=i;
-        for(i=1;i<n-1;i++)for(j=i+1;j<n;j++)
-          if(stricmp(font_name_at(font_map[i]),font_name_at(font_map[j]))>0){int t=font_map[i];font_map[i]=font_map[j];font_map[j]=t;}
-      } else {
-        font_map[1]=6;for(i=2,j=1;j<n;j++)if(j!=6)font_map[i++]=j;
-        for(i=2;i<n-1;i++)for(j=i+1;j<n;j++)
-          if(stricmp(font_name_at(font_map[i]),font_name_at(font_map[j]))>0){int t=font_map[i];font_map[i]=font_map[j];font_map[j]=t;}
-      }
+      font_map[1]=6;for(i=2,j=1;j<n;j++)if(j!=6)font_map[i++]=j;
+      for(i=2;i<n-1;i++)for(j=i+1;j<n;j++)
+        if(stricmp(font_name_at(font_map[i]),font_name_at(font_map[j]))>0){int t=font_map[i];font_map[i]=font_map[j];font_map[j]=t;}
     }
     current=0;for(i=0;i<n;i++){opts[i]=font_name_at(font_map[i]);if(font_map[i]==appearance.font_id)current=i;}
   }
@@ -3829,7 +3981,10 @@ static int configure_appearance(void)
   int hit,count,item,redraw=2,reset_choice;unsigned mb=0;
   video_init();if(!save_screen()){puts("Launch!: insufficient memory");return 0;}
   cursor_hide();mouse_present=mouse_start();mouse_stop();
-  config_shortcut_changed=0;shortcut_refresh();load_custom_schemes();scan_external_fonts();prompt_load_styles();prompt_ansi=ansi_installed();if(!prompt_ansi&&prompt_needs_ansi[prompt_style])prompt_style=prompt_next_style(prompt_style,1);
+  config_shortcut_changed=0;shortcut_refresh();
+#ifndef LIGHT86
+  load_custom_schemes();scan_external_fonts();prompt_load_styles();prompt_ansi=ansi_installed();if(!prompt_ansi&&prompt_needs_ansi[prompt_style])prompt_style=prompt_next_style(prompt_style,1);
+#endif
   x=(screen_cols-66)/2;y=(screen_rows-20)/2;
   for(;;){
     wait_vertical_retrace();if(redraw){render_begin();draw_config_page(x,y,tab,focus,hover,redraw==2);render_end();redraw=0;}
@@ -3840,17 +3995,19 @@ static int configure_appearance(void)
       if(hit>=CONFIG_CONTROL_BASE&&hit<20){
         focus=hit;item=hit-CONFIG_CONTROL_BASE;
         if(config_is_select(tab,item)){config_select_control(tab,item,x,y);redraw=2;continue;}
-        if(tab==5&&item==0){
+        if(tab==SHORTCUT_TAB&&item==0){
           if(config_shortcut_active){
             press_button(x+45,y+5,"  Unload  ",10);shortcut_unload();
           } else {
             press_button(x+45,y+5,"  Activate  ",12);shortcut_activate();
           }
           shortcut_refresh();
-        } else if(tab==5&&item==1){
+        } else if(tab==SHORTCUT_TAB&&item==1){
           press_button(x+31,y+11,"  Choose  ",10);
           if(shortcut_set_dialog())config_shortcut_changed=1;
           shortcut_refresh();
+        } else if(tab==SHORTCUT_TAB&&item==2){
+          shortcut_target_light=!shortcut_target_light;config_shortcut_changed=1;
         } else if(tab==2&&((appearance.screensaver==1&&item==3) ||
                            (appearance.screensaver!=1&&item==2))){
           press_button(x+25,appearance.screensaver==1?y+10:y+8,"  Preview  ",11);
@@ -3867,10 +4024,20 @@ static int configure_appearance(void)
       if(hit==20){
         TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);
         press_button(bok.x,y+17,"  OK  ",bok.w);
-        mouse_pointer_restore();if(font_commit(appearance.font_id)&&save_appearance()){close_menu();return 1;}mouse_pointer_install();
+        mouse_pointer_restore();
+#ifdef LIGHT86
+        if(save_light_appearance()){close_menu();return 1;}
+#else
+        if(font_commit(appearance.font_id)&&save_appearance()){close_menu();return 1;}
+#endif
+        mouse_pointer_install();
         notice_box("Write Error","Could not save the configuration.");redraw=2;continue;
       }
-      if(hit==21){TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(bcancel.x,y+17,"  Cancel  ",bcancel.w);mouse_pointer_restore();appearance=original;font_restore();close_menu();return 0;}
+      if(hit==21){TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(bcancel.x,y+17,"  Cancel  ",bcancel.w);mouse_pointer_restore();appearance=original;
+#ifndef LIGHT86
+      font_restore();
+#endif
+      close_menu();return 0;}
       if(hit==22){
         int reset_ok=1;
         {TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(breset.x,y+17,"  Reset  ",breset.w);}reset_choice=config_reset_box();
@@ -3888,7 +4055,11 @@ static int configure_appearance(void)
       if(hit==23){TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(bhelp.x,y+17,"  ?  ",bhelp.w);config_about_box();redraw=2;continue;}
       continue;
     }
-    if(k==27){mouse_pointer_restore();appearance=original;font_restore();close_menu();return 0;}
+    if(k==27){mouse_pointer_restore();appearance=original;
+#ifndef LIGHT86
+      font_restore();
+#endif
+      close_menu();return 0;}
     if(k==0xA500){tab=(tab+1)%CONFIG_TAB_COUNT;focus=tab;redraw=2;continue;}
     count=config_count(tab);
     if(k==9){
@@ -3936,7 +4107,7 @@ static int configure_appearance(void)
     if(focus<20){
       item=focus-CONFIG_CONTROL_BASE;
       if(config_is_select(tab,item)&&(k==13||k==' ')){config_select_control(tab,item,x,y);redraw=2;continue;}
-      if(tab==5&&item==0){
+      if(tab==SHORTCUT_TAB&&item==0){
         if(k==13||k==' '){
           if(config_shortcut_active){
             press_button(x+45,y+5,"  Unload  ",10);shortcut_unload();
@@ -3945,12 +4116,14 @@ static int configure_appearance(void)
           }
           shortcut_refresh();redraw=2;
         }
-      } else if(tab==5&&item==1){
+      } else if(tab==SHORTCUT_TAB&&item==1){
         if(k==13||k==' '){
           press_button(x+31,y+11,"  Choose  ",10);
           if(shortcut_set_dialog())config_shortcut_changed=1;
           shortcut_refresh();redraw=2;
         }
+      } else if(tab==SHORTCUT_TAB&&item==2){
+        if(k==0x4B00||k==0x4D00||k==' '||k==13){shortcut_target_light=!shortcut_target_light;config_shortcut_changed=1;redraw=2;}
       } else if(tab==2&&((appearance.screensaver==1&&item==3) ||
                          (appearance.screensaver!=1&&item==2))){
         if(k==13||k==' '){run_screensaver();redraw=2;}
@@ -3969,9 +4142,19 @@ static int configure_appearance(void)
       else focus=focus>=23?20:focus+1;
       redraw=1;
     } else if((k==13||k==' ')&&focus==20){
-      mouse_pointer_restore();if(font_commit(appearance.font_id)&&save_appearance()){close_menu();return 1;}mouse_pointer_install();
+      mouse_pointer_restore();
+#ifdef LIGHT86
+        if(save_light_appearance()){close_menu();return 1;}
+#else
+        if(font_commit(appearance.font_id)&&save_appearance()){close_menu();return 1;}
+#endif
+        mouse_pointer_install();
       notice_box("Write Error","Could not save the configuration.");redraw=2;
-    } else if((k==13||k==' ')&&focus==21){mouse_pointer_restore();appearance=original;font_restore();close_menu();return 0;
+    } else if((k==13||k==' ')&&focus==21){mouse_pointer_restore();appearance=original;
+#ifndef LIGHT86
+      font_restore();
+#endif
+      close_menu();return 0;
     } else if((k==13||k==' ')&&focus==22){
       int reset_ok=1;
       reset_choice=config_reset_box();
@@ -6231,7 +6414,7 @@ static int font_preview_vga(unsigned char id)
 static int font_preview_ega(unsigned char id)
 {
   unsigned segment;
-  if(!id){font_bios_standard_ega();launchui_rebase();return 1;}
+  if(!id){font_bios_standard_ega();if(launchui_active)ega14_overlay_ui_bios();return 1;}
   if(_dos_allocmem(224,&segment)!=0)return 0;
   if(!font_read_ega(id,segment)){_dos_freemem(segment);return 0;}
   font_bios_load_ega(segment,0);_dos_freemem(segment);launchui_rebase();return 1;
@@ -6260,7 +6443,7 @@ static int font_commit_vga(unsigned char id)
 static int font_commit_ega(unsigned char id)
 {
   unsigned resident,temporary;
-  if(!id){if(!font_unload())return 0;font_bios_standard_ega();launchui_rebase();return 1;}
+  if(!id){if(!font_unload())return 0;font_bios_standard_ega();if(launchui_active)ega14_overlay_ui_bios();return 1;}
   if(!appearance.font_persist){if(!font_unload())return 0;return font_preview_ega(id);}
   if(!font_manager(&resident))return 0;
   if(_dos_allocmem(224,&temporary)!=0)return 0;
@@ -6525,6 +6708,28 @@ static char *setkey_stristr(char *text,const char *find)
   return 0;
 }
 
+static char *shortcut_find_key_program(char *p)
+{
+  char *best=0,*q;
+  /* Current names plus the 3.75 test-build legacy Tiny name, so an
+     existing AUTOEXEC.BAT can be migrated without leaving duplicate TSRs. */
+  q=setkey_stristr(p,"!TKEY.COM");if(q)best=q;
+  q=setkey_stristr(p,"!KEY86.COM");if(q&&(!best||q<best))best=q;
+  q=setkey_stristr(p,"!KEY.COM");if(q&&(!best||q<best))best=q;
+  return best;
+}
+
+static int shortcut_update_target_line(char *line)
+{
+  char *hit,*tail;int oldlen,newlen;const char *want=shortcut_target_light?"!TKEY.COM":"!KEY.COM";
+  hit=shortcut_find_key_program(line);if(!hit)return 0;
+  if(!strnicmp(hit,"!TKEY.COM",9))oldlen=9;
+  else if(!strnicmp(hit,"!KEY86.COM",10))oldlen=10;
+  else oldlen=8;
+  newlen=(int)strlen(want);
+  tail=hit+oldlen;memmove(hit+newlen,tail,strlen(tail)+1);memcpy(hit,want,newlen);return 1;
+}
+
 static int update_shortcut_key(const char *spec)
 {
   static char autoexec[20],temp[20],old[20],line[256],output[256];
@@ -6537,7 +6742,7 @@ static int update_shortcut_key(const char *spec)
   out=fopen(temp,"wt");if(!out){fclose(in);return 0;}
   while(fgets(line,sizeof(line),in)){
     strcpy(output,line);p=output;while(*p==' ' || *p=='\t')p++;
-    hit=setkey_stristr(p,"!KEY.COM");
+    hit=shortcut_find_key_program(p);
     if(!found && hit && strnicmp(p,"REM",3)!=0){
       key=setkey_stristr(hit,"/KEY=");
       if(key){end=key+5;while(*end && !isspace((unsigned char)*end))end++;
@@ -6601,7 +6806,7 @@ static void shortcut_refresh(void)
   if(f){
     while(fgets(line,sizeof(line),f)){
       p=line;while(*p==' '||*p=='\t')p++;
-      hit=setkey_stristr(p,"!KEY.COM");
+      hit=shortcut_find_key_program(p);
       if(hit&&strnicmp(p,"REM",3)!=0){
         key=setkey_stristr(hit,"/KEY=");
         if(key){
@@ -6652,7 +6857,7 @@ static int ensure_shortcut_autoexec(void)
   if(f){
     while(fgets(line,sizeof(line),f)){
       p=line;while(*p==' '||*p=='\t')p++;
-      if(strnicmp(p,"REM",3)!=0&&setkey_stristr(p,"!KEY.COM")){
+      if(strnicmp(p,"REM",3)!=0&&shortcut_find_key_program(p)){
         fclose(f);return 1;
       }
     }
@@ -6662,8 +6867,20 @@ static int ensure_shortcut_autoexec(void)
   fseek(f,0L,SEEK_END);size=ftell(f);
   if(size>0){fseek(f,-1L,SEEK_END);last=fgetc(f);fseek(f,0L,SEEK_END);}
   if(size>0&&last!='\n'&&fputs("\r\n",f)==EOF){fclose(f);return 0;}
-  if(fprintf(f,"%s%s!KEY.COM\r\n",shortcut_loadhigh_supported()?"LOADHIGH ":"",program_dir)<0){fclose(f);return 0;}
+  if(fprintf(f,"%s%s%s\r\n",shortcut_loadhigh_supported()?"LOADHIGH ":"",program_dir,shortcut_target_light?"!TKEY.COM":"!KEY.COM")<0){fclose(f);return 0;}
   return fclose(f)==0;
+}
+
+static int shortcut_write_target(void)
+{
+  static char autoexec[20],temp[20],old[20],line[256];char *comspec,*p;FILE *in,*out;int found=0,ok=1;
+  comspec=getenv("COMSPEC");autoexec[0]=(comspec&&comspec[1]==':')?(char)toupper((unsigned char)comspec[0]):'C';
+  strcpy(autoexec+1,":\\AUTOEXEC.BAT");strcpy(temp,autoexec);strcpy(strrchr(temp,'.'),".$$$");strcpy(old,autoexec);strcpy(strrchr(old,'.'),".L!$");
+  in=fopen(autoexec,"rt");if(!in)return 1;out=fopen(temp,"wt");if(!out){fclose(in);return 0;}
+  while(fgets(line,sizeof(line),in)){p=line;while(*p==' '||*p=='\t')p++;if(!found&&strnicmp(p,"REM",3)!=0&&shortcut_update_target_line(p))found=1;if(fputs(line,out)==EOF){ok=0;break;}}
+  if(ferror(in))ok=0;if(fclose(in)!=0)ok=0;if(fclose(out)!=0)ok=0;if(!ok){remove(temp);return 0;}
+  if(!found){remove(temp);return 1;}
+  remove(old);if(rename(autoexec,old)!=0){remove(temp);return 0;}if(rename(temp,autoexec)!=0){rename(old,autoexec);remove(temp);return 0;}remove(old);return 1;
 }
 
 static int shortcut_activate(void)
@@ -6678,7 +6895,7 @@ static int shortcut_activate(void)
 static int shortcut_unload(void)
 {
   char shortcut[MAX_CMD];int result,saved_out=-1,saved_err=-1;FILE *nullout;
-  strcpy(shortcut,program_dir);strcat(shortcut,"!KEY.COM");
+  strcpy(shortcut,program_dir);strcat(shortcut,shortcut_target_light?"!TKEY.COM":"!KEY.COM");
   mouse_stop();fflush(stdout);fflush(stderr);nullout=fopen("NUL","wt");
   if(nullout){
     saved_out=_dup(1);saved_err=_dup(2);
@@ -6711,6 +6928,12 @@ static void shortcut_idle_sync(void)
 
 static void show_help(void)
 {
+#ifdef LIGHT86
+  puts("Launch! 86 Light 3.75 - lightweight command menu for DOS\n");
+  puts("Usage: !86 [menu.mnu] [/CONFIG | /OPENTO=folder | /?]\n");
+  puts("Menu management: Ctrl+A Add, Ctrl+D Delete, Ctrl+E Edit, Ctrl+Up/Down Move, Ctrl+S Sort");
+#else
+
   puts("Launch! 3.75 - a lightweight command menu for DOS\n");
   puts("Usage: ! [menu.mnu] [/CONFIG | /EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
   puts("Menu management shortcuts:");
@@ -6728,6 +6951,7 @@ static void show_help(void)
   puts("  menu.mnu      Use another menu file beside !.EXE (or a full path)");
   puts("  /OPENTO=name  Open directly to the first folder with this name");
   puts("  /?            Show this help");
+#endif
 }
 
 static int running_under_windows(void)
@@ -6766,19 +6990,33 @@ int main(int argc,char **argv)
   static char macro[MAX_MACRO],open_to[MAX_TITLE];
   config_path(argv[0]);
   windows_session=running_under_windows();
+#ifdef LIGHT86
+  no_glyph_mode=1;
+#else
   if(windows_session)no_glyph_mode=1;
   scan_external_fonts();
+#endif
   if(!load_appearance())puts("Launch!: LAUNCH.CFG is invalid; using default appearance.");
+#ifdef LIGHT86
+  light_standard_snapshot=appearance;
+  /* !86 has a fixed presentation: retain only lightweight menu preferences. */
+  appearance.background=default_appearance.background;appearance.border=default_appearance.border;appearance.titlebar_fg=default_appearance.titlebar_fg;appearance.titlebar_bg=default_appearance.titlebar_bg;
+  appearance.main_title=default_appearance.main_title;appearance.titles=default_appearance.titles;appearance.folders=default_appearance.folders;appearance.launchers=default_appearance.launchers;
+  appearance.selected_fg=default_appearance.selected_fg;appearance.selected_bg=default_appearance.selected_bg;appearance.controls_fg=default_appearance.controls_fg;appearance.controls_bg=default_appearance.controls_bg;appearance.labels=default_appearance.labels;
+  appearance.show_collections=appearance.show_explore=appearance.show_power=0;appearance.screensaver=0;appearance.font_id=0;appearance.font_persist=0;appearance.prompt_inactivity=0;appearance.mouse_cursor=1;
+#endif
   if(!windows_session)shortcut_idle_sync();
   for(i=1;i<argc;i++){
     if(!stricmp(argv[i],"/?") || !stricmp(argv[i],"-?")){show_help();return 0;}
     if(!stricmp(argv[i],"/CONFIG"))config_mode=1;
+#ifndef LIGHT86
     else if(!stricmp(argv[i],"/EXPLORE"))explore_mode=1;
     else if(!stricmp(argv[i],"/OPEN"))open_mode=1;
     else if(!stricmp(argv[i],"/BYE"))bye_mode=1;
     else if(!stricmp(argv[i],"/NOW"))now_mode=1;
     else if(!stricmp(argv[i],"/INITMENU"))initmenu_mode=1;
     else if(!stricmp(argv[i],"/NOGLYPH"))no_glyph_mode=1;
+#endif
     else if(i==1&&argv[i][0]!='/'&&argv[i][0]!='-'){
       if(!select_menu_file(argv[i])){puts("Launch!: invalid menu filename.");return 1;}
     }
@@ -6798,9 +7036,9 @@ int main(int argc,char **argv)
     if(!config_status){printf("Launch!: cannot recover %s\n",config_file);return 1;}
     if(config_status==3)puts("Launch!: no menu file was found; rebuilt the default menu.");
   }
-  if(!windows_session && !font_commit(appearance.font_id)){
-    font_commit(0);puts("Launch!: display font data could not be read; using the standard display font.");
-  }
+#ifndef LIGHT86
+  if(!windows_session && !font_commit(appearance.font_id)){font_commit(0);puts("Launch!: display font data could not be read; using the standard display font.");}
+#endif
   if(config_mode){
     result=configure_appearance();
     if(result==2 && prompt_macro_pending){

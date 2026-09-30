@@ -48,6 +48,7 @@ static char base_dir[144];
 static char menu_path[160];
 static char winrun_path[160];
 static HMENU root_menu;
+static int menu_tracking;
 
 static void trim(char *s)
 {
@@ -78,7 +79,7 @@ static int ensure_section(const char *name)
   if(section_count>=MAX_SECTIONS)return -1;
   strncpy(sections[section_count].name,name,sizeof(sections[0].name)-1);
   sections[section_count].name[sizeof(sections[0].name)-1]=0;
-  sections[section_count].menu=CreatePopupMenu();
+  sections[section_count].menu=NULL;
   return section_count++;
 }
 
@@ -125,7 +126,10 @@ static int is_windows_exe(const char *cmd);
 static void build_native_menu(void)
 {
   int i;HMENU m,sub;
-  for(i=0;i<section_count;i++)while(GetMenuItemCount(sections[i].menu)>0)RemoveMenu(sections[i].menu,0,MF_BYPOSITION);
+  /* Create a fresh native USER menu tree for each invocation.  The earlier
+     implementation leaked popup-menu handles every time the Launch button
+     was used, which is especially harmful to the small Win3.x USER heap. */
+  for(i=0;i<section_count;i++)sections[i].menu=CreatePopupMenu();
   for(i=0;i<node_count;i++){
     m=(nodes[i].section_index>=0&&nodes[i].section_index<section_count)?sections[nodes[i].section_index].menu:NULL;if(!m)continue;
     if(!strcmp(nodes[i].title,"-")){AppendMenu(m,MF_SEPARATOR,0,NULL);continue;}
@@ -183,9 +187,22 @@ static void run_item(int idx)
 
 static void show_launch_menu(void)
 {
-  RECT r;if(!load_launch_menu()){MessageBox(gWnd,"LAUNCH.MNU could not be opened.","Launch!",MB_OK|MB_ICONSTOP);return;}
-  build_native_menu();GetWindowRect(gWnd,&r);
-  TrackPopupMenu(root_menu,TPM_LEFTALIGN|TPM_RIGHTBUTTON,r.left,r.bottom,0,gWnd,NULL);
+  POINT pt;int i;
+  if(!load_launch_menu()){MessageBox(gWnd,"LAUNCH.MNU could not be opened.","Launch!",MB_OK|MB_ICONSTOP);return;}
+  build_native_menu();if(!root_menu)return;
+  /* Let USER own the entire popup/cascade while it is active.  In particular
+     do not run our Win3.x pseudo-topmost repaint timer underneath a popup
+     menu: display drivers that use save-under (notably some 256-colour
+     drivers) can otherwise restore stale menu-border pixels. */
+  menu_tracking=1;
+  pt.x=0;pt.y=0;ClientToScreen(gWnd,&pt);
+  { RECT r;GetClientRect(gWnd,&r);pt.y+=r.bottom; }
+  TrackPopupMenu(root_menu,TPM_LEFTALIGN|TPM_LEFTBUTTON,pt.x,pt.y,0,gWnd,NULL);
+  menu_tracking=0;
+  DestroyMenu(root_menu);root_menu=NULL;
+  for(i=0;i<section_count;i++)sections[i].menu=NULL;
+  SetWindowPos(gWnd,HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
+  InvalidateRect(gWnd,NULL,FALSE);UpdateWindow(gWnd);
 }
 
 static void button_size(int *bw,int *bh)
@@ -284,7 +301,7 @@ static LRESULT FAR PASCAL WndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
   switch(msg){
     case WM_CREATE:SetTimer(h,RAISE_TIMER,100,NULL);return 0;
     case WM_ACTIVATEAPP:
-      if(!wp){
+      if(!wp && !menu_tracking){
         /* Another application just became active.  Keep the launcher above
            its titlebar without taking activation back from it. */
         SetWindowPos(h,HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
@@ -292,7 +309,7 @@ static LRESULT FAR PASCAL WndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
       }
       return 0;
     case WM_TIMER:
-      if(wp==RAISE_TIMER && GetTopWindow(NULL)!=h){
+      if(wp==RAISE_TIMER && !menu_tracking && GetTopWindow(NULL)!=h){
         /* Windows 3.x has no WS_EX_TOPMOST.  Only when another top-level
            window has overtaken us, restore our Z-order without activation.
            Repaint once at that point so pixels from the covering window can

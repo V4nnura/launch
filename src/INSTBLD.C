@@ -652,7 +652,7 @@ static void draw_extract_progress(void)
   for(i=0;i<30;i++)line[pos++]=(char)(i<filled?219:176);
   line[pos++]=']';line[pos++]=' ';
   sprintf(line+pos,"%3d%%",percent);pos+=(int)strlen(line+pos);line[pos]=0;
-  colour_text(line,11);
+  colour_text(line,3);
   fflush(stdout);
   if(extract_progress_done>=extract_progress_total){
     putchar('\n');
@@ -698,14 +698,14 @@ static void remove_unselected_components(const char *install,int accessories,int
 {
   static const char *acc[]={"CAL.ICS","!CAL.EXE","!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MKDOWN.EXE","!NOTE.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
   static const char *gm[]={"!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLY.LVL",0};
-  int i;if(!accessories)for(i=0;acc[i];i++)remove_named(install,acc[i]);if(!games)for(i=0;gm[i];i++)remove_named(install,gm[i]);if(!fonts){remove_named(install,"FONT.DAT");remove_named(install,"FONT14.DAT");}if(!menu_generator){remove_named(install,"!MNUGEN.EXE");remove_named(install,"AUTOGEN.DAT");}if(!shortcut_key)remove_named(install,"!KEY.COM");
+  int i;if(!accessories)for(i=0;acc[i];i++)remove_named(install,acc[i]);if(!games)for(i=0;gm[i];i++)remove_named(install,gm[i]);if(!fonts){remove_named(install,"FONT.DAT");remove_named(install,"FONT14.DAT");}if(!menu_generator){remove_named(install,"!MNUGEN.EXE");remove_named(install,"AUTOGEN.DAT");}if(!shortcut_key){remove_named(install,"!KEY.COM");remove_named(install,"!TKEY.COM");remove_named(install,"!KEY86.COM");}
 }
 
 static int selected_member(const char *name,int shortcut_build,int accessories,
                            int games,int fonts,int menu_generator,int sample_docs,int windows_install,int vga_display,const char **dest_name)
 {
   *dest_name=name;
-  if(!stricmp(name,"!.EXE")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
+  if(!stricmp(name,"!.EXE")||!stricmp(name,"!86.EXE")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
   /* Windows integration is an optional install component.  Do not even
      extract these files when Windows integration was declined. */
   if(windows_install&&(!stricmp(name,"!WIN16.EXE")||!stricmp(name,"LAUNCH.ICO")||
@@ -725,6 +725,15 @@ static int selected_member(const char *name,int shortcut_build,int accessories,
   }
   if(!stricmp(name,"!KEY286.COM")){
     if(shortcut_build!=2)return 0;*dest_name="!KEY.COM";return 1;
+  }
+  if(!stricmp(name,"!TKEY.COM")){
+    if(shortcut_build!=0)return 0;*dest_name="!TKEY.COM";return 1;
+  }
+  if(!stricmp(name,"!TKEYDB.COM")){
+    if(shortcut_build!=1)return 0;*dest_name="!TKEY.COM";return 1;
+  }
+  if(!stricmp(name,"!TKEY286.COM")){
+    if(shortcut_build!=2)return 0;*dest_name="!TKEY.COM";return 1;
   }
   return 0;
 }
@@ -1055,7 +1064,7 @@ int main(int argc,char **argv)
      never writes the Win16 executable, icons or group template to disk. */
   strcpy(win_path,"C:\\WINDOWS");
   puts("");
-  win_inst=ask_windows_yes("Install Windows 3.x integration?",1,2);
+  win_inst=ask_windows_yes("Add Windows 3.x integration?",1,2);
   if(win_inst){
     static char entered[PATH_SIZE];
     puts("");
