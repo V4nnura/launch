@@ -13,8 +13,8 @@
 **Integrates with** Windows 3.x for a cohesive experience.
 
 <img width="640" alt="Menu (post boot)" src="https://github.com/user-attachments/assets/1ef29b23-0c63-43a0-b460-1d41a6af45ed" /><br/>
-<img width="640" alt="Launch! for DOS under WIN16" src="https://github.com/user-attachments/assets/04e120bd-7fbd-48c1-9a18-9e2476e9e024" /><br/>
-<img width="640" alt="Launch! WIN16" src="https://github.com/user-attachments/assets/c5e4e298-2750-4fce-9588-02c05dd8993a" />
+<img width="640" alt="Launch! for DOS - in Windows" src="https://github.com/user-attachments/assets/b8151e9f-8e8a-4342-87df-2f380dfb0b33" /><br/>
+<img width="640" alt="Launch! 16" src="https://github.com/user-attachments/assets/c1318702-41d0-498f-9312-528539fb6b1f" />
 
 ----
 
