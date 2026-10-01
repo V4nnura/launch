@@ -708,8 +708,8 @@ static int selected_member(const char *name,int shortcut_build,int accessories,
   if(!stricmp(name,"!.EXE")||!stricmp(name,"!86.EXE")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
   /* Windows integration is an optional install component.  Do not even
      extract these files when Windows integration was declined. */
-  if(windows_install&&(!stricmp(name,"!WIN16.EXE")||!stricmp(name,"LAUNCH.ICO")||
-      !stricmp(name,"LAUNCH16.ICO")||!stricmp(name,"LAUNCH.GRP")))return 1;
+  if(windows_install&&(!stricmp(name,"!WIN16.EXE")||!stricmp(name,"!MGR16.EXE")||!stricmp(name,"LAUNCH.ICO")||
+      !stricmp(name,"LAUNCH16.ICO")||!stricmp(name,"MENUMGR.ICO")||!stricmp(name,"LAUNCH.GRP")))return 1;
   if(fonts&&vga_display&&!stricmp(name,"FONT.DAT"))return 1;
   if(fonts&&!vga_display&&!stricmp(name,"FONT14.DAT"))return 1;
   if(menu_generator&&(!stricmp(name,"!MNUGEN.EXE")||!stricmp(name,"AUTOGEN.DAT")))return 1;
@@ -862,7 +862,7 @@ static void grp_set_word(unsigned char *p,unsigned off,unsigned v)
 { p[off]=(unsigned char)(v&255);p[off+1]=(unsigned char)((v>>8)&255); }
 
 /* Translate an offset from the supplied C:\\LAUNCH template to the rebuilt
-   group after all six installation-path strings have been resized. */
+   group after all nine installation-path strings have been resized. */
 static unsigned grp_map_offset(unsigned oldoff,const unsigned *pos,const int *delta,int count)
 {
   int i;long n=(long)oldoff;
@@ -871,31 +871,32 @@ static unsigned grp_map_offset(unsigned oldoff,const unsigned *pos,const int *de
 }
 
 /* Install the real Windows 3.1 Program Manager group supplied with Launch!.
-   The template was authored by Program Manager itself.  We only relocate its
-   C:\\LAUNCH path strings, repair every documented group/item offset, resize
+   The three-item template contains Launch! for DOS, Launch! 16 and Menu Manager;
+   the third item launches the dedicated !MGR16.EXE helper.
+   We relocate its C:\\LAUNCH paths, repair every group/item offset, resize
    the 3.1 working-directory tags and regenerate the 16-bit GRP checksum. */
 static int install_launch_group(const char *install,const char *winpath)
 {
   static char src[PATH_SIZE],dst[PATH_SIZE];FILE *f;unsigned char *in,*out;
-  long sz;unsigned old_cb,new_cb,old_items[2],new_items[2];
-  unsigned pos[8];int delta[8],reps=0;unsigned i,j,k,newsz;int dl;
+  long sz;unsigned old_cb,new_cb,old_items[3],new_items[3];
+  unsigned pos[12];int delta[12],reps=0;unsigned i,j,k,newsz;int dl;
   const char *old="C:\\LAUNCH";unsigned oldlen=9,newlen=(unsigned)strlen(install);
   unsigned fields[6]={12,14,16,18,20,22};unsigned sum,words;
   if(newlen<3||newlen>63)return 0;
   sprintf(src,"%s\\LAUNCH.GRP",install);f=fopen(src,"rb");if(!f)return 0;
   fseek(f,0,SEEK_END);sz=ftell(f);fseek(f,0,SEEK_SET);
   if(sz<100||sz>12000){fclose(f);return 0;}
-  in=(unsigned char*)malloc((unsigned)sz);out=(unsigned char*)malloc((unsigned)sz+6*(newlen+8));
+  in=(unsigned char*)malloc((unsigned)sz);out=(unsigned char*)malloc((unsigned)sz+9*(newlen+8));
   if(!in||!out){if(in)free(in);if(out)free(out);fclose(f);return 0;}
   if(fread(in,1,(unsigned)sz,f)!=(unsigned)sz){fclose(f);free(in);free(out);return 0;}fclose(f);
   if(memcmp(in,"PMCC",4)){free(in);free(out);return 0;}
-  old_cb=grp_word(in,6);if(grp_word(in,32)!=2){free(in);free(out);return 0;}
-  old_items[0]=grp_word(in,34);old_items[1]=grp_word(in,36);
+  old_cb=grp_word(in,6);if(grp_word(in,32)!=3){free(in);free(out);return 0;}
+  old_items[0]=grp_word(in,34);old_items[1]=grp_word(in,36);old_items[2]=grp_word(in,38);
   /* Locate every template installation path. */
   for(i=0;i+oldlen<=(unsigned)sz;i++)if(!memcmp(in+i,old,oldlen)){
-    if(reps>=8){free(in);free(out);return 0;}pos[reps]=i;delta[reps]=(int)newlen-(int)oldlen;reps++;i+=oldlen-1;
+    if(reps>=12){free(in);free(out);return 0;}pos[reps]=i;delta[reps]=(int)newlen-(int)oldlen;reps++;i+=oldlen-1;
   }
-  if(reps!=6){free(in);free(out);return 0;}
+  if(reps!=9){free(in);free(out);return 0;}
   /* Rebuild with resized strings. */
   i=j=k=0;while(i<(unsigned)sz){
     if(k<(unsigned)reps&&i==pos[k]){memcpy(out+j,install,newlen);j+=newlen;i+=oldlen;k++;}
@@ -903,7 +904,7 @@ static int install_launch_group(const char *install,const char *winpath)
   }
   newsz=j;new_cb=grp_map_offset(old_cb,pos,delta,reps);grp_set_word(out,6,new_cb);
   grp_set_word(out,22,grp_map_offset(grp_word(in,22),pos,delta,reps));
-  for(i=0;i<2;i++){
+  for(i=0;i<3;i++){
     unsigned oi=old_items[i],ni=grp_map_offset(oi,pos,delta,reps);new_items[i]=ni;grp_set_word(out,34+i*2,ni);
     for(j=0;j<6;j++)grp_set_word(out,ni+fields[j],grp_map_offset(grp_word(in,oi+fields[j]),pos,delta,reps));
   }
@@ -930,7 +931,7 @@ static int install_launch_group(const char *install,const char *winpath)
    Group numbers in PROGMAN.INI must remain contiguous on Windows 3.0. */
 static void cleanup_old_windows_integration(const char *install,const char *winpath)
 {
-  static const char *junk[]={"WINSETUP.EXE","WINSETUP.CFG","LAUNCH.MNU","LAUNCH.CFG","LAUNCH.PIF","LAUNCH.ICO","LAUNCH16.ICO","!WIN16.EXE",0};
+  static const char *junk[]={"WINSETUP.EXE","WINSETUP.CFG","LAUNCH.MNU","LAUNCH.CFG","LAUNCH.PIF","LAUNCH.ICO","LAUNCH16.ICO","MENUMGR.ICO","!WIN16.EXE","!MGR16.EXE",0};
   static char p[PATH_SIZE],ini[PATH_SIZE],tmp[PATH_SIZE],line[512],copy[512],self[PATH_SIZE];FILE *in,*out;int i;
   /* Remove files that older 3.75 test installers may have left in WINDOWS.
      LAUNCH.GRP is intentionally excluded. */
@@ -1124,7 +1125,7 @@ int main(int argc,char **argv)
   strcpy(autoexec+1,startup_batch_suffix());
   key_spec[0]=0;
   printf("\n");
-  update_autoexec=!upgrade&&ask_yes("Do you want to update your startup batch file?",1,0);
+  update_autoexec=!upgrade&&ask_yes("Update DOS startup batch file?",1,0);
   if(update_autoexec){
     puts("");add_path=ask_yes("Add Launch! to PATH?",1,5);
     puts("");add_shortcut=shortcut_key?ask_yes("Enable keyboard shortcut?",1,5):0;

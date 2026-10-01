@@ -21,6 +21,7 @@
 #define IDD_CONFIRM 1003
 #define IDD_EXITWIN 1004
 #define IDD_MESSAGE 1005
+#define IDD_MANAGER 1006
 #define CONFIRM_TEXT 70
 #define CONFIRM_ICON 71
 #define MESSAGE_TEXT 72
@@ -29,6 +30,13 @@
 #define IDI_CONFIRM 1101
 #define IDI_ERROR 1102
 #define IDI_SUCCESS 1103
+#define IDI_WINPROG 1104
+#define IDI_DOSPROG 1105
+#define IDB_MANAGER_LOGO 1200
+#define IDB_MENU_LOGO 1201
+#define IDB_MENU_TILE 1202
+#define IDB_MANAGER_TILE 1203
+#define IDM_MENU_BANNER 880
 #define RUN_EDIT 20
 #define RUN_OK IDOK
 #define RUN_CANCEL IDCANCEL
@@ -40,6 +48,9 @@
 #define WM_MANAGE_ACTION (WM_USER+17)
 #define WM_MANAGE_SELECTED (WM_USER+18)
 #define WM_BEGIN_BUTTON_DRAG (WM_USER+19)
+#define WM_SHOW_MENU_MANAGER (WM_USER+20)
+#define WM_MANAGER_ACTION (WM_USER+21)
+#define WM_OPEN_PENDING_MENU (WM_USER+22)
 #ifndef TPM_BOTTOMALIGN
 #define TPM_BOTTOMALIGN 0x0020
 #endif
@@ -82,11 +93,21 @@
 #define ITEM_OK IDOK
 #define ITEM_CANCEL IDCANCEL
 #define ITEM_BROWSE 49
+#define ITEM_TYPEICON 50
 
-#define REORDER_LIST 60
-#define REORDER_UP 61
-#define REORDER_DOWN 62
-#define REORDER_CLOSE 63
+#define MANAGER_PATH 80
+#define MANAGER_BROWSE 81
+#define MANAGER_TREE 82
+#define MANAGER_ADD 83
+#define MANAGER_EDIT 84
+#define MANAGER_REMOVE 85
+#define MANAGER_UP 86
+#define MANAGER_DOWN 87
+#define MANAGER_BANNER 88
+#define MANAGER_CLOSE IDCANCEL
+#define IDM_MANAGER_ADD_LAUNCHER 940
+#define IDM_MANAGER_ADD_FOLDER 941
+#define IDM_MANAGER_ADD_SEPARATOR 942
 
 typedef struct {
   char title[48];
@@ -102,6 +123,14 @@ typedef struct {
 
 typedef struct { char name[128]; HMENU menu; } SECTION;
 
+typedef struct {
+  int node_index;
+  int depth;
+  int is_windows;
+  unsigned long branch_mask;
+  int has_next;
+} MANAGER_ROW;
+
 static HINSTANCE gInst;
 static HWND gWnd, gButton, runWnd, runEdit, runMin;
 static HBRUSH gWindowBrush;
@@ -113,6 +142,7 @@ static int section_count;
 static char base_dir[144];
 static char menu_path[160];
 static int menu_path_explicit;
+static int start_menu_manager;
 static char winrun_path[160];
 static char launch_cfg_path[160];
 static char suite_title[32]="Launch!";
@@ -135,10 +165,15 @@ static char confirm_title[48],confirm_text[180];
 static int confirm_dialog_id=IDD_CONFIRM;
 static char message_title[48],message_text[220];
 static int message_kind;
-static HWND reorderWnd,reorderList;
-static int reorder_done;
-static int reorder_map[MAX_NODES];
-static int reorder_rows;
+static HWND managerWnd,managerTree,managerPath,managerBanner;
+static MANAGER_ROW manager_rows[MAX_NODES];
+static int manager_row_count;
+static unsigned char manager_expanded[MAX_NODES];
+static char manager_original_path[160];
+static FARPROC gManagerTreeProc;
+static FARPROC gManagerBannerProc;
+static HBITMAP gManagerLogoBmp,gManagerTileBmp;
+static HBITMAP gMenuLogoBmp,gMenuTileBmp;
 static HWND dde_server;
 static int dde_initiating;
 static int dde_waiting;
@@ -147,12 +182,21 @@ static HGLOBAL dde_reply;
 static FARPROC gButtonProc;
 static void resize_button_for_mode(void);
 static int browse_for_program(HWND owner,char *file,int maxfile);
+static int browse_for_menu(HWND owner,char *file,int maxfile);
 static int show_confirm_dialog(const char *title,const char *text);
 static int show_exit_windows_dialog(void);
 static void show_message_dialog(HWND owner,const char *title,const char *text,int kind);
+static int ensure_menu_header_bitmaps(void);
+static int measure_menu_header(MEASUREITEMSTRUCT FAR *mis);
+static int draw_menu_header(DRAWITEMSTRUCT FAR *dis);
+static void transparent_stretch_bitmap(HDC dc,HBITMAP bmp,int x,int y,int w,int h,COLORREF key);
+static void transparent_tile_bitmap(HDC dc,HBITMAP bmp,int x,int y,int w,COLORREF key);
+static void opaque_stretch_bitmap(HDC dc,HBITMAP bmp,int x,int y,int w,int h);
+static void opaque_tile_bitmap(HDC dc,HBITMAP bmp,int x,int y,int w);
 static int ensure_menu_file(void);
 static int copy_file_local(const char *src,const char *dst);
 static LRESULT FAR PASCAL ButtonProc(HWND h,UINT msg,WPARAM wp,LPARAM lp);
+static LRESULT FAR PASCAL ManagerTreeProc(HWND h,UINT msg,WPARAM wp,LPARAM lp);
 
 static void trim(char *s)
 {
@@ -191,25 +235,29 @@ static int is_menu_filename(const char *s)
   return dot && !stricmp(dot,".MNU");
 }
 
-static void set_menu_path_from_command_line(LPSTR cmd)
+static void apply_menu_argument(const char *arg)
 {
-  char arg[160];char *p=cmd;int n=0;
-  menu_path_explicit=0;
-  while(*p==' '||*p=='\t')p++;
-  if(!strnicmp(p,"/USE=",5)||!strnicmp(p,"-USE=",5))p+=5;
-  while(*p==' '||*p=='\t')p++;
-  if(!*p)return;
-  /* Win16 is an 8.3-only target.  Do not add or interpret quoted paths.
-     Only an actual .MNU filename is a menu override.  Some Win3.x launch
-     paths can leave a stray character in WinMain's raw command tail; that
-     must never replace the default adjacent LAUNCH.MNU. */
-  while(*p&&*p!=' '&&*p!='\t'&&n<(int)sizeof(arg)-1)arg[n++]=*p++;
-  arg[n]=0;trim(arg);
-  if(!arg[0]||!is_menu_filename(arg))return;
+  if(!arg||!arg[0]||!is_menu_filename(arg))return;
   menu_path_explicit=1;
   if(strchr(arg,':')||arg[0]=='\\')strncpy(menu_path,arg,sizeof(menu_path)-1);
   else sprintf(menu_path,"%s\\%s",base_dir,arg);
   menu_path[sizeof(menu_path)-1]=0;
+}
+
+static void set_menu_path_from_command_line(LPSTR cmd)
+{
+  char tok[160];char *p=cmd;int n;
+  menu_path_explicit=0;start_menu_manager=0;
+  while(p&&*p){
+    while(*p==' '||*p=='\t')p++;
+    if(!*p)break;
+    n=0;while(*p&&*p!=' '&&*p!='\t'&&n<(int)sizeof(tok)-1)tok[n++]=*p++;
+    tok[n]=0;trim(tok);if(!tok[0])continue;
+    /* Win16 remains deliberately 8.3-only: no quote parsing is introduced. */
+    if(!stricmp(tok,"/MANAGE")||!stricmp(tok,"-MANAGE")||!stricmp(tok,"MANAGE")){start_menu_manager=1;continue;}
+    if(!strnicmp(tok,"/USE=",5)||!strnicmp(tok,"-USE=",5)){apply_menu_argument(tok+5);continue;}
+    apply_menu_argument(tok);
+  }
 }
 
 static void menu_sidecar_path(char *out,const char *ext)
@@ -356,6 +404,44 @@ static int section_has_nodes(int section_index)
   return 0;
 }
 
+static int ensure_menu_header_bitmaps(void)
+{
+  if(!gMenuLogoBmp)gMenuLogoBmp=LoadBitmap(gInst,MAKEINTRESOURCE(IDB_MENU_LOGO));
+  if(!gMenuTileBmp)gMenuTileBmp=LoadBitmap(gInst,MAKEINTRESOURCE(IDB_MENU_TILE));
+  return gMenuLogoBmp&&gMenuTileBmp;
+}
+
+static int measure_menu_header(MEASUREITEMSTRUCT FAR *mis)
+{
+  BITMAP bm_logo,bm_tile;
+  if(!mis || mis->CtlType!=ODT_MENU || mis->itemID!=IDM_MENU_BANNER)return 0;
+  if(!ensure_menu_header_bitmaps())return 0;
+  GetObject(gMenuLogoBmp,sizeof(bm_logo),&bm_logo);
+  GetObject(gMenuTileBmp,sizeof(bm_tile),&bm_tile);
+  /* MENULOGO.BMP establishes only the minimum menu width.  Normal menu
+     contents remain free to make the popup wider; MENUTILE.BMP is repeated
+     horizontally to the natural right edge. */
+  mis->itemWidth=(UINT)bm_logo.bmWidth;
+  mis->itemHeight=(UINT)(bm_logo.bmHeight>bm_tile.bmHeight?bm_logo.bmHeight:bm_tile.bmHeight);
+  return 1;
+}
+
+static int draw_menu_header(DRAWITEMSTRUCT FAR *dis)
+{
+  BITMAP bm_logo,bm_tile;int x,y,remaining;
+  if(!dis || dis->CtlType!=ODT_MENU || dis->itemID!=IDM_MENU_BANNER)return 0;
+  if(!ensure_menu_header_bitmaps())return 1;
+  GetObject(gMenuLogoBmp,sizeof(bm_logo),&bm_logo);
+  GetObject(gMenuTileBmp,sizeof(bm_tile),&bm_tile);
+  y=dis->rcItem.top;
+  /* Menu artwork is intentionally opaque: preserve the grey background
+     designed into MENULOGO.BMP / MENUTILE.BMP rather than colour-keying it. */
+  opaque_stretch_bitmap(dis->hDC,gMenuLogoBmp,dis->rcItem.left,y,bm_logo.bmWidth,bm_logo.bmHeight);
+  x=dis->rcItem.left+bm_logo.bmWidth;remaining=dis->rcItem.right-x;
+  if(remaining>0)opaque_tile_bitmap(dis->hDC,gMenuTileBmp,x,y,remaining);
+  return 1;
+}
+
 static void build_native_menu(void)
 {
   int i;HMENU m,sub;
@@ -390,6 +476,8 @@ static void build_native_menu(void)
     }
   }
   root_menu=menu_for_section("Launcher");
+  if(root_menu && ensure_menu_header_bitmaps())
+    InsertMenu(root_menu,0,MF_BYPOSITION|MF_OWNERDRAW|MF_DISABLED,IDM_MENU_BANNER,NULL);
   if(root_menu && manage_mode==MANAGE_NONE){
     AppendMenu(root_menu,MF_SEPARATOR,0,NULL);
     AppendMenu(root_menu,MF_STRING,IDM_RUN,"&Run...");
@@ -751,6 +839,29 @@ static void center_dialog(HWND h)
   SetWindowPos(h,NULL,x,y,0,0,SWP_NOSIZE|SWP_NOZORDER);
 }
 
+static void update_item_program_type(HWND h)
+{
+  char exe[160];int valid,iswin=0;HICON icon=NULL;HWND iconctl;
+  if(!h||item_dialog_folder||!itemCommand)return;
+  GetWindowText(itemCommand,exe,sizeof(exe));trim(exe);
+  valid=exe[0]?item_command_validation(exe):-1;
+  if(valid>0){
+    iswin=is_windows_exe(exe);
+    icon=LoadIcon(gInst,MAKEINTRESOURCE(iswin?IDI_WINPROG:IDI_DOSPROG));
+  }
+  iconctl=GetDlgItem(h,ITEM_TYPEICON);
+  if(iconctl){
+    if(valid>0&&icon){SendMessage(iconctl,STM_SETICON,(WPARAM)icon,0L);ShowWindow(iconctl,SW_SHOW);}
+    else ShowWindow(iconctl,SW_HIDE);
+  }
+  /* These four options affect only DOS sessions.  Preserve their checked
+     state, but make the irrelevance obvious only for a valid Windows EXE. */
+  EnableWindow(itemPrompt,!iswin);
+  EnableWindow(itemEnter,!iswin);
+  EnableWindow(itemChdir,!iswin);
+  EnableWindow(itemAddpath,!iswin);
+}
+
 static BOOL FAR PASCAL ItemDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
 {
   switch(msg){
@@ -774,10 +885,11 @@ static BOOL FAR PASCAL ItemDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
         SendMessage(itemEnter,BM_SETCHECK,item_work.enter_after?1:0,0L);
         SendMessage(itemChdir,BM_SETCHECK,item_work.change_dir?1:0,0L);
         SendMessage(itemAddpath,BM_SETCHECK,item_work.add_path?1:0,0L);
+        update_item_program_type(h);
       }
       SetFocus(itemName);return FALSE;
     case WM_COMMAND:
-      if(wp==ITEM_COMMAND && HIWORD(lp)==EN_CHANGE){InvalidateRect(itemCommand,NULL,TRUE);UpdateWindow(itemCommand);return TRUE;}
+      if(wp==ITEM_COMMAND && HIWORD(lp)==EN_CHANGE){update_item_program_type(h);InvalidateRect(itemCommand,NULL,TRUE);UpdateWindow(itemCommand);return TRUE;}
       if(wp==ITEM_BROWSE){
         char file[160]="";
         if(browse_for_program(h,file,sizeof(file)))SetWindowText(itemCommand,file);
@@ -805,15 +917,6 @@ static BOOL FAR PASCAL ItemDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
       }
       if(wp==IDCANCEL){EndDialog(h,IDCANCEL);return TRUE;}
       break;
-    case WM_CTLCOLOR:
-      if(!item_dialog_folder && (HWND)LOWORD(lp)==itemCommand){
-        char exe[160];int valid;GetWindowText(itemCommand,exe,sizeof(exe));trim(exe);valid=item_command_validation(exe);
-        if(valid>=0){
-          SetTextColor((HDC)wp,launch_colourref(valid?win_launcher_index:win_accent_index));
-          SetBkColor((HDC)wp,GetSysColor(COLOR_WINDOW));return (BOOL)gWindowBrush;
-        }
-      }
-      break;
     case WM_CLOSE:EndDialog(h,IDCANCEL);return TRUE;
     case WM_DESTROY:itemWnd=NULL;return TRUE;
   }
@@ -822,7 +925,7 @@ static BOOL FAR PASCAL ItemDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
 
 static int run_item_dialog(int node_index,int folder,int editing,int section_index)
 {
-  FARPROC proc;int rc;
+  FARPROC proc;int rc,old_tracking=menu_tracking;
   load_win_preferences();
   memset(&item_work,0,sizeof(item_work));item_exe[0]=item_params[0]=0;
   item_dialog_node=node_index;item_dialog_folder=folder;item_dialog_editing=editing;item_dialog_section=section_index;
@@ -831,36 +934,48 @@ static int run_item_dialog(int node_index,int folder,int editing,int section_ind
   item_dialog_ok=0;itemWnd=NULL;
   proc=MakeProcInstance((FARPROC)ItemDlgProc,gInst);if(!proc)return 0;
   menu_tracking=1;
-  rc=DialogBox(gInst,MAKEINTRESOURCE(folder?IDD_FOLDER:IDD_LAUNCHER),gWnd,proc);
-  menu_tracking=0;
-  FreeProcInstance(proc);itemWnd=NULL;SetActiveWindow(gWnd);
+  rc=DialogBox(gInst,MAKEINTRESOURCE(folder?IDD_FOLDER:IDD_LAUNCHER),managerWnd?managerWnd:gWnd,proc);
+  menu_tracking=old_tracking;
+  FreeProcInstance(proc);itemWnd=NULL;SetActiveWindow(managerWnd?managerWnd:gWnd);
   if(rc==-1){show_message_dialog(gWnd,"Launch!","Could not create the Launch! dialog.",MSG_ERROR);return 0;}
   return item_dialog_ok;
 }
 
-static int add_menu_item(int folder)
+static int add_menu_item_to_section(int folder,int section_index)
 {
-  int root;MENU_NODE *n;char child[128];
-  root=find_section("Launcher");if(root<0)return 0;
+  MENU_NODE *n;char child[128];
+  if(section_index<0||section_index>=section_count)return 0;
   if(node_count>=MAX_NODES){show_message_dialog(gWnd,"Launch!","The menu is full.",MSG_WARNING);return 0;}
-  if(!run_item_dialog(-1,folder,0,root))return 0;
-  n=&nodes[node_count];*n=item_work;n->section_index=root;n->is_folder=folder;n->child_section_index=-1;
+  if(!run_item_dialog(-1,folder,0,section_index))return 0;
+  n=&nodes[node_count];*n=item_work;n->section_index=section_index;n->is_folder=folder;n->child_section_index=-1;
   if(folder){
     if(section_count>=MAX_SECTIONS){show_message_dialog(gWnd,"Launch!","The menu has too many folders.",MSG_WARNING);return 0;}
-    sprintf(child,"%s\\%s",sections[root].name,n->title);n->child_section_index=ensure_section(child);
+    if(strlen(sections[section_index].name)+strlen(n->title)+2>=sizeof(child)){show_message_dialog(gWnd,"Launch!","The folder path is too long.",MSG_WARNING);return 0;}
+    sprintf(child,"%s\\%s",sections[section_index].name,n->title);n->child_section_index=ensure_section(child);
   }
   node_count++;
-  if(!save_launch_menu()){show_message_dialog(gWnd,"Launch!","Could not update the selected menu file.",MSG_ERROR);return 0;}
+  if(!save_launch_menu()){show_message_dialog(managerWnd?managerWnd:gWnd,"Launch!","Could not update the selected menu file.",MSG_ERROR);return 0;}
+  return 1;
+}
+
+static int add_menu_item(int folder)
+{
+  int root=find_section("Launcher");
+  return add_menu_item_to_section(folder,root);
+}
+
+static int add_menu_separator_to_section(int section_index)
+{
+  MENU_NODE *n;
+  if(section_index<0||section_index>=section_count||node_count>=MAX_NODES)return 0;
+  n=&nodes[node_count++];memset(n,0,sizeof(*n));strcpy(n->title,"-");n->section_index=section_index;n->child_section_index=-1;
+  if(!save_launch_menu()){show_message_dialog(managerWnd?managerWnd:gWnd,"Launch!","Could not update the selected menu file.",MSG_ERROR);return 0;}
   return 1;
 }
 
 static int add_menu_separator(void)
 {
-  int root;MENU_NODE *n;
-  root=find_section("Launcher");if(root<0||node_count>=MAX_NODES)return 0;
-  n=&nodes[node_count++];memset(n,0,sizeof(*n));strcpy(n->title,"-");n->section_index=root;n->child_section_index=-1;
-  if(!save_launch_menu()){show_message_dialog(gWnd,"Launch!","Could not update the selected menu file.",MSG_ERROR);return 0;}
-  return 1;
+  return add_menu_separator_to_section(find_section("Launcher"));
 }
 
 static void edit_menu_node(int node_index)
@@ -875,7 +990,7 @@ static void edit_menu_node(int node_index)
   item_work.child_section_index=nodes[node_index].child_section_index;
   item_work.is_folder=nodes[node_index].is_folder;
   nodes[node_index]=item_work;
-  if(!save_launch_menu())show_message_dialog(gWnd,"Launch!","Could not update the selected menu file.",MSG_ERROR);
+  if(!save_launch_menu())show_message_dialog(managerWnd?managerWnd:gWnd,"Launch!","Could not update the selected menu file.",MSG_ERROR);
 }
 
 static int section_is_under(int section_index,const char *prefix)
@@ -897,32 +1012,32 @@ static void remove_menu_node(int node_index)
   for(i=0;i<node_count;i++){
     if(i==node_index)continue;
     if(prefix[0] && section_is_under(nodes[i].section_index,prefix))continue;
-    if(j!=i)nodes[j]=nodes[i];j++;
+    if(j!=i)nodes[j]=nodes[i];
+    if(managerWnd)manager_expanded[j]=manager_expanded[i];
+    j++;
   }
   node_count=j;
-  if(!save_launch_menu())show_message_dialog(gWnd,"Launch!","Could not update the selected menu file.",MSG_ERROR);
+  if(managerWnd)for(i=j;i<MAX_NODES;i++)manager_expanded[i]=0;
+  if(!save_launch_menu())show_message_dialog(managerWnd?managerWnd:gWnd,"Launch!","Could not update the selected menu file.",MSG_ERROR);
 }
 
-static void reorder_add_section(HWND list,int section_index,int depth)
+static int manager_selected_node(void)
 {
-  int i,j;char label[96];
-  for(i=0;i<node_count;i++)if(nodes[i].section_index==section_index){
-    label[0]=0;for(j=0;j<depth && (int)strlen(label)<20;j++)strcat(label,"  ");
-    if(nodes[i].is_folder){strcat(label,"[Folder] ");strncat(label,nodes[i].title,sizeof(label)-strlen(label)-1);}
-    else if(!strcmp(nodes[i].title,"-"))strcat(label,"----------");
-    else strncat(label,nodes[i].title,sizeof(label)-strlen(label)-1);
-    SendMessage(list,LB_ADDSTRING,0,(LPARAM)(LPSTR)label);if(reorder_rows<MAX_NODES)reorder_map[reorder_rows++]=i;
-    if(nodes[i].is_folder)reorder_add_section(list,nodes[i].child_section_index,depth+1);
+  int row;
+  if(!managerTree)return -1;
+  row=(int)SendMessage(managerTree,LB_GETCURSEL,0,0L);
+  if(row==LB_ERR||row<0||row>=manager_row_count)return -1;
+  return manager_rows[row].node_index;
+}
+
+static int manager_target_section(void)
+{
+  int node=manager_selected_node(),root;
+  if(node>=0&&node<node_count){
+    if(nodes[node].is_folder&&nodes[node].child_section_index>=0)return nodes[node].child_section_index;
+    return nodes[node].section_index;
   }
-}
-
-static void refill_reorder_list(int select_node)
-{
-  int root,row=0;
-  if(!reorderList)return;SendMessage(reorderList,LB_RESETCONTENT,0,0L);reorder_rows=0;
-  root=find_section("Launcher");if(root>=0)reorder_add_section(reorderList,root,0);
-  while(row<reorder_rows && reorder_map[row]!=select_node)row++;
-  if(row<reorder_rows)SendMessage(reorderList,LB_SETCURSEL,row,0L);else if(reorder_rows)SendMessage(reorderList,LB_SETCURSEL,0,0L);
+  root=find_section("Launcher");return root;
 }
 
 static int adjacent_same_section(int node_index,int direction)
@@ -933,51 +1048,407 @@ static int adjacent_same_section(int node_index,int direction)
   return -1;
 }
 
-static void reorder_move(int direction)
+static int manager_has_later_sibling(int node_index,int section_index)
 {
-  int row,node,other;MENU_NODE tmp;
-  row=(int)SendMessage(reorderList,LB_GETCURSEL,0,0L);if(row==LB_ERR||row<0||row>=reorder_rows)return;
-  node=reorder_map[row];other=adjacent_same_section(node,direction);if(other<0)return;
-  tmp=nodes[node];nodes[node]=nodes[other];nodes[other]=tmp;
-  if(!save_launch_menu()){show_message_dialog(reorderWnd,"Launch!","Could not update the selected menu file.",MSG_ERROR);return;}
-  /* Reload compacts section state; find the moved item by its former array position after the swap. */
-  refill_reorder_list(other);
+  int i;
+  for(i=node_index+1;i<node_count;i++)if(nodes[i].section_index==section_index)return 1;
+  return 0;
 }
 
-static LRESULT FAR PASCAL ReorderProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
+static void manager_add_section_rows(int section_index,int depth,unsigned long branch_mask)
+{
+  int i,row,has_next;
+  for(i=0;i<node_count&&manager_row_count<MAX_NODES;i++)if(nodes[i].section_index==section_index){
+    has_next=manager_has_later_sibling(i,section_index);
+    row=manager_row_count++;
+    manager_rows[row].node_index=i;manager_rows[row].depth=depth;
+    manager_rows[row].is_windows=(!nodes[i].is_folder&&strcmp(nodes[i].title,"-")&&is_windows_exe(nodes[i].command))?1:0;
+    manager_rows[row].branch_mask=branch_mask;manager_rows[row].has_next=has_next;
+    SendMessage(managerTree,LB_ADDSTRING,0,(LPARAM)(LPSTR)"");
+    SendMessage(managerTree,LB_SETITEMDATA,row,(LPARAM)i);
+    if(nodes[i].is_folder&&manager_expanded[i]&&nodes[i].child_section_index>=0)
+      manager_add_section_rows(nodes[i].child_section_index,depth+1,branch_mask|(has_next?(1UL<<depth):0L));
+  }
+}
+
+static void manager_reset_expansion(void)
+{
+  memset(manager_expanded,0,sizeof(manager_expanded));
+}
+
+static void manager_rebuild_tree(int select_node)
+{
+  int root,row=0;
+  if(!managerTree)return;
+  SendMessage(managerTree,WM_SETREDRAW,FALSE,0L);
+  SendMessage(managerTree,LB_RESETCONTENT,0,0L);manager_row_count=0;
+  root=find_section("Launcher");if(root>=0)manager_add_section_rows(root,0,0L);
+  if(select_node>=0){while(row<manager_row_count&&manager_rows[row].node_index!=select_node)row++;}
+  if(row>=manager_row_count)row=manager_row_count?0:-1;
+  if(row>=0)SendMessage(managerTree,LB_SETCURSEL,row,0L);
+  SendMessage(managerTree,WM_SETREDRAW,TRUE,0L);InvalidateRect(managerTree,NULL,TRUE);
+}
+
+static void manager_update_buttons(void)
+{
+  int node=manager_selected_node(),can_edit=0,can_remove=0,can_up=0,can_down=0;
+  if(node>=0&&node<node_count){
+    can_edit=strcmp(nodes[node].title,"-")!=0;can_remove=1;
+    can_up=adjacent_same_section(node,-1)>=0;can_down=adjacent_same_section(node,1)>=0;
+  }
+  EnableWindow(GetDlgItem(managerWnd,MANAGER_EDIT),can_edit);
+  EnableWindow(GetDlgItem(managerWnd,MANAGER_REMOVE),can_remove);
+  EnableWindow(GetDlgItem(managerWnd,MANAGER_UP),can_up);
+  EnableWindow(GetDlgItem(managerWnd,MANAGER_DOWN),can_down);
+}
+
+static void manager_toggle_folder(int node,int expand)
+{
+  if(node<0||node>=node_count||!nodes[node].is_folder)return;
+  if(expand<0)manager_expanded[node]=manager_expanded[node]?0:1;
+  else manager_expanded[node]=(unsigned char)(expand?1:0);
+  manager_rebuild_tree(node);manager_update_buttons();
+}
+
+static void manager_move(int direction)
+{
+  int node,other;MENU_NODE tmp;
+  node=manager_selected_node();if(node<0)return;other=adjacent_same_section(node,direction);if(other<0)return;
+  {unsigned char exptmp=manager_expanded[node];
+    tmp=nodes[node];nodes[node]=nodes[other];nodes[other]=tmp;
+    manager_expanded[node]=manager_expanded[other];manager_expanded[other]=exptmp;
+  }
+  if(!save_launch_menu()){show_message_dialog(managerWnd,"Menu Manager","Could not update the selected menu file.",MSG_ERROR);return;}
+  manager_rebuild_tree(other);manager_update_buttons();
+}
+
+static int manager_open_path(const char *path)
+{
+  char old[160];FILE *f;
+  if(!path||!path[0]||!is_menu_filename(path))return 0;
+  f=fopen(path,"rt");if(!f)return 0;fclose(f);
+  strcpy(old,menu_path);strncpy(menu_path,path,sizeof(menu_path)-1);menu_path[sizeof(menu_path)-1]=0;
+  if(!load_launch_menu()){strcpy(menu_path,old);load_launch_menu();return 0;}
+  if(managerPath)SetWindowText(managerPath,menu_path);
+  manager_reset_expansion();manager_rebuild_tree(-1);manager_update_buttons();return 1;
+}
+
+static void manager_apply_path_field(void)
+{
+  char path[160];
+  if(!managerPath)return;GetWindowText(managerPath,path,sizeof(path));trim(path);
+  if(!path[0]||!stricmp(path,menu_path)){SetWindowText(managerPath,menu_path);return;}
+  if(!manager_open_path(path)){
+    show_message_dialog(managerWnd,"Menu Manager","The specified .MNU file could not be opened.",MSG_ERROR);
+    SetWindowText(managerPath,menu_path);
+  }
+}
+
+static void manager_show_add_menu(void)
+{
+  HWND b;RECT r;HMENU m;
+  b=GetDlgItem(managerWnd,MANAGER_ADD);if(!b)return;GetWindowRect(b,&r);
+  m=CreatePopupMenu();if(!m)return;
+  AppendMenu(m,MF_STRING,IDM_MANAGER_ADD_LAUNCHER,"Launcher");
+  AppendMenu(m,MF_STRING,IDM_MANAGER_ADD_FOLDER,"Folder");
+  AppendMenu(m,MF_STRING,IDM_MANAGER_ADD_SEPARATOR,"Separator");
+  TrackPopupMenu(m,TPM_LEFTALIGN|TPM_LEFTBUTTON,r.left,r.bottom,0,managerWnd,NULL);DestroyMenu(m);
+}
+
+static void manager_add_item_command(int command)
+{
+  int section=manager_target_section(),ok=0,old_count=node_count,i;
+  if(command==IDM_MANAGER_ADD_LAUNCHER)ok=add_menu_item_to_section(0,section);
+  else if(command==IDM_MANAGER_ADD_FOLDER)ok=add_menu_item_to_section(1,section);
+  else if(command==IDM_MANAGER_ADD_SEPARATOR)ok=add_menu_separator_to_section(section);
+  if(ok){for(i=old_count;i<node_count;i++)manager_expanded[i]=0;manager_rebuild_tree(-1);manager_update_buttons();}
+}
+
+static void manager_edit_selected(void)
+{
+  int node=manager_selected_node();if(node<0||!strcmp(nodes[node].title,"-"))return;
+  edit_menu_node(node);manager_rebuild_tree(node);manager_update_buttons();
+}
+
+static void manager_remove_selected(void)
+{
+  int node=manager_selected_node();if(node<0)return;
+  remove_menu_node(node);manager_rebuild_tree(-1);manager_update_buttons();
+}
+
+static void manager_draw_folder(HDC dc,int x,int y,COLORREF colour)
+{
+  HPEN pen,old;HBRUSH oldb;
+  pen=CreatePen(PS_SOLID,1,colour);old=(HPEN)SelectObject(dc,pen);oldb=(HBRUSH)SelectObject(dc,GetStockObject(HOLLOW_BRUSH));
+  MoveTo(dc,x,y+4);LineTo(dc,x+5,y+4);LineTo(dc,x+7,y+6);LineTo(dc,x+14,y+6);
+  LineTo(dc,x+14,y+14);LineTo(dc,x,y+14);LineTo(dc,x,y+4);
+  SelectObject(dc,oldb);SelectObject(dc,old);DeleteObject(pen);
+}
+
+static void manager_draw_windows_marker(HDC dc,int right,int top,COLORREF colour)
+{
+  HPEN pen,old;HBRUSH oldb;int x=right-17,y=top+3;
+  pen=CreatePen(PS_SOLID,1,colour);old=(HPEN)SelectObject(dc,pen);oldb=(HBRUSH)SelectObject(dc,GetStockObject(HOLLOW_BRUSH));
+  Rectangle(dc,x,y,x+13,y+11);MoveTo(dc,x+1,y+3);LineTo(dc,x+12,y+3);
+  MoveTo(dc,x+3,y+1);LineTo(dc,x+4,y+1);MoveTo(dc,x+6,y+1);LineTo(dc,x+7,y+1);
+  SelectObject(dc,oldb);SelectObject(dc,old);DeleteObject(pen);
+}
+
+static void manager_draw_row(LPDRAWITEMSTRUCT dis)
+{
+  int row=(int)dis->itemID,node,depth,x,d,cy;COLORREF bg,fg,linec;HBRUSH b;HPEN pen,oldp;TEXTMETRIC tm;
+  if(row<0||row>=manager_row_count)return;node=manager_rows[row].node_index;depth=manager_rows[row].depth;if(node<0||node>=node_count)return;
+  bg=(dis->itemState&ODS_SELECTED)?GetSysColor(COLOR_HIGHLIGHT):GetSysColor(COLOR_WINDOW);
+  fg=(dis->itemState&ODS_SELECTED)?GetSysColor(COLOR_HIGHLIGHTTEXT):GetSysColor(COLOR_WINDOWTEXT);
+  linec=(dis->itemState&ODS_SELECTED)?fg:GetSysColor(COLOR_BTNSHADOW);
+  b=CreateSolidBrush(bg);FillRect(dis->hDC,&dis->rcItem,b);DeleteObject(b);SetBkMode(dis->hDC,TRANSPARENT);SetTextColor(dis->hDC,fg);
+  cy=(dis->rcItem.top+dis->rcItem.bottom)/2;x=dis->rcItem.left+5;
+  pen=CreatePen(PS_SOLID,1,linec);oldp=(HPEN)SelectObject(dis->hDC,pen);
+  for(d=0;d<depth;d++){
+    int tx=x+d*14+4;
+    if(d<depth-1){
+      if(manager_rows[row].branch_mask&(1UL<<d)){MoveTo(dis->hDC,tx,dis->rcItem.top);LineTo(dis->hDC,tx,dis->rcItem.bottom);}
+    } else {
+      MoveTo(dis->hDC,tx,dis->rcItem.top);
+      LineTo(dis->hDC,tx,manager_rows[row].has_next?dis->rcItem.bottom:cy);
+    }
+  }
+  if(depth>0){int tx=x+depth*14-10;MoveTo(dis->hDC,tx,cy);LineTo(dis->hDC,x+depth*14+3,cy);}
+  SelectObject(dis->hDC,oldp);DeleteObject(pen);x+=depth*14;
+  if(nodes[node].is_folder){
+    HBRUSH oldb=(HBRUSH)SelectObject(dis->hDC,GetStockObject(HOLLOW_BRUSH));
+    Rectangle(dis->hDC,x,cy-4,x+9,cy+5);SelectObject(dis->hDC,oldb);MoveTo(dis->hDC,x+2,cy);LineTo(dis->hDC,x+7,cy);
+    if(!manager_expanded[node]){MoveTo(dis->hDC,x+4,cy-3);LineTo(dis->hDC,x+4,cy+4);}
+    manager_draw_folder(dis->hDC,x+13,dis->rcItem.top-1,fg);x+=31;
+  } else x+=13;
+  if(!strcmp(nodes[node].title,"-")){
+    pen=CreatePen(PS_SOLID,1,linec);oldp=(HPEN)SelectObject(dis->hDC,pen);MoveTo(dis->hDC,x,cy);LineTo(dis->hDC,dis->rcItem.right-6,cy);SelectObject(dis->hDC,oldp);DeleteObject(pen);
+  } else {
+    GetTextMetrics(dis->hDC,&tm);
+    TextOut(dis->hDC,x,dis->rcItem.top+(dis->rcItem.bottom-dis->rcItem.top-tm.tmHeight)/2,nodes[node].title,strlen(nodes[node].title));
+    if(manager_rows[row].is_windows)manager_draw_windows_marker(dis->hDC,dis->rcItem.right,dis->rcItem.top,fg);
+  }
+  if(dis->itemState&ODS_FOCUS)DrawFocusRect(dis->hDC,&dis->rcItem);
+}
+
+/* Windows 3.0/3.1 owner-draw list boxes are normally painted through
+   WM_DRAWITEM sent to the dialog owner.  Some real Win16 combinations can
+   retain the selectable rows while failing to send/repaint those callbacks.
+   Keep the owner-draw path, but also paint the visible rows directly after
+   the list box has handled WM_PAINT.  This is only a rendering fallback;
+   selection, scrolling and keyboard/mouse behaviour remain the native
+   LISTBOX implementation. */
+static void manager_paint_tree_fallback(HWND h)
+{
+  HDC dc;RECT client,ri;DRAWITEMSTRUCT dis;int top,count,sel,height,row,y;
+  HBRUSH back;
+  if(!h)return;
+  count=(int)SendMessage(h,LB_GETCOUNT,0,0L);if(count<=0)return;
+  top=(int)SendMessage(h,LB_GETTOPINDEX,0,0L);if(top<0)top=0;
+  sel=(int)SendMessage(h,LB_GETCURSEL,0,0L);
+  height=(int)SendMessage(h,LB_GETITEMHEIGHT,0,0L);if(height<=0)height=17;
+  GetClientRect(h,&client);dc=GetDC(h);if(!dc)return;
+  back=CreateSolidBrush(GetSysColor(COLOR_WINDOW));FillRect(dc,&client,back);DeleteObject(back);
+  memset(&dis,0,sizeof(dis));dis.CtlType=ODT_LISTBOX;dis.CtlID=MANAGER_TREE;dis.hwndItem=h;dis.hDC=dc;
+  y=client.top;
+  for(row=top;row<count && y<client.bottom;row++,y+=height){
+    ri.left=client.left;ri.right=client.right;ri.top=y;ri.bottom=y+height;if(ri.bottom>client.bottom)ri.bottom=client.bottom;
+    dis.itemID=(UINT)row;dis.itemAction=ODA_DRAWENTIRE;dis.itemState=0;
+    if(row==sel)dis.itemState|=ODS_SELECTED;
+    if(row==sel && GetFocus()==h)dis.itemState|=ODS_FOCUS;
+    dis.rcItem=ri;dis.itemData=(DWORD)SendMessage(h,LB_GETITEMDATA,row,0L);
+    manager_draw_row(&dis);
+  }
+  ReleaseDC(h,dc);
+}
+
+/* Draw colour-keyed bitmap artwork using only Windows 3.0 GDI operations.
+   The banner assets use RGB(192,192,192) as their background key.  A 1bpp
+   mask leaves the current Windows menu/dialog colour visible underneath. */
+static void transparent_stretch_bitmap(HDC dc,HBITMAP bmp,int x,int y,int w,int h,COLORREF key)
+{
+  BITMAP bm;HDC src=NULL,mask=NULL,inv=NULL,work=NULL;HBITMAP maskbm=NULL,invbm=NULL,workbm=NULL;
+  HBITMAP oldsrc=NULL,oldmask=NULL,oldinv=NULL,oldwork=NULL;COLORREF oldbk,oldtx;
+  if(!dc||!bmp||w<=0||h<=0)return;if(!GetObject(bmp,sizeof(bm),(LPSTR)&bm))return;
+  src=CreateCompatibleDC(dc);mask=CreateCompatibleDC(dc);inv=CreateCompatibleDC(dc);work=CreateCompatibleDC(dc);
+  if(!src||!mask||!inv||!work)goto done;
+  maskbm=CreateBitmap(bm.bmWidth,bm.bmHeight,1,1,NULL);
+  invbm=CreateBitmap(bm.bmWidth,bm.bmHeight,1,1,NULL);
+  workbm=CreateCompatibleBitmap(dc,bm.bmWidth,bm.bmHeight);
+  if(!maskbm||!invbm||!workbm)goto done;
+  oldsrc=(HBITMAP)SelectObject(src,bmp);oldmask=(HBITMAP)SelectObject(mask,maskbm);
+  oldinv=(HBITMAP)SelectObject(inv,invbm);oldwork=(HBITMAP)SelectObject(work,workbm);
+  BitBlt(work,0,0,bm.bmWidth,bm.bmHeight,src,0,0,SRCCOPY);
+  oldbk=SetBkColor(src,key);BitBlt(mask,0,0,bm.bmWidth,bm.bmHeight,src,0,0,SRCCOPY);SetBkColor(src,oldbk);
+  BitBlt(inv,0,0,bm.bmWidth,bm.bmHeight,mask,0,0,NOTSRCCOPY);
+  oldtx=SetTextColor(work,RGB(0,0,0));oldbk=SetBkColor(work,RGB(255,255,255));
+  BitBlt(work,0,0,bm.bmWidth,bm.bmHeight,inv,0,0,SRCAND);SetTextColor(work,oldtx);SetBkColor(work,oldbk);
+  oldtx=SetTextColor(dc,RGB(0,0,0));oldbk=SetBkColor(dc,RGB(255,255,255));
+  StretchBlt(dc,x,y,w,h,mask,0,0,bm.bmWidth,bm.bmHeight,SRCAND);
+  SetTextColor(dc,oldtx);SetBkColor(dc,oldbk);
+  StretchBlt(dc,x,y,w,h,work,0,0,bm.bmWidth,bm.bmHeight,SRCPAINT);
+done:
+  if(oldsrc)SelectObject(src,oldsrc);if(oldmask)SelectObject(mask,oldmask);if(oldinv)SelectObject(inv,oldinv);if(oldwork)SelectObject(work,oldwork);
+  if(maskbm)DeleteObject(maskbm);if(invbm)DeleteObject(invbm);if(workbm)DeleteObject(workbm);
+  if(src)DeleteDC(src);if(mask)DeleteDC(mask);if(inv)DeleteDC(inv);if(work)DeleteDC(work);
+}
+
+static void transparent_tile_bitmap(HDC dc,HBITMAP bmp,int x,int y,int w,COLORREF key)
+{
+  BITMAP bm;HDC src=NULL,mask=NULL,inv=NULL,work=NULL;HBITMAP maskbm=NULL,invbm=NULL,workbm=NULL;
+  HBITMAP oldsrc=NULL,oldmask=NULL,oldinv=NULL,oldwork=NULL;COLORREF oldbk,oldtx;int tx,cw;
+  if(!dc||!bmp||w<=0)return;if(!GetObject(bmp,sizeof(bm),(LPSTR)&bm)||bm.bmWidth<=0||bm.bmHeight<=0)return;
+  src=CreateCompatibleDC(dc);mask=CreateCompatibleDC(dc);inv=CreateCompatibleDC(dc);work=CreateCompatibleDC(dc);
+  if(!src||!mask||!inv||!work)goto done;
+  maskbm=CreateBitmap(bm.bmWidth,bm.bmHeight,1,1,NULL);
+  invbm=CreateBitmap(bm.bmWidth,bm.bmHeight,1,1,NULL);
+  workbm=CreateCompatibleBitmap(dc,bm.bmWidth,bm.bmHeight);
+  if(!maskbm||!invbm||!workbm)goto done;
+  oldsrc=(HBITMAP)SelectObject(src,bmp);oldmask=(HBITMAP)SelectObject(mask,maskbm);
+  oldinv=(HBITMAP)SelectObject(inv,invbm);oldwork=(HBITMAP)SelectObject(work,workbm);
+  BitBlt(work,0,0,bm.bmWidth,bm.bmHeight,src,0,0,SRCCOPY);
+  oldbk=SetBkColor(src,key);BitBlt(mask,0,0,bm.bmWidth,bm.bmHeight,src,0,0,SRCCOPY);SetBkColor(src,oldbk);
+  BitBlt(inv,0,0,bm.bmWidth,bm.bmHeight,mask,0,0,NOTSRCCOPY);
+  oldtx=SetTextColor(work,RGB(0,0,0));oldbk=SetBkColor(work,RGB(255,255,255));
+  BitBlt(work,0,0,bm.bmWidth,bm.bmHeight,inv,0,0,SRCAND);SetTextColor(work,oldtx);SetBkColor(work,oldbk);
+  oldtx=SetTextColor(dc,RGB(0,0,0));oldbk=SetBkColor(dc,RGB(255,255,255));
+  for(tx=x;tx<x+w;tx+=bm.bmWidth){
+    cw=bm.bmWidth;if(tx+cw>x+w)cw=x+w-tx;
+    BitBlt(dc,tx,y,cw,bm.bmHeight,mask,0,0,SRCAND);
+    BitBlt(dc,tx,y,cw,bm.bmHeight,work,0,0,SRCPAINT);
+  }
+  SetTextColor(dc,oldtx);SetBkColor(dc,oldbk);
+done:
+  if(oldsrc)SelectObject(src,oldsrc);if(oldmask)SelectObject(mask,oldmask);if(oldinv)SelectObject(inv,oldinv);if(oldwork)SelectObject(work,oldwork);
+  if(maskbm)DeleteObject(maskbm);if(invbm)DeleteObject(invbm);if(workbm)DeleteObject(workbm);
+  if(src)DeleteDC(src);if(mask)DeleteDC(mask);if(inv)DeleteDC(inv);if(work)DeleteDC(work);
+}
+
+static void opaque_stretch_bitmap(HDC dc,HBITMAP bmp,int x,int y,int w,int h)
+{
+  BITMAP bm;HDC src;HBITMAP old;
+  if(!dc||!bmp||w<=0||h<=0)return;
+  if(!GetObject(bmp,sizeof(bm),(LPSTR)&bm))return;
+  src=CreateCompatibleDC(dc);if(!src)return;
+  old=(HBITMAP)SelectObject(src,bmp);
+  StretchBlt(dc,x,y,w,h,src,0,0,bm.bmWidth,bm.bmHeight,SRCCOPY);
+  if(old)SelectObject(src,old);DeleteDC(src);
+}
+
+static void opaque_tile_bitmap(HDC dc,HBITMAP bmp,int x,int y,int w)
+{
+  BITMAP bm;HDC src;HBITMAP old;int tx,cw;
+  if(!dc||!bmp||w<=0)return;
+  if(!GetObject(bmp,sizeof(bm),(LPSTR)&bm)||bm.bmWidth<=0||bm.bmHeight<=0)return;
+  src=CreateCompatibleDC(dc);if(!src)return;
+  old=(HBITMAP)SelectObject(src,bmp);
+  for(tx=x;tx<x+w;tx+=bm.bmWidth){
+    cw=bm.bmWidth;if(tx+cw>x+w)cw=x+w-tx;
+    BitBlt(dc,tx,y,cw,bm.bmHeight,src,0,0,SRCCOPY);
+  }
+  if(old)SelectObject(src,old);DeleteDC(src);
+}
+
+static void manager_paint_banner(HWND h)
+{
+  HDC dc;RECT r;BITMAP logo,tile;HBRUSH back;int x,remaining;
+  if(!h||!gManagerLogoBmp||!gManagerTileBmp)return;dc=GetDC(h);if(!dc)return;
+  GetClientRect(h,&r);back=CreateSolidBrush(GetSysColor(COLOR_BTNFACE));FillRect(dc,&r,back);DeleteObject(back);
+  GetObject(gManagerLogoBmp,sizeof(logo),&logo);GetObject(gManagerTileBmp,sizeof(tile),&tile);
+  transparent_stretch_bitmap(dc,gManagerLogoBmp,0,0,logo.bmWidth,logo.bmHeight,RGB(192,192,192));
+  x=logo.bmWidth;remaining=r.right-x;
+  if(remaining>0)transparent_tile_bitmap(dc,gManagerTileBmp,x,0,remaining,RGB(192,192,192));
+  ReleaseDC(h,dc);
+}
+
+static LRESULT FAR PASCAL ManagerBannerProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
+{
+  if(msg==WM_PAINT){LRESULT r=CallWindowProc(gManagerBannerProc,h,msg,wp,lp);manager_paint_banner(h);return r;}
+  return CallWindowProc(gManagerBannerProc,h,msg,wp,lp);
+}
+
+static LRESULT FAR PASCAL ManagerTreeProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
+{
+  if(msg==WM_PAINT){
+    LRESULT r=CallWindowProc(gManagerTreeProc,h,msg,wp,lp);manager_paint_tree_fallback(h);return r;
+  }
+  if(msg==WM_SETFOCUS||msg==WM_KILLFOCUS){
+    LRESULT r=CallWindowProc(gManagerTreeProc,h,msg,wp,lp);InvalidateRect(h,NULL,FALSE);return r;
+  }
+  if(msg==WM_KEYDOWN){
+    int node=manager_selected_node();
+    if(GetKeyState(VK_CONTROL)<0&&wp==VK_UP){SendMessage(managerWnd,WM_MANAGER_ACTION,MANAGER_UP,0L);return 0;}
+    if(GetKeyState(VK_CONTROL)<0&&wp==VK_DOWN){SendMessage(managerWnd,WM_MANAGER_ACTION,MANAGER_DOWN,0L);return 0;}
+    if((wp==VK_UP||wp==VK_DOWN)&&GetKeyState(VK_CONTROL)>=0){
+      int row=(int)SendMessage(h,LB_GETCURSEL,0,0L),count=(int)SendMessage(h,LB_GETCOUNT,0,0L),next,top,height,visible;RECT r;
+      if(count>0){
+        if(row==LB_ERR)row=0;next=row+(wp==VK_UP?-1:1);if(next<0)next=0;if(next>=count)next=count-1;
+        SendMessage(h,LB_SETCURSEL,next,0L);
+        top=(int)SendMessage(h,LB_GETTOPINDEX,0,0L);height=(int)SendMessage(h,LB_GETITEMHEIGHT,0,0L);GetClientRect(h,&r);
+        visible=height>0?(r.bottom-r.top)/height:1;if(visible<1)visible=1;
+        if(next<top)SendMessage(h,LB_SETTOPINDEX,next,0L);else if(next>=top+visible)SendMessage(h,LB_SETTOPINDEX,next-visible+1,0L);
+        manager_update_buttons();InvalidateRect(h,NULL,TRUE);
+      }
+      return 0;
+    }
+    if(wp==VK_LEFT&&node>=0&&nodes[node].is_folder){manager_toggle_folder(node,0);return 0;}
+    if(wp==VK_RIGHT&&node>=0&&nodes[node].is_folder){manager_toggle_folder(node,1);return 0;}
+    if(wp==VK_RETURN){if(node>=0&&nodes[node].is_folder)manager_toggle_folder(node,-1);else SendMessage(managerWnd,WM_MANAGER_ACTION,MANAGER_EDIT,0L);return 0;}
+    if(wp==VK_DELETE){SendMessage(managerWnd,WM_MANAGER_ACTION,MANAGER_REMOVE,0L);return 0;}
+  }
+  return CallWindowProc(gManagerTreeProc,h,msg,wp,lp);
+}
+
+static BOOL FAR PASCAL ManagerDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
 {
   switch(msg){
-    case WM_CREATE:{
-      HWND up,down,close;
-      reorderList=CreateWindow("LISTBOX","",WS_CHILD|WS_VISIBLE|WS_BORDER|WS_VSCROLL|WS_TABSTOP|LBS_NOTIFY,8,8,250,210,h,(HMENU)REORDER_LIST,gInst,NULL);
-      up=CreateWindow("BUTTON","&Up",WS_CHILD|WS_VISIBLE|WS_TABSTOP,268,20,64,24,h,(HMENU)REORDER_UP,gInst,NULL);
-      down=CreateWindow("BUTTON","&Down",WS_CHILD|WS_VISIBLE|WS_TABSTOP,268,52,64,24,h,(HMENU)REORDER_DOWN,gInst,NULL);
-      close=CreateWindow("BUTTON","Close",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_DEFPUSHBUTTON,268,194,64,24,h,(HMENU)REORDER_CLOSE,gInst,NULL);
-      if(gDialogFont){SendMessage(reorderList,WM_SETFONT,(WPARAM)gDialogFont,0);SendMessage(up,WM_SETFONT,(WPARAM)gDialogFont,0);SendMessage(down,WM_SETFONT,(WPARAM)gDialogFont,0);SendMessage(close,WM_SETFONT,(WPARAM)gDialogFont,0);}
-      refill_reorder_list(-1);return 0;}
+    case WM_INITDIALOG:
+      managerWnd=h;center_dialog(h);managerPath=GetDlgItem(h,MANAGER_PATH);managerTree=GetDlgItem(h,MANAGER_TREE);managerBanner=GetDlgItem(h,MANAGER_BANNER);
+      SendMessage(managerPath,EM_LIMITTEXT,158,0L);SetWindowText(managerPath,menu_path);
+      gManagerTreeProc=(FARPROC)SetWindowLong(managerTree,GWL_WNDPROC,(LONG)(FARPROC)ManagerTreeProc);
+      if(managerBanner){gManagerLogoBmp=LoadBitmap(gInst,MAKEINTRESOURCE(IDB_MANAGER_LOGO));gManagerTileBmp=LoadBitmap(gInst,MAKEINTRESOURCE(IDB_MANAGER_TILE));gManagerBannerProc=(FARPROC)SetWindowLong(managerBanner,GWL_WNDPROC,(LONG)(FARPROC)ManagerBannerProc);}
+      manager_reset_expansion();manager_rebuild_tree(-1);manager_update_buttons();SetFocus(managerTree);return FALSE;
+    case WM_MEASUREITEM:
+      if(wp==MANAGER_TREE){LPMEASUREITEMSTRUCT mi=(LPMEASUREITEMSTRUCT)lp;mi->itemHeight=17;return TRUE;}break;
+    case WM_DRAWITEM:
+      if(wp==MANAGER_TREE){manager_draw_row((LPDRAWITEMSTRUCT)lp);return TRUE;}break;
     case WM_COMMAND:
-      if(wp==REORDER_UP){reorder_move(-1);return 0;}
-      if(wp==REORDER_DOWN){reorder_move(1);return 0;}
-      if(wp==REORDER_CLOSE){reorder_done=1;DestroyWindow(h);return 0;}
-      break;
-    case WM_CLOSE:reorder_done=1;DestroyWindow(h);return 0;
-    case WM_DESTROY:reorderWnd=NULL;reorderList=NULL;return 0;
+      if(wp==MANAGER_PATH&&HIWORD(lp)==EN_KILLFOCUS){manager_apply_path_field();return TRUE;}
+      if(wp==MANAGER_BROWSE){char file[160];strncpy(file,menu_path,sizeof(file)-1);file[sizeof(file)-1]=0;if(browse_for_menu(h,file,sizeof(file))&&!manager_open_path(file))show_message_dialog(h,"Menu Manager","The selected .MNU file could not be opened.",MSG_ERROR);return TRUE;}
+      if(wp==MANAGER_TREE&&HIWORD(lp)==LBN_SELCHANGE){manager_update_buttons();return TRUE;}
+      if(wp==MANAGER_TREE&&HIWORD(lp)==LBN_DBLCLK){int node=manager_selected_node();if(node>=0&&nodes[node].is_folder)manager_toggle_folder(node,-1);else manager_edit_selected();return TRUE;}
+      if(wp==MANAGER_ADD){manager_show_add_menu();return TRUE;}
+      if(wp==MANAGER_EDIT){manager_edit_selected();return TRUE;}
+      if(wp==MANAGER_REMOVE){manager_remove_selected();return TRUE;}
+      if(wp==MANAGER_UP){manager_move(-1);return TRUE;}
+      if(wp==MANAGER_DOWN){manager_move(1);return TRUE;}
+      if(wp==IDM_MANAGER_ADD_LAUNCHER||wp==IDM_MANAGER_ADD_FOLDER||wp==IDM_MANAGER_ADD_SEPARATOR){manager_add_item_command((int)wp);return TRUE;}
+      if(wp==IDCANCEL||wp==MANAGER_CLOSE){EndDialog(h,IDCANCEL);return TRUE;}break;
+    case WM_MANAGER_ACTION:
+      if(wp==MANAGER_EDIT)manager_edit_selected();else if(wp==MANAGER_REMOVE)manager_remove_selected();else if(wp==MANAGER_UP)manager_move(-1);else if(wp==MANAGER_DOWN)manager_move(1);return TRUE;
+    case WM_CLOSE:EndDialog(h,IDCANCEL);return TRUE;
+    case WM_DESTROY:
+      if(gManagerLogoBmp){DeleteObject(gManagerLogoBmp);gManagerLogoBmp=NULL;}
+      if(gManagerTileBmp){DeleteObject(gManagerTileBmp);gManagerTileBmp=NULL;}
+      managerWnd=NULL;managerTree=NULL;managerPath=NULL;managerBanner=NULL;gManagerTreeProc=NULL;gManagerBannerProc=NULL;return TRUE;
   }
-  return DefWindowProc(h,msg,wp,lp);
+  return FALSE;
 }
 
-static void show_reorder_dialog(void)
+static void show_menu_manager_dialog(void)
 {
-  MSG msg;reorder_done=0;
-  if(!ensure_menu_file())return;
-  if(!load_launch_menu()){show_message_dialog(gWnd,"Launch!","The selected menu file could not be opened.",MSG_ERROR);return;}
-  reorderWnd=CreateWindow("LaunchReorderDialog","Re-order Menu",WS_POPUP|WS_CAPTION|WS_SYSMENU,120,70,344,254,gWnd,NULL,gInst,NULL);
-  if(!reorderWnd)return;
-  menu_tracking=1;EnableWindow(gWnd,FALSE);ShowWindow(reorderWnd,SW_SHOW);UpdateWindow(reorderWnd);
-  while(!reorder_done && GetMessage(&msg,NULL,0,0)){
-    if(!IsDialogMessage(reorderWnd,&msg)){TranslateMessage(&msg);DispatchMessage(&msg);}
-  }
-  EnableWindow(gWnd,TRUE);menu_tracking=0;SetActiveWindow(gWnd);
+  FARPROC proc;int rc;
+  if(managerWnd){SetActiveWindow(managerWnd);return;}
+  if(!ensure_menu_file())return;if(!load_launch_menu()){show_message_dialog(gWnd,"Menu Manager","The selected menu file could not be opened.",MSG_ERROR);return;}
+  strcpy(manager_original_path,menu_path);
+  proc=MakeProcInstance((FARPROC)ManagerDlgProc,gInst);if(!proc)return;
+  menu_tracking=1;rc=DialogBox(gInst,MAKEINTRESOURCE(IDD_MANAGER),gWnd,proc);menu_tracking=0;
+  FreeProcInstance(proc);managerWnd=NULL;
+  /* Browsing in Menu Manager is an editing choice, not a permanent change to
+     the resident launcher's active menu. */
+  strncpy(menu_path,manager_original_path,sizeof(menu_path)-1);menu_path[sizeof(menu_path)-1]=0;load_launch_menu();
+  SetActiveWindow(gWnd);
+  if(rc==-1)show_message_dialog(gWnd,"Menu Manager","Could not create the Menu Manager dialog.",MSG_ERROR);
 }
 
 static void show_management_menu(void)
@@ -992,10 +1463,12 @@ static void show_management_menu(void)
   AppendMenu(add,MF_STRING,IDM_MGMT_ADD_LAUNCHER,"Launcher");
   AppendMenu(add,MF_STRING,IDM_MGMT_ADD_FOLDER,"Folder");
   AppendMenu(add,MF_STRING,IDM_MGMT_ADD_SEPARATOR,"Separator");
+  if(ensure_menu_header_bitmaps())AppendMenu(menu,MF_OWNERDRAW|MF_DISABLED,IDM_MENU_BANNER,NULL);
   AppendMenu(menu,MF_POPUP,(UINT)add,"Add");
   AppendMenu(menu,MF_STRING,IDM_MGMT_EDIT,"Edit");
   AppendMenu(menu,MF_STRING,IDM_MGMT_REMOVE,"Remove");
-  AppendMenu(menu,MF_STRING,IDM_MGMT_REORDER,"Re-order");
+  AppendMenu(menu,MF_SEPARATOR,0,NULL);
+  AppendMenu(menu,MF_STRING,IDM_MGMT_REORDER,"Menu Manager...");
   begin_popup_tracking(&previous_active,&previous_focus);
   GetWindowRect(gWnd,&wr);pt.x=wr.left;flags=TPM_LEFTALIGN|TPM_LEFTBUTTON;
   if(button_edge){pt.y=wr.top;flags|=TPM_BOTTOMALIGN;}else pt.y=wr.bottom;
@@ -1080,6 +1553,19 @@ static int browse_for_program(HWND owner,char *file,int maxfile)
   of.lpstrFile=file;of.nMaxFile=maxfile;of.Flags=OFN_FILEMUSTEXIST|OFN_HIDEREADONLY;
   ok=((BOOL (FAR PASCAL *)(LPOPENFILENAME))proc)(&of);
   FreeLibrary(lib);return ok?1:0;
+}
+
+
+static int browse_for_menu(HWND owner,char *file,int maxfile)
+{
+  HINSTANCE lib;FARPROC proc;OPENFILENAME of;BOOL ok;
+  lib=LoadLibrary("COMMDLG.DLL");
+  if((UINT)lib<32){show_message_dialog(owner,"Menu Manager","Browse requires the Windows common-dialog library.",MSG_INFO);return 0;}
+  proc=GetProcAddress(lib,"GetOpenFileName");if(!proc){FreeLibrary(lib);return 0;}
+  memset(&of,0,sizeof(of));of.lStructSize=sizeof(of);of.hwndOwner=owner;
+  of.lpstrFilter="Launch! Menus (*.MNU)\0*.MNU\0All Files (*.*)\0*.*\0\0";
+  of.lpstrFile=file;of.nMaxFile=maxfile;of.Flags=OFN_FILEMUSTEXIST|OFN_HIDEREADONLY;
+  ok=((BOOL (FAR PASCAL *)(LPOPENFILENAME))proc)(&of);FreeLibrary(lib);return ok?1:0;
 }
 
 static BOOL FAR PASCAL RunDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
@@ -1177,14 +1663,16 @@ static void show_message_dialog(HWND owner,const char *title,const char *text,in
 
 static int show_confirm_dialog_resource(int dialog_id,const char *title,const char *text)
 {
-  FARPROC proc;int rc;
+  FARPROC proc;int rc,old_tracking=menu_tracking;
   strncpy(confirm_title,title,sizeof(confirm_title)-1);confirm_title[sizeof(confirm_title)-1]=0;
   strncpy(confirm_text,text,sizeof(confirm_text)-1);confirm_text[sizeof(confirm_text)-1]=0;
   proc=MakeProcInstance((FARPROC)ConfirmDlgProc,gInst);if(!proc)return 0;
   confirm_dialog_id=dialog_id;
-  menu_tracking=1;rc=DialogBox(gInst,MAKEINTRESOURCE(dialog_id),gWnd,proc);menu_tracking=0;
-  FreeProcInstance(proc);SetActiveWindow(gWnd);
-  if(rc==-1){MessageBox(gWnd,"Could not create the confirmation dialog.","Launch!",MB_OK|MB_ICONSTOP);return 0;}
+  { HWND owner=managerWnd?managerWnd:gWnd;
+    menu_tracking=1;rc=DialogBox(gInst,MAKEINTRESOURCE(dialog_id),owner,proc);menu_tracking=old_tracking;
+    FreeProcInstance(proc);SetActiveWindow(owner);
+    if(rc==-1){MessageBox(owner,"Could not create the confirmation dialog.","Launch!",MB_OK|MB_ICONSTOP);return 0;}
+  }
   return rc==IDYES;
 }
 
@@ -1195,7 +1683,7 @@ static int show_confirm_dialog(const char *title,const char *text)
 
 static int show_exit_windows_dialog(void)
 {
-  return show_confirm_dialog_resource(IDD_EXITWIN,"Exit Windows","Exit Windows and return to the DOS prompt?");
+  return show_confirm_dialog_resource(IDD_EXITWIN,"Exit Windows","Exit Windows and return\r\nto the DOS prompt?");
 }
 
 static LRESULT FAR PASCAL ButtonProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
@@ -1249,6 +1737,14 @@ static LRESULT FAR PASCAL WndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
       }
       if(!menu_tracking && !runWnd){menu_open_pending=1;menu_open_delay=5;}
       return 0;
+    case WM_SHOW_MENU_MANAGER:
+      if(managerWnd){SetActiveWindow(managerWnd);return 0;}
+      if(wp){
+        char path[160];path[0]=0;GlobalGetAtomName((ATOM)wp,path,sizeof(path));GlobalDeleteAtom((ATOM)wp);
+        if(path[0]){strncpy(menu_path,path,sizeof(menu_path)-1);menu_path[sizeof(menu_path)-1]=0;}
+      }
+      if(!menu_tracking&&!runWnd)show_menu_manager_dialog();
+      return 0;
     case WM_ACTIVATEAPP:
       /* Ordinary activation (including Alt+Tab) must never open the menu.
          Program Manager's Ctrl+Alt+\\ shortcut can activate an existing
@@ -1280,7 +1776,7 @@ static LRESULT FAR PASCAL WndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
         else {
           menu_open_pending=0;
           BringWindowToTop(h);SetActiveWindow(h);if(gButton)SetFocus(gButton);
-          PostMessage(h,WM_USER+22,0,0L);
+          PostMessage(h,WM_OPEN_PENDING_MENU,0,0L);
           return 0;
         }
       }
@@ -1289,7 +1785,7 @@ static LRESULT FAR PASCAL WndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
         InvalidateRect(h,NULL,FALSE);UpdateWindow(h);
       }
       return 0;
-    case WM_USER+22:
+    case WM_OPEN_PENDING_MENU:
       if(!menu_tracking && !runWnd)show_launch_menu();
       return 0;
     case WM_MOUSEACTIVATE:
@@ -1329,12 +1825,18 @@ static LRESULT FAR PASCAL WndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
       if(wp==IDM_MGMT_ADD_SEPARATOR){if(load_launch_menu())add_menu_separator();return 0;}
       if(wp==IDM_MGMT_EDIT){begin_manage_mode(MANAGE_EDIT);return 0;}
       if(wp==IDM_MGMT_REMOVE){begin_manage_mode(MANAGE_REMOVE);return 0;}
-      if(wp==IDM_MGMT_REORDER){show_reorder_dialog();return 0;}
+      if(wp==IDM_MGMT_REORDER){show_menu_manager_dialog();return 0;}
       return 0;
     case WM_MANAGE_SELECTED:
       if((int)lp==MANAGE_EDIT)edit_menu_node((int)wp);
       else if((int)lp==MANAGE_REMOVE)remove_menu_node((int)wp);
       return 0;
+    case WM_MEASUREITEM:
+      if(measure_menu_header((MEASUREITEMSTRUCT FAR *)lp))return TRUE;
+      break;
+    case WM_DRAWITEM:
+      if(draw_menu_header((DRAWITEMSTRUCT FAR *)lp))return TRUE;
+      break;
     case WM_COMMAND:
       if(wp==BTN_ID){if(!menu_tracking&&!runWnd)show_launch_menu();return 0;}
       if(wp>=IDM_MGMT_ADD_LAUNCHER && wp<=IDM_MGMT_REORDER){PostMessage(h,WM_MANAGE_ACTION,wp,0L);return 0;}
@@ -1359,12 +1861,19 @@ int PASCAL WinMain(HINSTANCE inst,HINSTANCE prev,LPSTR cmd,int show)
      popup so task termination/Program Manager activation is already over. */
   prior=FindWindow("LaunchWin16Button",NULL);
   if(prior){
-    if(menu_path_explicit){
-      ATOM a=GlobalAddAtom(menu_path);
-      if(a){if(!PostMessage(prior,WM_SHOW_LAUNCH_MENU,(WPARAM)a,0L))GlobalDeleteAtom(a);}
-      else PostMessage(prior,WM_SHOW_LAUNCH_MENU,0,0L);
-    } else PostMessage(prior,WM_SHOW_LAUNCH_MENU,0,0L);
+    UINT request=start_menu_manager?WM_SHOW_MENU_MANAGER:WM_SHOW_LAUNCH_MENU;
+    ATOM a=0;
+    if(menu_path_explicit)a=GlobalAddAtom(menu_path);
     BringWindowToTop(prior);SetActiveWindow(prior);
+    /* Menu Manager is modal, so a synchronous cross-task request is the
+       reliable Win16 hand-off: the helper remains alive until the manager
+       closes.  The normal launcher popup retains its deferred PostMessage
+       path because native popup menus must not overlap helper termination. */
+    if(start_menu_manager){
+      SendMessage(prior,request,(WPARAM)a,0L);
+    } else if(!PostMessage(prior,request,(WPARAM)a,0L) && a){
+      GlobalDeleteAtom(a);
+    }
     return 0;
   }
   gWindowBrush=CreateSolidBrush(GetSysColor(COLOR_WINDOW));load_win_preferences();
@@ -1374,8 +1883,7 @@ int PASCAL WinMain(HINSTANCE inst,HINSTANCE prev,LPSTR cmd,int show)
   ReleaseDC(NULL,dc);
   if(!prev){memset(&wc,0,sizeof(wc));wc.lpfnWndProc=WndProc;wc.hInstance=inst;wc.hCursor=LoadCursor(NULL,IDC_ARROW);wc.hbrBackground=NULL;wc.lpszClassName="LaunchWin16Button";
     if(!RegisterClass(&wc)){MessageBox(NULL,"Could not register Launch! Win16 window class.","Launch!",MB_OK|MB_ICONSTOP);return 1;}
-    memset(&wc,0,sizeof(wc));wc.lpfnWndProc=ReorderProc;wc.hInstance=inst;wc.hCursor=LoadCursor(NULL,IDC_ARROW);wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);wc.lpszClassName="LaunchReorderDialog";
-    if(!RegisterClass(&wc)){MessageBox(NULL,"Could not register re-order dialog class.","Launch!",MB_OK|MB_ICONSTOP);return 1;}}
+}
   /* Use the native Windows BUTTON again.  The popup host has no background
      brush and never erases its client area, so the rounded BUTTON corner
      pixels expose the pixels already beneath the popup instead of a fixed
@@ -1391,9 +1899,11 @@ int PASCAL WinMain(HINSTANCE inst,HINSTANCE prev,LPSTR cmd,int show)
   ShowWindow(gWnd,SW_SHOWNOACTIVATE);
   SetWindowPos(gWnd,HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
   UpdateWindow(gWnd);
-  if(ensure_menu_file()){menu_open_pending=1;menu_open_delay=4;}
+  if(ensure_menu_file()){if(start_menu_manager)PostMessage(gWnd,WM_SHOW_MENU_MANAGER,0,0L);else {menu_open_pending=1;menu_open_delay=4;}}
   while(GetMessage(&msg,NULL,0,0)){TranslateMessage(&msg);DispatchMessage(&msg);}
   if(dde_reply)GlobalFree(dde_reply);
+  if(gMenuLogoBmp)DeleteObject(gMenuLogoBmp);
+  if(gMenuTileBmp)DeleteObject(gMenuTileBmp);
   if(gButtonFont)DeleteObject(gButtonFont);
   if(gDialogFont)DeleteObject(gDialogFont);
   if(gWindowBrush)DeleteObject(gWindowBrush);

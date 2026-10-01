@@ -680,7 +680,7 @@ static int selected_member(const char *name,int shortcut_build,int accessories,
                            int games,int fonts,int menu_generator,int sample_docs,const char **dest_name)
 {
   *dest_name=name;
-  if(!stricmp(name,"!.EXE")||!stricmp(name,"WINSETUP.EXE")||!stricmp(name,"!WIN16.EXE")||!stricmp(name,"LAUNCH.ICO")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
+  if(!stricmp(name,"!.EXE")||!stricmp(name,"WINSETUP.EXE")||!stricmp(name,"!WIN16.EXE")||!stricmp(name,"!MGR16.EXE")||!stricmp(name,"LAUNCH.ICO")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
   if(fonts&&vga_display&&!stricmp(name,"FONT.DAT"))return 1;
   if(fonts&&!vga_display&&!stricmp(name,"FONT14.DAT"))return 1;
   if(menu_generator&&(!stricmp(name,"!MNUGEN.EXE")||!stricmp(name,"AUTOGEN.DAT")))return 1;
@@ -1023,7 +1023,7 @@ int main(int argc,char **argv)
   strcpy(autoexec+1,":\\AUTOEXEC.BAT");
   key_spec[0]=0;
   printf("\n");
-  update_autoexec=!upgrade&&ask_yes("Do you want to update your AUTOEXEC.BAT file?",1,0);
+  update_autoexec=!upgrade&&ask_yes("Update DOS startup batch file?",1,0);
   if(update_autoexec){
     puts("");add_path=ask_yes("Add Launch! to PATH?",1,5);
     puts("");add_shortcut=shortcut_key?ask_yes("Enable keyboard shortcut?",1,5):0;
