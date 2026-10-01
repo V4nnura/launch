@@ -1,5 +1,8 @@
 /* Launch! 3.76 - native Windows 3.x menu companion.
    Target: Microsoft C/C++ 7.0 + Windows 3.0/3.1 SDK, medium model. */
+#ifndef WINVER
+#define WINVER 0x0300
+#endif
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,7 +28,9 @@
 #define CONFIRM_TEXT 70
 #define CONFIRM_ICON 71
 #define MESSAGE_TEXT 72
-#define MESSAGE_ICON 73
+#define MESSAGE_ERROR_ICON 73
+#define MESSAGE_SUCCESS_ICON 74
+#define MESSAGE_CONFIRM_ICON 75
 #define IDI_SLEEP 1100
 #define IDI_CONFIRM 1101
 #define IDI_ERROR 1102
@@ -54,16 +59,23 @@
 #ifndef TPM_BOTTOMALIGN
 #define TPM_BOTTOMALIGN 0x0020
 #endif
+
+/* Windows 3.0 requires TrackPopupMenu wFlags to be zero.  Windows 3.1
+   introduced the popup alignment flags; use the bottom-alignment bit only
+   when that later USER implementation is actually running. */
+static int launch_win31_or_later(void)
+{
+  DWORD v=GetVersion();
+  BYTE major=LOBYTE(LOWORD(v));
+  BYTE minor=HIBYTE(LOWORD(v));
+  return (major>3 || (major==3 && minor>=10));
+}
 #ifndef VK_OEM_5
 #define VK_OEM_5 0xDC
 #endif
 #ifndef SC_HOTKEY
 #define SC_HOTKEY 0xF150
 #endif
-#ifndef STM_SETICON
-#define STM_SETICON 0x0170
-#endif
-
 #define IDM_MGMT_ADD_LAUNCHER 920
 #define IDM_MGMT_ADD_FOLDER 921
 #define IDM_MGMT_ADD_SEPARATOR 922
@@ -93,7 +105,8 @@
 #define ITEM_OK IDOK
 #define ITEM_CANCEL IDCANCEL
 #define ITEM_BROWSE 49
-#define ITEM_TYPEICON 50
+#define ITEM_DOSICON 50
+#define ITEM_WINICON 51
 
 #define MANAGER_PATH 80
 #define MANAGER_BROWSE 81
@@ -732,8 +745,8 @@ static void show_launch_menu(void)
   build_native_menu();if(!root_menu)return;
   begin_popup_tracking(&previous_active,&previous_focus);
   GetWindowRect(gWnd,&wr);pt.x=wr.left;
-  flags=TPM_LEFTALIGN|TPM_LEFTBUTTON;
-  if(button_edge){pt.y=wr.top;flags|=TPM_BOTTOMALIGN;}
+  flags=0;
+  if(button_edge){pt.y=wr.top;if(launch_win31_or_later())flags|=TPM_BOTTOMALIGN;}
   else pt.y=wr.bottom;
   queue_initial_menu_focus();
   TrackPopupMenu(root_menu,flags,pt.x,pt.y,0,gWnd,NULL);
@@ -841,19 +854,14 @@ static void center_dialog(HWND h)
 
 static void update_item_program_type(HWND h)
 {
-  char exe[160];int valid,iswin=0;HICON icon=NULL;HWND iconctl;
+  char exe[160];int valid,iswin=0;HWND dosicon,winicon;
   if(!h||item_dialog_folder||!itemCommand)return;
   GetWindowText(itemCommand,exe,sizeof(exe));trim(exe);
   valid=exe[0]?item_command_validation(exe):-1;
-  if(valid>0){
-    iswin=is_windows_exe(exe);
-    icon=LoadIcon(gInst,MAKEINTRESOURCE(iswin?IDI_WINPROG:IDI_DOSPROG));
-  }
-  iconctl=GetDlgItem(h,ITEM_TYPEICON);
-  if(iconctl){
-    if(valid>0&&icon){SendMessage(iconctl,STM_SETICON,(WPARAM)icon,0L);ShowWindow(iconctl,SW_SHOW);}
-    else ShowWindow(iconctl,SW_HIDE);
-  }
+  if(valid>0)iswin=is_windows_exe(exe);
+  dosicon=GetDlgItem(h,ITEM_DOSICON);winicon=GetDlgItem(h,ITEM_WINICON);
+  if(dosicon)ShowWindow(dosicon,(valid>0&&!iswin)?SW_SHOW:SW_HIDE);
+  if(winicon)ShowWindow(winicon,(valid>0&&iswin)?SW_SHOW:SW_HIDE);
   /* These four options affect only DOS sessions.  Preserve their checked
      state, but make the irrelevance obvious only for a valid Windows EXE. */
   EnableWindow(itemPrompt,!iswin);
@@ -1152,7 +1160,7 @@ static void manager_show_add_menu(void)
   AppendMenu(m,MF_STRING,IDM_MANAGER_ADD_LAUNCHER,"Launcher");
   AppendMenu(m,MF_STRING,IDM_MANAGER_ADD_FOLDER,"Folder");
   AppendMenu(m,MF_STRING,IDM_MANAGER_ADD_SEPARATOR,"Separator");
-  TrackPopupMenu(m,TPM_LEFTALIGN|TPM_LEFTBUTTON,r.left,r.bottom,0,managerWnd,NULL);DestroyMenu(m);
+  TrackPopupMenu(m,0,r.left,r.bottom,0,managerWnd,NULL);DestroyMenu(m);
 }
 
 static void manager_add_item_command(int command)
@@ -1246,7 +1254,7 @@ static void manager_paint_tree_fallback(HWND h)
   count=(int)SendMessage(h,LB_GETCOUNT,0,0L);if(count<=0)return;
   top=(int)SendMessage(h,LB_GETTOPINDEX,0,0L);if(top<0)top=0;
   sel=(int)SendMessage(h,LB_GETCURSEL,0,0L);
-  height=(int)SendMessage(h,LB_GETITEMHEIGHT,0,0L);if(height<=0)height=17;
+  height=17;
   GetClientRect(h,&client);dc=GetDC(h);if(!dc)return;
   back=CreateSolidBrush(GetSysColor(COLOR_WINDOW));FillRect(dc,&client,back);DeleteObject(back);
   memset(&dis,0,sizeof(dis));dis.CtlType=ODT_LISTBOX;dis.CtlID=MANAGER_TREE;dis.hwndItem=h;dis.hDC=dc;
@@ -1384,7 +1392,7 @@ static LRESULT FAR PASCAL ManagerTreeProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
       if(count>0){
         if(row==LB_ERR)row=0;next=row+(wp==VK_UP?-1:1);if(next<0)next=0;if(next>=count)next=count-1;
         SendMessage(h,LB_SETCURSEL,next,0L);
-        top=(int)SendMessage(h,LB_GETTOPINDEX,0,0L);height=(int)SendMessage(h,LB_GETITEMHEIGHT,0,0L);GetClientRect(h,&r);
+        top=(int)SendMessage(h,LB_GETTOPINDEX,0,0L);height=17;GetClientRect(h,&r);
         visible=height>0?(r.bottom-r.top)/height:1;if(visible<1)visible=1;
         if(next<top)SendMessage(h,LB_SETTOPINDEX,next,0L);else if(next>=top+visible)SendMessage(h,LB_SETTOPINDEX,next-visible+1,0L);
         manager_update_buttons();InvalidateRect(h,NULL,TRUE);
@@ -1470,8 +1478,8 @@ static void show_management_menu(void)
   AppendMenu(menu,MF_SEPARATOR,0,NULL);
   AppendMenu(menu,MF_STRING,IDM_MGMT_REORDER,"Menu Manager...");
   begin_popup_tracking(&previous_active,&previous_focus);
-  GetWindowRect(gWnd,&wr);pt.x=wr.left;flags=TPM_LEFTALIGN|TPM_LEFTBUTTON;
-  if(button_edge){pt.y=wr.top;flags|=TPM_BOTTOMALIGN;}else pt.y=wr.bottom;
+  GetWindowRect(gWnd,&wr);pt.x=wr.left;flags=0;
+  if(button_edge){pt.y=wr.top;if(launch_win31_or_later())flags|=TPM_BOTTOMALIGN;}else pt.y=wr.bottom;
   queue_initial_menu_focus();
   TrackPopupMenu(menu,flags,pt.x,pt.y,0,gWnd,NULL);
   DestroyMenu(menu);
@@ -1602,11 +1610,7 @@ static BOOL FAR PASCAL ConfirmDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
   (void)lp;
   switch(msg){
     case WM_INITDIALOG:
-      { HICON icon;
-        center_dialog(h);SetWindowText(h,confirm_title);SetDlgItemText(h,CONFIRM_TEXT,confirm_text);
-        icon=LoadIcon(gInst,MAKEINTRESOURCE(confirm_dialog_id==IDD_EXITWIN?IDI_SLEEP:IDI_CONFIRM));
-        if(icon&&GetDlgItem(h,CONFIRM_ICON))SendDlgItemMessage(h,CONFIRM_ICON,STM_SETICON,(WPARAM)icon,0L);
-      }
+      center_dialog(h);SetWindowText(h,confirm_title);SetDlgItemText(h,CONFIRM_TEXT,confirm_text);
       SetFocus(GetDlgItem(h,IDNO));return FALSE;
     case WM_COMMAND:
       if(wp==IDYES){EndDialog(h,IDYES);return TRUE;}
@@ -1619,15 +1623,15 @@ static BOOL FAR PASCAL ConfirmDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
 
 static BOOL FAR PASCAL MessageDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
 {
-  HICON icon;
+  HWND erricon,okicon,qicon;
   (void)lp;
   switch(msg){
     case WM_INITDIALOG:
       center_dialog(h);SetWindowText(h,message_title);SetDlgItemText(h,MESSAGE_TEXT,message_text);
-      if(message_kind==MSG_ERROR)icon=LoadIcon(gInst,MAKEINTRESOURCE(IDI_ERROR));
-      else if(message_kind==MSG_WARNING)icon=LoadIcon(NULL,IDI_EXCLAMATION);
-      else icon=LoadIcon(gInst,MAKEINTRESOURCE(IDI_SUCCESS));
-      if(icon)SendDlgItemMessage(h,MESSAGE_ICON,STM_SETICON,(WPARAM)icon,0L);
+      erricon=GetDlgItem(h,MESSAGE_ERROR_ICON);okicon=GetDlgItem(h,MESSAGE_SUCCESS_ICON);qicon=GetDlgItem(h,MESSAGE_CONFIRM_ICON);
+      if(erricon)ShowWindow(erricon,message_kind==MSG_ERROR?SW_SHOW:SW_HIDE);
+      if(okicon)ShowWindow(okicon,(message_kind==MSG_INFO||message_kind==MSG_SUCCESS)?SW_SHOW:SW_HIDE);
+      if(qicon)ShowWindow(qicon,message_kind==MSG_WARNING?SW_SHOW:SW_HIDE);
       SetFocus(GetDlgItem(h,IDOK));return FALSE;
     case WM_COMMAND:
       if(wp==IDOK||wp==IDCANCEL){EndDialog(h,IDOK);return TRUE;}
@@ -1899,6 +1903,9 @@ int PASCAL WinMain(HINSTANCE inst,HINSTANCE prev,LPSTR cmd,int show)
   ShowWindow(gWnd,SW_SHOWNOACTIVATE);
   SetWindowPos(gWnd,HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
   UpdateWindow(gWnd);
+  /* Windows 3.0 can defer painting a visible child of a no-background popup.
+     Force the native button itself through one paint cycle at startup. */
+  if(gButton){ShowWindow(gButton,SW_SHOW);InvalidateRect(gButton,NULL,TRUE);UpdateWindow(gButton);}
   if(ensure_menu_file()){if(start_menu_manager)PostMessage(gWnd,WM_SHOW_MENU_MANAGER,0,0L);else {menu_open_pending=1;menu_open_delay=4;}}
   while(GetMessage(&msg,NULL,0,0)){TranslateMessage(&msg);DispatchMessage(&msg);}
   if(dde_reply)GlobalFree(dde_reply);

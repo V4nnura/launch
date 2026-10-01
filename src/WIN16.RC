@@ -1,3 +1,4 @@
+#define WINVER 0x0300
 #include <windows.h>
 
 #define IDD_RUN             1000
@@ -30,12 +31,15 @@
 #define ITEM_CHDIR             45
 #define ITEM_ADDPATH           46
 #define ITEM_BROWSE            49
-#define ITEM_TYPEICON          50
+#define ITEM_DOSICON           50
+#define ITEM_WINICON           51
 
 #define CONFIRM_TEXT           70
 #define CONFIRM_ICON           71
 #define MESSAGE_TEXT           72
-#define MESSAGE_ICON           73
+#define MESSAGE_ERROR_ICON     73
+#define MESSAGE_SUCCESS_ICON   74
+#define MESSAGE_CONFIRM_ICON   75
 #define MANAGER_PATH           80
 #define MANAGER_BROWSE         81
 #define MANAGER_TREE           82
@@ -84,7 +88,8 @@ BEGIN
     LTEXT           "&Parameters:", -1,            7, 51,  52,  8
     EDITTEXT        ITEM_PARAMS,                   66, 49, 116, 13, ES_AUTOHSCROLL | WS_TABSTOP
     CONTROL         "&Prompt?", ITEM_PROMPT, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 188, 50, 62, 10
-    ICON            IDI_DOSPROG, ITEM_TYPEICON,      18, 70, 32, 32
+    ICON            IDI_DOSPROG, ITEM_DOSICON,       18, 70, 32, 32
+    ICON            IDI_WINPROG, ITEM_WINICON,       18, 70, 32, 32
     CONTROL         "Provide &Enter after launcher command", ITEM_ENTER, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 66, 70, 177, 10
     CONTROL         "&Change directory first", ITEM_CHDIR, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 66, 86, 134, 10
     CONTROL         "&Add to PATH for execution", ITEM_ADDPATH, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 66, 102, 150, 10
@@ -108,7 +113,7 @@ STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Launch!"
 FONT 8, "MS Sans Serif"
 BEGIN
-    CONTROL         "", CONFIRM_ICON, "STATIC", SS_ICON | WS_CHILD | WS_VISIBLE, 8, 9, 32, 32
+    ICON            IDI_CONFIRM, CONFIRM_ICON,       8,  9, 32, 32
     LTEXT           "", CONFIRM_TEXT,             48, 12, 180, 24
     PUSHBUTTON      "Yes", IDYES,                127, 46,  48, 14
     DEFPUSHBUTTON   "No", IDNO,                  181, 46,  48, 14
@@ -131,7 +136,9 @@ STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Launch!"
 FONT 8, "MS Sans Serif"
 BEGIN
-    CONTROL         "", MESSAGE_ICON, "STATIC", SS_ICON | WS_CHILD | WS_VISIBLE, 8, 9, 32, 32
+    ICON            IDI_ERROR, MESSAGE_ERROR_ICON,      8,  9, 32, 32
+    ICON            IDI_SUCCESS, MESSAGE_SUCCESS_ICON,  8,  9, 32, 32
+    ICON            IDI_CONFIRM, MESSAGE_CONFIRM_ICON,  8,  9, 32, 32
     LTEXT           "", MESSAGE_TEXT,             48, 12, 180, 24
     DEFPUSHBUTTON   "OK", IDOK,                  181, 46,  48, 14
 END

@@ -5,6 +5,9 @@
  * icon.  It deliberately does not depend on Program Manager preserving a
  * command-line switch for !WIN16.EXE.
  */
+#ifndef WINVER
+#define WINVER 0x0300
+#endif
 #include <windows.h>
 #include <string.h>
 
