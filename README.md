@@ -1,4 +1,4 @@
-# <img alt="Launch! for DOS" src="https://github.com/user-attachments/assets/8f4207ab-15d2-47df-80a3-a44701e03f83" />
+<img height="100" alt="main-logo" src="https://github.com/user-attachments/assets/d7429665-3bf5-4ec2-a438-cb3289aa9614" />
 
 > A free lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- plus accessories and games, to create a modern and useful desktop environment.
 
@@ -46,7 +46,7 @@
 
 
 <a id="install"></a>
-### <img alt="Installation" src="https://github.com/user-attachments/assets/a14320e8-f790-4a82-95d6-1cee146512c9" />
+### <img height="100" alt="Installation" src="https://github.com/user-attachments/assets/a14320e8-f790-4a82-95d6-1cee146512c9" />
 
 Extract [the release](https://github.com/therenegar/launch/releases/) zip file or mount the floppy image (or image it to a real floppy disk) and run
 ```
@@ -57,7 +57,7 @@ INSTALL.EXE
 <img width="640" height="350" alt="Installation" src="https://github.com/user-attachments/assets/5c85c0f0-f9b7-4e9c-a401-b52399da275b" />
 
 <a id="the-menu"></a>
-### <img alt="The menu" src="https://github.com/user-attachments/assets/eb20a623-f631-4b33-b340-90d470f6e7c1" />
+### <img height="100" alt="The menu" src="https://github.com/user-attachments/assets/eb20a623-f631-4b33-b340-90d470f6e7c1" />
 
 At the **command prompt**, display your menu by pressing the keyboard shortcut which by default is set to:
 ```
@@ -68,7 +68,7 @@ CTRL + ALT + \
 <img width="720" alt="Menu (at boot)" src="https://github.com/user-attachments/assets/34da7f78-e761-432e-859c-c5af78eacd07" />
 
 <a id="config"></a>
-### <img alt="Config" src="https://github.com/user-attachments/assets/8b30b2a6-cb46-435e-b9e1-7fb47e5fc44e" />
+### <img height="100" alt="Config" src="https://github.com/user-attachments/assets/8b30b2a6-cb46-435e-b9e1-7fb47e5fc44e" />
 
 Everything in Launch! can be configured in one place by running
 ```
@@ -81,7 +81,7 @@ Configuration includes the menu, colors, screen savers, prompt customization, fo
 <img width="720" alt="Configuration" src="https://github.com/user-attachments/assets/e537e661-5e06-4c31-b3f4-b625f4dfd17f" />
 
 <a id="screen-savers"></a>
-### <img alt="Screen Savers" src="https://github.com/user-attachments/assets/447f06ad-4597-45bc-b4cf-3f3debcc02a1" />
+### <img height="100" alt="Screen Savers" src="https://github.com/user-attachments/assets/447f06ad-4597-45bc-b4cf-3f3debcc02a1" />
 
 Some interesting graphical displays that give the real early 90s vibes.
 
@@ -104,7 +104,7 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 
 
 <a id="accessories"></a>
-### <img alt="Accessories" src="https://github.com/user-attachments/assets/59ceb839-9cc4-456e-8e5f-99d103b871cb" />
+### <img height="100" alt="Accessories" src="https://github.com/user-attachments/assets/59ceb839-9cc4-456e-8e5f-99d103b871cb" />
 
 Handy accessories with a goal of turning an old DOS PC into something useful in the modern day.
 
@@ -123,7 +123,7 @@ Handy accessories with a goal of turning an old DOS PC into something useful in 
 <img width="360" height="300" alt="Typo" src="https://github.com/user-attachments/assets/00b4d154-1d18-4cc1-b79d-6859a6b1a5bf" />
 
 <a id="games"></a>
-### <img alt="Games" src="https://github.com/user-attachments/assets/ad644a58-0e3b-4f34-b6cb-8de93f67bdcc" />
+### <img height="100" alt="Games" src="https://github.com/user-attachments/assets/ad644a58-0e3b-4f34-b6cb-8de93f67bdcc" />
 
 Fun games with some more modern ideas taken back in time, to push text mode DOS to the absolute limits.
 
@@ -140,7 +140,7 @@ Fun games with some more modern ideas taken back in time, to push text mode DOS 
 <img width="360" height="300" alt="sol" src="https://github.com/user-attachments/assets/25ebb582-f0c1-400a-954b-85a2ac28e199" />
 
 <a id="tooling"></a>
-### <img alt="Tooling" src="https://github.com/user-attachments/assets/e96b1ec4-fcfb-4368-b9e1-801024401611" />
+### <img height="100" alt="Tooling" src="https://github.com/user-attachments/assets/e96b1ec4-fcfb-4368-b9e1-801024401611" />
 
 Everything is separated out to keep `!.EXE` as streamlined as possible, and make things completely optional.
 The shortcut key and menu generator are examples of tools that are completely optional, but work closely with `!.EXE` to add useful functionality.
@@ -148,7 +148,7 @@ The shortcut key and menu generator are examples of tools that are completely op
 **Learn more about [Tooling](https://github.com/therenegar/launch/wiki/Tooling).**
 
 <a id="techinfo"></a>
-### <img alt="Tech Info" src="https://github.com/user-attachments/assets/702756ee-38aa-4eb7-b39b-d7e15cbf0ca2" />
+### <img height="100" alt="Tech Info" src="https://github.com/user-attachments/assets/702756ee-38aa-4eb7-b39b-d7e15cbf0ca2" />
 
 Behind the UI, everything is plain text configuration. You can configure everything yourself with any text editor. 
 
