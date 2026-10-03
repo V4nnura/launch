@@ -3,7 +3,7 @@
 <a id="launch"></a>
 <img id="launch" height="100" alt="main-logo" src="https://github.com/user-attachments/assets/d7429665-3bf5-4ec2-a438-cb3289aa9614" />
 
-> A free lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- plus accessories and games, to create a modern and useful desktop environment.
+> A free lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- plus accessories and games, to create a retro yet modern desktop environment.
 
 ----
 
