@@ -1447,13 +1447,17 @@ static void ega14_glyph_write(int code,const unsigned char far *glyph)
   _asm {
     push bp
     push es
+    /* code is a BP-relative C argument.  Capture it before BP is replaced
+       with the BIOS ES:BP glyph pointer.  Reading code after MOV BP,foff
+       writes the glyph to an arbitrary character slot on genuine EGA. */
+    mov dx,code
     mov ax,fseg
     mov es,ax
     mov bp,foff
     mov ax,1100h
-    mov bx,0E00h
+    mov bh,14
+    mov bl,0
     mov cx,1
-    mov dx,code
     int 10h
     pop es
     pop bp
@@ -1487,11 +1491,11 @@ static void ega14_select_block0(void)
 static void ega14_rom_reset(void)
 {
   union REGS r;
-  /* Restore the EGA BIOS 8x14 ROM font and 25-row geometry.  AL=01 is the
-     user-font loader and requires ES:BP; using it here leaves undefined glyphs
-     in the active character set.  AL=11 is the ROM 8x14 load-and-reprogram
-     service and is the proven Standard-font path on genuine EGA. */
-  memset(&r,0,sizeof(r));r.x.ax=0x1111;r.x.bx=0;int86(0x10,&r,&r);
+  /* Proven genuine-EGA sequence used by Launch! before this regression:
+     AH=11h/AL=01h loads the adapter BIOS ROM 8x14 font into block 0; AL=03h
+     then explicitly selects block 0.  Do not use the VGA/reprogram variants
+     here and do not reconstruct Standard by copying an AX=1130h pointer. */
+  memset(&r,0,sizeof(r));r.x.ax=0x1101;r.x.bx=0;int86(0x10,&r,&r);
   ega14_select_block0();
 }
 
@@ -6582,12 +6586,8 @@ static void font_bios_standard_vga(void)
 
 static void font_bios_standard_ega(void)
 {
-  union REGS r;
-  /* EGA Standard is the adapter BIOS 8x14 ROM font.  AX=1101h is the
-     user-font loader and requires ES:BP; it must never be used as a ROM
-     font selector.  AX=1111h explicitly loads the BIOS ROM 8x14 set. */
-  memset(&r,0,sizeof(r));r.x.ax=0x1111;r.x.bx=0;int86(0x10,&r,&r);
-  memset(&r,0,sizeof(r));r.x.ax=0x1103;r.x.bx=0;int86(0x10,&r,&r);
+  /* Keep every Standard-font path on the one known-good EGA reset routine. */
+  ega14_rom_reset();
 }
 
 static int font_preview_vga(unsigned char id)
@@ -7318,7 +7318,7 @@ static void shortcut_idle_sync(void)
    Configuration rewrites the generated !START.BAT only. */
 static int sync_startup_services(void)
 {
-  char path[MAX_CMD],dir[MAX_CMD],spec[64],value[256];FILE *f;int n;
+  static char path[MAX_CMD],dir[MAX_CMD],spec[64],value[256];FILE *f;int n;
   if(!program_dir[0])return 0;
   strncpy(dir,program_dir,sizeof(dir)-1);dir[sizeof(dir)-1]=0;n=(int)strlen(dir);while(n>3&&(dir[n-1]=='\\'||dir[n-1]=='/'))dir[--n]=0;
   strcpy(path,program_dir);strcat(path,"!START.BAT");f=fopen(path,"wt");if(!f)return 0;
@@ -7352,7 +7352,7 @@ static int queue_bios_short_text(const char *text)
 
 static int queue_service_apply(void)
 {
-  char commands[MAX_MACRO];commands[0]=0;
+  static char commands[MAX_MACRO];commands[0]=0;
   if(fonts_installed&&font_activation_pending)strcat(commands,"!FONT.COM\r");
   if(shortcut_component_installed&&shortcut_activation_pending){strcat(commands,shortcut_target_light?"!TKEY.COM":"!KEY.COM");strcat(commands," /KEY=");if(shortcut_ctrl)strcat(commands,"CTRL+");if(shortcut_alt)strcat(commands,"ALT+");if(shortcut_shift)strcat(commands,"SHIFT+");strcat(commands,shortcut_key_cfg);strcat(commands,"\r");}
   if(!commands[0])return 1;
@@ -7361,7 +7361,7 @@ static int queue_service_apply(void)
 
 static int queue_shell_batch(const char *commands)
 {
-  char path[MAX_CMD];const char *p;FILE *f;int last_cr=0;
+  static char path[MAX_CMD];const char *p;FILE *f;int last_cr=0;
   strcpy(path,program_dir);strcat(path,"!APPLY.BAT");remove(path);f=fopen(path,"wt");if(!f)return 0;
   if(fputs("@ECHO OFF\n",f)==EOF){fclose(f);return 0;}
   for(p=commands;*p;p++){if(*p=='\r'){if(fputc('\n',f)==EOF){fclose(f);return 0;}last_cr=1;}else{if(fputc(*p,f)==EOF){fclose(f);return 0;}last_cr=0;}}
