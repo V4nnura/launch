@@ -109,14 +109,14 @@ static WORD_PLACE puzzle_place[WORDS];
 
 static void puzzle_file_path(char *p,int fi)
 {
-  size_t n;strcpy(p,acc_directory);n=strlen(p);if(n&&p[n-1]!='\\'&&p[n-1]!='/')strcat(p,"\\");strcat(p,puzzle_files[fi]);
+  size_t n;strcpy(p,acc_directory);n=strlen(p);if(n&&p[n-1]!='\\'&&p[n-1]!='/')strcat(p,"\\");strcat(p,"GAMERES\\");strcat(p,puzzle_files[fi]);
 }
 static void puzzle_strip(char *s)
 {int n=(int)strlen(s);while(n&&(s[n-1]=='\r'||s[n-1]=='\n'))s[--n]=0;}
 static int scan_puzzles(void)
 {
   struct find_t ff;char mask[ACC_PATH],p[ACC_PATH],line[192],tmp[13];FILE *f;long pos;unsigned e;int i,j,fi;
-  puzzle_total=0;puzzle_file_count=0;strcpy(mask,acc_directory);if(mask[0]&&mask[strlen(mask)-1]!='\\'&&mask[strlen(mask)-1]!='/')strcat(mask,"\\");strcat(mask,"WORDZ*.LVL");
+  puzzle_total=0;puzzle_file_count=0;strcpy(mask,acc_directory);if(mask[0]&&mask[strlen(mask)-1]!='\\'&&mask[strlen(mask)-1]!='/')strcat(mask,"\\");strcat(mask,"GAMERES\\WORDZ*.LVL");
   e=_dos_findfirst(mask,_A_NORMAL,&ff);while(!e&&puzzle_file_count<MAX_LEVEL_FILES){strncpy(puzzle_files[puzzle_file_count],ff.name,12);puzzle_files[puzzle_file_count][12]=0;puzzle_file_count++;e=_dos_findnext(&ff);}
   for(i=0;i<puzzle_file_count-1;i++)for(j=i+1;j<puzzle_file_count;j++)if(stricmp(puzzle_files[i],puzzle_files[j])>0){strcpy(tmp,puzzle_files[i]);strcpy(puzzle_files[i],puzzle_files[j]);strcpy(puzzle_files[j],tmp);}
   for(fi=0;fi<puzzle_file_count&&puzzle_total<MAX_PUZZLES;fi++){puzzle_file_path(p,fi);f=fopen(p,"rt");if(!f)continue;for(;;){pos=ftell(f);if(!fgets(line,sizeof(line),f))break;if(line[0]=='@'&&puzzle_total<MAX_PUZZLES){puzzle_offset[puzzle_total]=pos;puzzle_file_index[puzzle_total]=(unsigned char)fi;puzzle_total++;}}fclose(f);}

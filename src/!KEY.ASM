@@ -587,7 +587,7 @@ int2f_handler:
     xor al,al
     iret
 22: cmp ax,0xd5b4
-    jne 10f
+    jne 23f
     mov byte ptr cs:[idle_enabled],bl
     mov word ptr cs:[idle_timeout],cx
     mov word ptr cs:[idle_timeout+2],dx
@@ -600,6 +600,20 @@ int2f_handler:
     mov word ptr cs:[idle_last+2],ax
     pop es
     xor al,al
+    iret
+/* Private cooperative-unload API.  !FONT uses this only when !KEY is the
+ * immediate INT 2Fh owner above it, allowing the shared chain to be spliced
+ * without unloading and reloading either TSR. */
+23: cmp ax,0xd5b5
+    jne 10f
+    mov bx,0x4b43                     /* "KC": cooperative chain info */
+    mov cx,0x030b
+    push cs
+    pop es
+    mov si,offset int2f_handler
+    mov di,offset old2f
+    mov bp,offset resident_prepare_unload
+    mov dx,offset resident_reload_command
     iret
 10: jmp far ptr cs:[old2f]
 
@@ -683,6 +697,122 @@ verify_done:
     pop ax
     ret
 
+/* Restore !KEY's vectors while leaving its PSP allocated.  The other Launch!
+ * TSR's transient unloader calls this only after verifying that this !KEY
+ * instance is the immediate INT 2F owner; it then frees our PSP itself. */
+resident_prepare_unload:
+    push bx
+    push cx
+    push dx
+    push ds
+    push es
+    mov ax,0x3509
+    int 0x21
+    mov dx,offset int09_handler
+    call resident_check_vector
+    jc resident_prepare_fail
+.ifndef CPU286_BUILD
+    mov ax,0x3515
+    int 0x21
+    mov dx,offset int15_handler
+    call resident_check_vector
+    jc resident_prepare_fail
+    mov ax,0x3516
+    int 0x21
+    mov dx,offset int16_handler
+    call resident_check_vector
+    jc resident_prepare_fail
+    mov ax,0x3521
+    int 0x21
+    mov dx,offset int21_handler
+    call resident_check_vector
+    jc resident_prepare_fail
+.endif
+    mov ax,0x3528
+    int 0x21
+    mov dx,offset int28_handler
+    call resident_check_vector
+    jc resident_prepare_fail
+    mov ax,0x352f
+    int 0x21
+    mov dx,offset int2f_handler
+    call resident_check_vector
+    jc resident_prepare_fail
+
+    mov al,0x09
+    mov bx,offset old09
+    call resident_restore_vector
+.ifndef CPU286_BUILD
+    mov al,0x15
+    mov bx,offset old15
+    call resident_restore_vector
+    mov al,0x16
+    mov bx,offset old16
+    call resident_restore_vector
+.endif
+    mov al,0x28
+    mov bx,offset old28
+    call resident_restore_vector
+    mov al,0x2f
+    mov bx,offset old2f
+    call resident_restore_vector
+.ifndef CPU286_BUILD
+    mov al,0x21
+    mov bx,offset old21
+    call resident_restore_vector
+.endif
+    xor al,al
+    jmp resident_prepare_done
+resident_prepare_fail:
+    mov al,1
+resident_prepare_done:
+    pop es
+    pop ds
+    pop dx
+    pop cx
+    pop bx
+    retf
+
+resident_check_vector:
+    mov ax,es
+    push cs
+    pop cx
+    cmp ax,cx
+    jne resident_check_bad
+    cmp bx,dx
+    jne resident_check_bad
+    clc
+    ret
+resident_check_bad:
+    stc
+    ret
+
+resident_restore_vector:
+    push ax
+    push cx
+    push dx
+    push ds
+    mov cl,al
+    mov dx,word ptr cs:[bx]
+    mov ax,word ptr cs:[bx+2]
+    mov ds,ax
+    mov al,cl
+    mov ah,0x25
+    int 0x21
+    pop ds
+    pop dx
+    pop cx
+    pop ax
+    ret
+
+resident_self_name:
+.ifdef LIGHT_TARGET
+    .asciz "!TKEY"
+.else
+    .asciz "!KEY"
+.endif
+resident_reload_command: .space 40,0
+
 resident_end:
 
 /* ------------------------- transient installer ------------------------ */
@@ -696,6 +826,7 @@ installer:
     je show_help
     cmp al,2
     je unload_shortcut
+    call build_reload_command
 
     mov ax,0xd5b0
     xor bx,bx
@@ -1084,10 +1215,57 @@ unload_shortcut:
     int 0x21
     call check_28
     jc unload_unsafe
+    /* !FONT may be the immediate INT 2Fh owner above !KEY.  Cycle that
+       Launch! TSR cleanly: prepare/free it now, remove !KEY, then queue the
+       exact !FONT command for COMMAND.COM after this transient exits. */
+    mov byte ptr [reload_needed],0
     mov ax,0x352f
     int 0x21
-    call check_2f
+    mov ax,es
+    cmp ax,word ptr [resident_seg]
+    jne unload_try_font_above
+    cmp bx,offset int2f_handler
+    je unload_int2f_ready
+unload_try_font_above:
+    mov word ptr [top2f_off],bx
+    mov word ptr [top2f_seg],es
+    mov ax,0xd5c4
+    xor bx,bx
+    int 0x2f
+    cmp bx,0x4643
+    jne unload_unsafe
+    cmp cx,0x0100
+    jne unload_unsafe
+    mov ax,es
+    cmp ax,word ptr [top2f_seg]
+    jne unload_unsafe
+    cmp si,word ptr [top2f_off]
+    jne unload_unsafe
+    cmp word ptr es:[di],offset int2f_handler
+    jne unload_unsafe
+    mov ax,word ptr [resident_seg]
+    cmp word ptr es:[di+2],ax
+    jne unload_unsafe
+    mov word ptr [other_resident],es
+    mov word ptr [other_prepare],bp
+    mov word ptr [other_prepare+2],es
+    call copy_reload_from_es_dx
+    lcall [other_prepare]
+    or al,al
+    jnz unload_unsafe
+    mov es,word ptr [other_resident]
+    mov ah,0x49
+    int 0x21
     jc unload_unsafe
+    mov byte ptr [reload_needed],1
+    mov ax,0x352f
+    int 0x21
+    mov ax,es
+    cmp ax,word ptr [resident_seg]
+    jne unload_unsafe
+    cmp bx,offset int2f_handler
+    jne unload_unsafe
+unload_int2f_ready:
 
     mov al,0x09
     mov bx,offset old09
@@ -1117,8 +1295,16 @@ unload_shortcut:
     mov ah,0x49
     int 0x21
     jc unload_unsafe
+    cmp byte ptr [reload_needed],0
+    je unload_no_reload
+    call queue_reload_command
+    jc unload_reload_failed
+unload_no_reload:
     mov dx,offset msg_unloaded
     jmp print_exit
+unload_reload_failed:
+    mov dx,offset msg_reload_failed
+    jmp print_exit_error
 
 check_09:
     mov dx,offset int09_handler
@@ -1166,6 +1352,110 @@ restore_vector:
     pop ds
     pop dx
     pop cx
+    pop ax
+    ret
+
+/* Copy the other Launch! TSR's resident ASCIIZ reload command. */
+copy_reload_from_es_dx:
+    push ax
+    push cx
+    push si
+    push di
+    push ds
+    push es
+    mov si,dx
+    push es
+    pop ds
+    push cs
+    pop es
+    mov di,offset reload_command
+    mov cx,15
+copy_reload_loop:
+    lodsb
+    stosb
+    or al,al
+    jz copy_reload_done
+    loop copy_reload_loop
+    mov byte ptr es:[di-1],0
+copy_reload_done:
+    pop es
+    pop ds
+    pop di
+    pop si
+    pop cx
+    pop ax
+    ret
+
+/* Queue reload after this transient process exits so DOS coalesces the freed
+ * resident blocks before the surviving Launch! TSR is loaded again. */
+queue_reload_command:
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push es
+    mov si,offset reload_command
+    xor cx,cx
+queue_count_loop:
+    cmp byte ptr [si],0
+    je queue_count_done
+    inc si
+    inc cx
+    jmp queue_count_loop
+queue_count_done:
+    inc cx
+    mov ax,0x40
+    mov es,ax
+    mov bx,word ptr es:[0x1c]
+    mov dx,word ptr es:[0x1a]
+    mov di,bx
+queue_space_loop:
+    add di,2
+    cmp di,0x3e
+    jb queue_space_nowrap
+    mov di,0x1e
+queue_space_nowrap:
+    cmp di,dx
+    je queue_reload_fail
+    loop queue_space_loop
+    cli
+    mov bx,word ptr es:[0x1c]
+    mov si,offset reload_command
+queue_write_loop:
+    mov al,byte ptr [si]
+    or al,al
+    jz queue_write_return
+    xor ah,ah
+    mov word ptr es:[bx],ax
+    add bx,2
+    cmp bx,0x3e
+    jb queue_write_next
+    mov bx,0x1e
+queue_write_next:
+    inc si
+    jmp queue_write_loop
+queue_write_return:
+    mov word ptr es:[bx],0x1c0d
+    add bx,2
+    cmp bx,0x3e
+    jb queue_store_tail
+    mov bx,0x1e
+queue_store_tail:
+    mov word ptr es:[0x1c],bx
+    sti
+    clc
+    jmp queue_reload_done
+queue_reload_fail:
+    stc
+queue_reload_done:
+    pop es
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
     pop ax
     ret
 
@@ -1369,6 +1659,92 @@ print_launch_red:
     pop ax
     ret
 
+/* Preserve the exact resident hotkey configuration for cooperative TSR
+ * cycling.  The other Launch! TSR queues this command only after both old
+ * resident blocks and the current transient command have been released. */
+build_reload_command:
+    push ax
+    push bx
+    push dx
+    push si
+    push di
+    push es
+    push cs
+    pop es
+    mov si,offset resident_self_name
+    mov di,offset resident_reload_command
+build_reload_copy_name:
+    lodsb
+    or al,al
+    jz build_reload_name_done
+    stosb
+    jmp build_reload_copy_name
+build_reload_name_done:
+    mov si,offset reload_state_prefix
+    call build_reload_copy_text
+    /* Compact private reload syntax: /S=FFSS, where FF is the resident
+     * modifier byte (bit 7 denotes an E0/extended key) and SS is the scan
+     * code.  The complete command is <=13 characters, so it fits in the
+     * classic BIOS keyboard ring when queued after cooperative unloading. */
+    mov al,byte ptr [hot_mods]
+    cmp byte ptr [hot_extended],0
+    je build_reload_flags_ready
+    or al,0x80
+build_reload_flags_ready:
+    call build_reload_hex_byte
+    mov al,byte ptr [hot_scan]
+    call build_reload_hex_byte
+    xor al,al
+    stosb
+    pop es
+    pop di
+    pop si
+    pop dx
+    pop bx
+    pop ax
+    ret
+
+/* AL -> two uppercase hexadecimal digits at ES:DI. */
+build_reload_hex_byte:
+    push ax
+    mov ah,al
+    shr al,1
+    shr al,1
+    shr al,1
+    shr al,1
+    and al,0x0f
+    xor bx,bx
+    mov bl,al
+    mov al,byte ptr [hex_digits+bx]
+    stosb
+    mov al,ah
+    and al,0x0f
+    xor bx,bx
+    mov bl,al
+    mov al,byte ptr [hex_digits+bx]
+    stosb
+    pop ax
+    ret
+
+/* Copy ASCIIZ DS:SI to ES:DI without copying the terminator. */
+build_reload_copy_text:
+    lodsb
+    or al,al
+    jz build_reload_copy_done
+    stosb
+    jmp build_reload_copy_text
+build_reload_copy_done:
+    ret
+
+reload_state_prefix: .asciz " /S="
+reload_key_prefix:   .asciz " /KEY="
+reload_ctrl:       .asciz "CTRL+"
+reload_alt:        .asciz "ALT+"
+reload_shift:      .asciz "SHIFT+"
+reload_lwin:       .asciz "LWIN"
+reload_rwin:       .asciz "RWIN"
+reload_menu:       .asciz "MENU"
+
 /* AL=0 install, AL=1 help, AL=2 unload, CF=1 error. */
 parse_command:
     mov cl,byte ptr cs:[0x80]
@@ -1386,13 +1762,19 @@ parse_have_command:
     jne parse_bad
 8:  inc si
     dec cx
-    jcxz parse_bad
+    or cx,cx
+    jnz parse_command_nonempty
+    jmp parse_bad
+parse_command_nonempty:
     cmp byte ptr [si],'?'
     jne parse_key_option
     inc si
     dec cx
     call skip_spaces
-    jcxz parse_help
+    or cx,cx
+    jnz parse_help_trailing
+    jmp parse_help
+parse_help_trailing:
     jmp parse_bad
 
 parse_key_option:
@@ -1403,11 +1785,41 @@ parse_key_option:
     pop si
     pop cx
     jnc parse_unload
+    call match_state_prefix
+    jnc parse_state_option
     call match_key_prefix
     jc parse_bad
     mov byte ptr [hot_mods],0
     mov byte ptr [hot_scan],0
     mov byte ptr [hot_extended],0
+    jmp parse_token
+
+/* Private compact state form used only for cooperative !KEY/!FONT cycling:
+ * /S=FFSS.  It is deliberately omitted from /? documentation. */
+parse_state_option:
+    cmp cx,4
+    jb parse_bad
+    call parse_hex_byte
+    jc parse_bad
+    mov dl,al
+    call parse_hex_byte
+    jc parse_bad
+    mov byte ptr [hot_scan],al
+    mov al,dl
+    and al,0x07
+    mov byte ptr [hot_mods],al
+    mov byte ptr [hot_extended],0
+    test dl,0x80
+    jz parse_state_no_extended
+    mov byte ptr [hot_extended],1
+parse_state_no_extended:
+    call skip_spaces
+    or cx,cx
+    jnz parse_bad
+    cmp byte ptr [hot_scan],0
+    je parse_bad
+    jmp parse_default
+
 parse_token:
     call skip_spaces
     jcxz parse_finish
@@ -1469,6 +1881,69 @@ skip_spaces:
     dec cx
     jnz 11b
 12: ret
+
+/* Consume private case-insensitive "S=" from DS:SI/CX. */
+match_state_prefix:
+    cmp cx,2
+    jb match_state_bad
+    mov al,byte ptr [si]
+    and al,0xdf
+    cmp al,'S'
+    jne match_state_bad
+    cmp byte ptr [si+1],'='
+    jne match_state_bad
+    add si,2
+    sub cx,2
+    clc
+    ret
+match_state_bad:
+    stc
+    ret
+
+/* Read exactly two hexadecimal digits from DS:SI/CX into AL. */
+parse_hex_byte:
+    cmp cx,2
+    jb parse_hex_bad
+    mov al,byte ptr [si]
+    call parse_hex_nibble
+    jc parse_hex_bad
+    shl al,1
+    shl al,1
+    shl al,1
+    shl al,1
+    mov ah,al
+    mov al,byte ptr [si+1]
+    call parse_hex_nibble
+    jc parse_hex_bad
+    or al,ah
+    add si,2
+    sub cx,2
+    clc
+    ret
+parse_hex_bad:
+    stc
+    ret
+
+parse_hex_nibble:
+    cmp al,'0'
+    jb parse_nibble_bad
+    cmp al,'9'
+    jbe parse_nibble_digit
+    and al,0xdf
+    cmp al,'A'
+    jb parse_nibble_bad
+    cmp al,'F'
+    ja parse_nibble_bad
+    sub al,'A'-10
+    clc
+    ret
+parse_nibble_digit:
+    sub al,'0'
+    clc
+    ret
+parse_nibble_bad:
+    stc
+    ret
 
 /* Consume case-insensitive "KEY=" from DS:SI/CX. */
 match_key_prefix:
@@ -1788,6 +2263,12 @@ launch_short_name: .ascii "!86"
 launch_short_name: .ascii "!"
 .endif
 resident_seg:   .word 0
+top2f_off:     .word 0
+top2f_seg:     .word 0
+other_resident:.word 0
+other_prepare: .word 0,0
+reload_needed: .byte 0
+reload_command:.space 16,0
 
 character_table:
     .byte 'A',0x1e,'B',0x30,'C',0x2e,'D',0x20,'E',0x12,'F',0x21
@@ -1855,6 +2336,8 @@ msg_unload_unsafe:
     .ascii "!KEY cannot unload: another TSR is above it.\r\n"
 .endif
     .ascii "Unload that TSR first, or reboot.\r\n$"
+msg_reload_failed:
+    .ascii "!KEY unloaded, but the other Launch! TSR could not be reloaded automatically.\r\n$"
 msg_help:
 .ifdef DOSBOX_BUILD
     .ascii "!KEYDB 3.5 - DOSBox-X hotkey for Launch!\r\n\r\n"

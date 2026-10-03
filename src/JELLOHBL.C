@@ -170,7 +170,7 @@ static void jelly_level_path(char *out,int fi)
   size_t n;
   strcpy(out,acc_directory);n=strlen(out);
   if(n&&out[n-1]!='\\'&&out[n-1]!='/')strcat(out,"\\");
-  strcat(out,level_files[fi]);
+  strcat(out,"GAMERES\\");strcat(out,level_files[fi]);
 }
 
 static void strip_eol(char *s)
@@ -191,7 +191,7 @@ static int scan_levels(void)
   level_count=0;level_file_count=0;
   strcpy(mask,acc_directory);
   if(mask[0]&&mask[strlen(mask)-1]!='\\'&&mask[strlen(mask)-1]!='/')strcat(mask,"\\");
-  strcat(mask,"JELLY*.LVL");
+  strcat(mask,"GAMERES\\JELLY*.LVL");
   err=_dos_findfirst(mask,_A_NORMAL,&ff);
   while(!err&&level_file_count<MAX_LEVEL_FILES){
     strncpy(level_files[level_file_count],ff.name,12);

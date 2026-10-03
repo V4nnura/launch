@@ -9,13 +9,13 @@ Launch! for DOS ---------------------
 /*
  * MAINTAINER NOTES - Launch! 3.73
  * File: MDFONTS.C
- * Role: !MKDOWN graphical renderer font data/helpers
- * Build/ownership: Linked only with !MKDOWN.
+ * Role: !MD / !MDVIEW graphical renderer font data/helpers
+ * Build/ownership: Linked only with !MD / !MDVIEW.
  * Maintainer contract: Maps Markdown semantic styles to Launch! bitmap fonts used by graphical Show.
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Generated private !MKDOWN Show font resources. */
+/* Generated private !MD / !MDVIEW Show font resources. */
 #include "MDFONTS.H"
 
 const unsigned char far md_body_font[4096]={

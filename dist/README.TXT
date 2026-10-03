@@ -19,4 +19,4 @@ for you automatically.
 
 
 More information and latest release available online at
-https://github.com/therenegar/launch
+https://launchfordos.app

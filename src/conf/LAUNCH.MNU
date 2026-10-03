@@ -1,4 +1,4 @@
-; Launch! 3.5 menu definition
+; Launch! 3.76 default menu definition
 ; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)
 ; SEPARATOR= adds a movable horizontal separator
 
@@ -11,20 +11,23 @@ FOLDER=DOS Commands
 ITEM=Calculator|!CALC|1|0|0|0
 ITEM=Calendar|!CAL|1|0|0|0
 ITEM=Card Stack|!STACK|1|0|0|0
+ITEM=DOS Fetch|!DFETCH|1|0|0|0
 ITEM=Journal|!JOURNAL|1|0|0|0
+ITEM=Markdown|!MD|1|0|0|0
 ITEM=Note|!NOTE|1|0|0|0
 ITEM=Pixel Draw|!DRAW|1|0|0|0
-ITEM=DOS Fetch|!DFETCH|1|0|0|0
 ITEM=To-Dos|!TODOS|1|0|0|0
-ITEM=Typo|!TYPO|1|0|0|0
 
 [Launcher\Games]
 ITEM=Boxes|!BOXES|1|0|0|0
 ITEM=FreeCell|!FCELL|1|0|0|0
+ITEM=Jell-Oh|!JELLOH|1|0|0|0
+ITEM=Metro|!METRO|1|0|0|0
 ITEM=Plumb|!PLUMB|1|0|0|0
 ITEM=Pop|!POP|1|0|0|0
 ITEM=Snake|!SNAKE|1|0|0|0
 ITEM=Solitaire|!SOL|1|0|0|0
+ITEM=Typo|!TYPO|1|0|0|0
 ITEM=Wordz|!WORDZ|1|0|0|0
 
 [Launcher\DOS Commands]

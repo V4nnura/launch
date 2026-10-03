@@ -1,0 +1,168 @@
+#define WINVER 0x0300
+#include <windows.h>
+
+#define IDD_RUN             1000
+#define IDD_LAUNCHER        1001
+#define IDD_FOLDER          1002
+#define IDD_CONFIRM         1003
+#define IDD_EXITWIN         1004
+#define IDD_MESSAGE         1005
+#define IDD_MANAGER         1006
+#define IDI_LAUNCH16         900
+#define IDI_LAUNCHDOS        901
+#define IDI_SLEEP           1100
+#define IDI_CONFIRM         1101
+#define IDI_ERROR           1102
+#define IDI_SUCCESS         1103
+#define IDI_WINPROG         1104
+#define IDI_DOSPROG         1105
+#define IDB_MANAGER_LOGO    1200
+#define IDB_MENU_LOGO       1201
+#define IDB_MENU_TILE       1202
+#define IDB_MANAGER_TILE    1203
+
+#define RUN_EDIT              20
+#define RUN_BROWSE             23
+#define RUN_MIN                24
+
+#define ITEM_NAME              40
+#define ITEM_COMMAND           41
+#define ITEM_PARAMS            42
+#define ITEM_PROMPT            43
+#define ITEM_ENTER             44
+#define ITEM_CHDIR             45
+#define ITEM_ADDPATH           46
+#define ITEM_BROWSE            49
+#define ITEM_DOSICON           50
+#define ITEM_WINICON           51
+
+#define CONFIRM_TEXT           70
+#define CONFIRM_ICON           71
+#define MESSAGE_TEXT           72
+#define MESSAGE_ERROR_ICON     73
+#define MESSAGE_SUCCESS_ICON   74
+#define MESSAGE_CONFIRM_ICON   75
+#define MANAGER_PATH           80
+#define MANAGER_BROWSE         81
+#define MANAGER_TREE           82
+#define MANAGER_ADD            83
+#define MANAGER_EDIT           84
+#define MANAGER_REMOVE         85
+#define MANAGER_UP             86
+#define MANAGER_DOWN           87
+#define MANAGER_BANNER         88
+
+
+IDI_LAUNCH16     ICON   "LAUNCH16.ICO"
+IDI_LAUNCHDOS    ICON   "LAUNCH.ICO"
+IDI_SLEEP        ICON   "SLEEP.ICO"
+IDI_CONFIRM      ICON   "CONFIRM.ICO"
+IDI_ERROR        ICON   "ERROR.ICO"
+IDI_SUCCESS      ICON   "SUCCESS.ICO"
+IDI_WINPROG      ICON   "WINPROG.ICO"
+IDI_DOSPROG      ICON   "DOSPROG.ICO"
+IDB_MANAGER_LOGO BITMAP "MGRLOGO.BMP"
+IDB_MANAGER_TILE BITMAP "MGRTILE.BMP"
+IDB_MENU_LOGO BITMAP "MENULOGO.BMP"
+IDB_MENU_TILE BITMAP "MENUTILE.BMP"
+
+IDD_RUN DIALOG 0, 0, 250, 84
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Run"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Command Line:", -1,       7,  8,  80,  8
+    EDITTEXT        RUN_EDIT,                   7, 20, 176, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    CONTROL         "Run &Minimized", RUN_MIN, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 43, 92, 10
+    DEFPUSHBUTTON   "OK", IDOK,               190,  7,  52, 14
+    PUSHBUTTON      "Cancel", IDCANCEL,       190, 27,  52, 14
+    PUSHBUTTON      "&Browse...", RUN_BROWSE, 190, 47,  52, 14
+END
+
+IDD_LAUNCHER DIALOG 0, 0, 260, 142
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Launcher"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Name:", -1,                  7,  9,  52,  8
+    EDITTEXT        ITEM_NAME,                     66,  7, 184, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "&Command:", -1,               7, 30,  52,  8
+    EDITTEXT        ITEM_COMMAND,                  66, 28, 126, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Browse...", ITEM_BROWSE,    198, 27,  52, 14
+    LTEXT           "&Parameters:", -1,            7, 51,  52,  8
+    EDITTEXT        ITEM_PARAMS,                   66, 49, 116, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    CONTROL         "&Prompt?", ITEM_PROMPT, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 188, 50, 62, 10
+    ICON            IDI_DOSPROG, ITEM_DOSICON,       18, 70, 32, 32
+    ICON            IDI_WINPROG, ITEM_WINICON,       18, 70, 32, 32
+    CONTROL         "Provide &Enter after launcher command", ITEM_ENTER, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 66, 70, 177, 10
+    CONTROL         "&Change directory first", ITEM_CHDIR, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 66, 86, 134, 10
+    CONTROL         "&Add to PATH for execution", ITEM_ADDPATH, "BUTTON", BS_AUTOCHECKBOX | WS_TABSTOP, 66, 102, 150, 10
+    DEFPUSHBUTTON   "OK", IDOK,                  145, 120,  50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL,          200, 120,  50, 14
+END
+
+IDD_FOLDER DIALOG 0, 0, 214, 60
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Folder"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Name:", -1,                  7, 11,  52,  8
+    EDITTEXT        ITEM_NAME,                     66,  9, 138, 13, ES_AUTOHSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "OK", IDOK,                   99, 38,  50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL,          154, 38,  50, 14
+END
+
+IDD_CONFIRM DIALOG 0, 0, 238, 68
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Launch!"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_CONFIRM, CONFIRM_ICON,       8,  9, 32, 32
+    LTEXT           "", CONFIRM_TEXT,             48, 12, 180, 24
+    PUSHBUTTON      "Yes", IDYES,                127, 46,  48, 14
+    DEFPUSHBUTTON   "No", IDNO,                  181, 46,  48, 14
+END
+
+IDD_EXITWIN DIALOG 0, 0, 203, 68
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Exit Windows"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_SLEEP, CONFIRM_ICON,       8,  9, 32, 32
+    LTEXT           "", CONFIRM_TEXT,             48, 10, 138, 28
+    PUSHBUTTON      "Yes", IDYES,                 91, 46,  48, 14
+    DEFPUSHBUTTON   "No", IDNO,                  145, 46,  48, 14
+END
+
+
+IDD_MESSAGE DIALOG 0, 0, 238, 68
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Launch!"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_ERROR, MESSAGE_ERROR_ICON,      8,  9, 32, 32
+    ICON            IDI_SUCCESS, MESSAGE_SUCCESS_ICON,  8,  9, 32, 32
+    ICON            IDI_CONFIRM, MESSAGE_CONFIRM_ICON,  8,  9, 32, 32
+    LTEXT           "", MESSAGE_TEXT,             48, 12, 180, 24
+    DEFPUSHBUTTON   "OK", IDOK,                  181, 46,  48, 14
+END
+
+
+IDD_MANAGER DIALOG 0, 0, 360, 262
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Menu Manager"
+FONT 8, "MS Sans Serif"
+BEGIN
+    CONTROL         "", MANAGER_BANNER, "STATIC", SS_LEFT | WS_CHILD | WS_VISIBLE, 0, 0, 360, 38
+    LTEXT           "Menu &file:", -1,             7,  50,  40,   8
+    EDITTEXT        MANAGER_PATH,                  49,  48, 241,  13, ES_AUTOHSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Browse...", MANAGER_BROWSE, 296,  47,  56,  14
+    CONTROL         "", -1, "STATIC", SS_BLACKRECT | WS_CHILD | WS_VISIBLE, 7, 65, 345, 1
+    LISTBOX         MANAGER_TREE,                   7,  69, 282, 184, LBS_OWNERDRAWFIXED | LBS_HASSTRINGS | LBS_NOTIFY | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Add...", MANAGER_ADD,       297,  70,  55,  14
+    PUSHBUTTON      "&Edit", MANAGER_EDIT,        297,  91,  55,  14
+    PUSHBUTTON      "&Remove", MANAGER_REMOVE,    297, 112,  55,  14
+    PUSHBUTTON      "Move &Up", MANAGER_UP,       297, 147,  55,  14
+    PUSHBUTTON      "Move &Down", MANAGER_DOWN,   297, 168,  55,  14
+    DEFPUSHBUTTON   "Close", IDCANCEL,            297, 239,  55,  14
+END

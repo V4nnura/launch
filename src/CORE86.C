@@ -1,4 +1,4 @@
-/* Launch! 3.76 !86 light front-end.
+/* Launch! 3.77 !86 light front-end.
  * Compile-time LIGHT86 removes the standard front-end presentation/features
  * from the active code path while preserving the shared LAUNCH.MNU editor.
  */

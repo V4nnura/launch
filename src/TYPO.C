@@ -58,7 +58,7 @@ static int level_len=0;
 
 static void level_file_path(char *p,int fi)
 {
-  size_t n;strcpy(p,acc_directory);n=strlen(p);if(n&&p[n-1]!='\\'&&p[n-1]!='/')strcat(p,"\\");strcat(p,level_files[fi]);
+  size_t n;strcpy(p,acc_directory);n=strlen(p);if(n&&p[n-1]!='\\'&&p[n-1]!='/')strcat(p,"\\");strcat(p,"GAMERES\\");strcat(p,level_files[fi]);
 }
 
 static void strip_eol(char *s)
@@ -67,7 +67,7 @@ static void strip_eol(char *s)
 static int scan_levels(void)
 {
   struct find_t ff;char mask[ACC_PATH],p[ACC_PATH],line[128],tmp[13];FILE *f;long pos;unsigned e;int i,j,fi;
-  level_count=0;level_file_count=0;strcpy(mask,acc_directory);if(mask[0]&&mask[strlen(mask)-1]!='\\'&&mask[strlen(mask)-1]!='/')strcat(mask,"\\");strcat(mask,"TYPO*.LVL");
+  level_count=0;level_file_count=0;strcpy(mask,acc_directory);if(mask[0]&&mask[strlen(mask)-1]!='\\'&&mask[strlen(mask)-1]!='/')strcat(mask,"\\");strcat(mask,"GAMERES\\TYPO*.LVL");
   e=_dos_findfirst(mask,_A_NORMAL,&ff);while(!e&&level_file_count<MAX_LEVEL_FILES){strncpy(level_files[level_file_count],ff.name,12);level_files[level_file_count][12]=0;level_file_count++;e=_dos_findnext(&ff);}
   for(i=0;i<level_file_count-1;i++)for(j=i+1;j<level_file_count;j++)if(stricmp(level_files[i],level_files[j])>0){strcpy(tmp,level_files[i]);strcpy(level_files[i],level_files[j]);strcpy(level_files[j],tmp);}
   for(fi=0;fi<level_file_count&&level_count<MAX_LEVELS;fi++){level_file_path(p,fi);f=fopen(p,"rt");if(!f)continue;for(;;){pos=ftell(f);if(!fgets(line,sizeof(line),f))break;if(line[0]=='@'&&level_count<MAX_LEVELS){level_offset[level_count]=pos;level_file_index[level_count]=(unsigned char)fi;level_count++;}}fclose(f);}

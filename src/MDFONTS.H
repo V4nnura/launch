@@ -9,7 +9,7 @@ Launch! for DOS ---------------------
 /*
  * MAINTAINER NOTES - Launch! 3.73
  * File: MDFONTS.H
- * Role: !MKDOWN graphical font interface
+ * Role: !MD / !MDVIEW graphical font interface
  * Build/ownership: Consumed by MKDOWN.C.
  * Maintainer contract: Keep font IDs/mappings synchronized with MDFONTS.C and packaged resources.
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
@@ -18,7 +18,7 @@ Launch! for DOS ---------------------
 #ifndef MDFONTS_H
 #define MDFONTS_H
 
-/* Private !MKDOWN Show fonts. These are embedded into !MKDOWN.EXE and are
+/* Private !MD / !MDVIEW Show fonts. These are embedded into !MD / !MDVIEW.EXE and are
    deliberately not added to FONT.DAT or the Launch! font selector. */
 extern const unsigned char far md_body_font[4096];
 extern const unsigned char far md_h1_font[6144];

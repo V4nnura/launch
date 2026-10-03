@@ -9,14 +9,16 @@ Launch! for DOS ---------------------
 /*
  * MAINTAINER NOTES - Launch! 3.73
  * File: MKDOWN.C
- * Role: !MKDOWN Markdown editor
+ * Role: !MD Markdown editor and shared !MDVIEW renderer
  * Build/ownership: Standalone accessory using ACCLIB and MDFONTS.
  * Maintainer contract: Handles editor, preview, graphical Show, Document Map, import normalization, printing and file lifecycle. Large buffers must avoid overflowing 16-bit DGROUP/stack.
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
 /* Launch! Markdown - persistent Markdown editor, live text preview, VGA page
-   renderer and formatted Epson-compatible printing.  Microsoft C/C++ 7.0. */
+   renderer and formatted Epson-compatible printing.  The same source is built
+   with MDVIEW_BUILD for the standalone read-only !MDVIEW renderer.
+   Microsoft C/C++ 7.0. */
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -66,7 +68,7 @@ Launch! for DOS ---------------------
 #define MD_QUOTE ACC_ATTR(7,6)
 #define MD_LINK ACC_ATTR(7,9)
 #define MD_CODE ACC_ATTR(0,15)
-#define MD_MEDIA ACC_ATTR(7,12)
+#define MD_MEDIA ACC_ATTR(7,4)
 
 typedef char MDLINE[DOC_COLS];
 static MDLINE far *page[PAGES];
@@ -471,15 +473,52 @@ static int save_all_dirty(int persistent_mode)
 #define GF_COUNT 12
 static unsigned char far *graph_fonts[GF_COUNT];static unsigned char graph_font_owned[GF_COUNT];static unsigned char graph_font_height[GF_COUNT]={16,16,16,16,16,24,19,16,16,16,16,16};static int graph_role=GF_BODY;
 #define GLINK_MAX 48
-typedef struct {int x0,y0,x1,y1;char target[48];} GLINK;
+typedef struct {int x0,y0,x1,y1;char target[ACC_PATH];} GLINK;
 static GLINK far *graph_links=0;static int graph_link_count=0;
-static void graph_link_add(int x0,int y0,int x1,int y1,const char*t){int n;if(!graph_links||graph_link_count>=GLINK_MAX||!t||*t!='#')return;n=(int)strlen(t);if(n>47)n=47;graph_links[graph_link_count].x0=x0;graph_links[graph_link_count].y0=y0;graph_links[graph_link_count].x1=x1;graph_links[graph_link_count].y1=y1;_fmemcpy(graph_links[graph_link_count].target,t,n);graph_links[graph_link_count].target[n]=0;graph_link_count++;}
+/* F2 appearance cycles shared by graphical Show and !MDVIEW.  VGA colour
+   numbers are deliberate: only explicitly Bright colours use the intensity
+   bit.  Scheme 6 is the private !MDVIEW /HELP appearance and is not part of
+   the normal F2 cycle. */
+typedef struct {unsigned char fg,bg,link;} MDCOLOR;
+static const MDCOLOR md_colours[7]={
+ {0,7,1},    /* Black on White; Blue links */
+ {10,0,10},  /* Bright Green on Black; Bright Green links */
+ {15,0,9},   /* Bright White on Black; Bright Blue links */
+ {7,1,11},   /* White on Blue; Bright Cyan links */
+ {1,7,9},    /* Blue on White; Bright Blue links */
+ {0,15,1},   /* Black on Bright White; Blue links */
+ {15,3,1}    /* /HELP: Bright White on Cyan; Blue links */
+};
+static int graph_colour_scheme=0,graph_colour_locked=0;
+static int focus_colour_scheme=3;
+static int graph_fg(void){return md_colours[graph_colour_scheme].fg;}
+static int graph_bg(void){return md_colours[graph_colour_scheme].bg;}
+static int graph_link_colour(void){return md_colours[graph_colour_scheme].link;}
+static int focus_attr(void){return ACC_ATTR(md_colours[focus_colour_scheme].bg,md_colours[focus_colour_scheme].fg);}
+/* Focus is text mode, so disable VGA blink while it is active.  This makes
+   attribute bit 7 the background-intensity bit and allows the requested
+   Black on Bright White appearance.  Restore ordinary blink semantics on
+   return to the Launch! UI. */
+static void focus_bright_backgrounds(int enable){union REGS r;memset(&r,0,sizeof(r));r.x.ax=0x1003;r.h.bl=(unsigned char)(enable?0:1);r.h.bh=0;int86(0x10,&r,&r);}
+static int md_link_is_web(const char *t)
+{if(!t)return 0;return !strnicmp(t,"http:",5)||!strnicmp(t,"https:",6)||!strnicmp(t,"ftp:",4)||!strnicmp(t,"mailto:",7)||strstr(t,"://")!=0;}
+static int md_link_is_markdown(const char *t)
+{char b[ACC_PATH],*hash,*dot,*slash,*other;int n;if(!t||!*t||md_link_is_web(t))return 0;strncpy(b,t,ACC_PATH-1);b[ACC_PATH-1]=0;hash=strchr(b,'#');if(hash)*hash=0;n=(int)strlen(b);while(n&&isspace((unsigned char)b[n-1]))b[--n]=0;if(!n)return 0;slash=strrchr(b,'\\');other=strrchr(b,'/');if(other&&(!slash||other>slash))slash=other;dot=strrchr(b,'.');return dot&&(!slash||dot>slash)&&!stricmp(dot,".MD");}
+static int graph_link_supported(const char *t)
+{if(!t||!*t)return 0;if(*t=='#')return 1;
+#ifdef MDVIEW_BUILD
+ return md_link_is_markdown(t);
+#else
+ return 0;
+#endif
+}
+static void graph_link_add(int x0,int y0,int x1,int y1,const char*t){int n;if(!graph_links||graph_link_count>=GLINK_MAX||!graph_link_supported(t))return;n=(int)strlen(t);if(n>=ACC_PATH)n=ACC_PATH-1;graph_links[graph_link_count].x0=x0;graph_links[graph_link_count].y0=y0;graph_links[graph_link_count].x1=x1;graph_links[graph_link_count].y1=y1;_fmemcpy(graph_links[graph_link_count].target,t,n);graph_links[graph_link_count].target[n]=0;graph_link_count++;}
 static void md_slug(const char*s,char*out,int max){int i=0,o=0,dash=0;while(s[i]&&o<max-1){unsigned char c=(unsigned char)s[i++];if(isalnum(c)){out[o++]=(char)tolower(c);dash=0;}else if((c==' '||c=='-'||c=='_')&&o&&!dash){out[o++]='-';dash=1;}}while(o&&out[o-1]=='-')o--;out[o]=0;}
 static int graph_find_anchor(int p,const char*target){int r,n,i,h;char b[DOC_COLS+1],slug[64];const char*t=target&&*target=='#'?target+1:target;if(!t||!*t)return -1;for(r=0;r<LINES;r++){md_line(p,r,b,&n);i=md_lead(b,n);h=0;if(i<n&&b[i]=='#'){while(i<n&&b[i]=='#'&&h<6){h++;i++;}while(i<n&&b[i]==' ')i++;md_slug(b+i,slug,sizeof(slug));if(!stricmp(slug,t))return r;}}return -1;}
 static unsigned char far *helvfont[4];static unsigned char helvh[4],helvfirst[4],helvlast[4];static int helv_loaded=0;
 static void graph_fonts_free(void){int i;for(i=0;i<GF_COUNT;i++){if(graph_fonts[i]&&graph_font_owned[i])_ffree(graph_fonts[i]);graph_fonts[i]=0;graph_font_owned[i]=0;}}
 static int graph_fonts_load(void)
-{/* H1/H2 remain private embedded !MKDOWN resources.  Other Show roles use
+{/* H1/H2 remain private embedded !MD resources.  Other Show roles use
     the Launch! FONT.DAT collection: body Serif, code Clean, H3 Extra,
     H4 News, H5 Max Elite, blockquotes Big. */
  static const signed char slot[GF_COUNT]={32,26,5,23,2,-1,-1,34,7,13,3,31};
@@ -519,10 +558,13 @@ static void graph_dither(int x0,int y0,int x1,int y1)
  graph_box(x0,y0,x1,y1,1);
 }
 static void graph_page(void)
-{/* Neutral document view: dark-grey surround, VGA-white paper, black 1px edge. */
+{/* Keep the neutral grey surround.  The paper has no outline; its only edge
+    treatment is an 8-pixel, byte-aligned solid black shadow on the right.
+    The aligned planar fill is intentionally used so the shadow costs only a
+    few memory fills rather than thousands of BIOS pixel calls. */
  graph_clear(8);
- graph_box(GP_L,GP_T,GP_R,GP_B,7);
- graph_frame(GP_L-1,GP_T-1,GP_R+1,GP_B+1,0);
+ graph_box(GP_L,GP_T,GP_R,GP_B,graph_bg());
+ graph_box(GP_R+1,GP_T+8,GP_R+8,GP_B,0);
 }
 /* BIOS pixel plotting is deliberately used here.  The MediaGX VGA-compatible
    hardware does not preserve the planar latches expected by the former direct
@@ -542,11 +584,11 @@ static int doc_width(unsigned char ch,int strike,int scale){(void)ch;(void)strik
 static void doc_char(int x,int y,unsigned char ch,int strike,int scale,int colour,int style){(void)strike;gchar(x,y,ch,scale,colour,style);}
 static int graph_word_width(const char*s,int i,int n,int strike,int scale){int w=0;while(i<n&&s[i]!=' '){w+=doc_width((unsigned char)s[i],strike,scale);i++;}return w;}
 static int video_is_vga(void){union REGS r;memset(&r,0,sizeof(r));r.x.ax=0x1A00;int86(0x10,&r,&r);return r.h.al==0x1A;}
-static void graph_rule(int y,int kind){int x;if(kind==3){for(x=GP_TEXT_L;x<GP_TEXT_R;x+=12){int e=x+6,i;if(e>GP_TEXT_R)e=GP_TEXT_R;for(i=x;i<e;i++)gpixel(i,y,0);}}else{for(x=GP_TEXT_L;x<GP_TEXT_R;x++)gpixel(x,y,0);if(kind==2)for(x=GP_TEXT_L;x<GP_TEXT_R;x++)gpixel(x,y+2,0);}}
+static void graph_rule(int y,int kind){int x,c=graph_fg();if(kind==3){for(x=GP_TEXT_L;x<GP_TEXT_R;x+=12){int e=x+6,i;if(e>GP_TEXT_R)e=GP_TEXT_R;for(i=x;i<e;i++)gpixel(i,y,c);}}else{for(x=GP_TEXT_L;x<GP_TEXT_R;x++)gpixel(x,y,c);if(kind==2)for(x=GP_TEXT_L;x<GP_TEXT_R;x++)gpixel(x,y+2,c);}}
 static void graph_frame(int x0,int y0,int x1,int y1,int colour)
 {int x,y;for(x=x0;x<=x1;x++){gpixel(x,y0,colour);gpixel(x,y1,colour);}for(y=y0;y<=y1;y++){gpixel(x0,y,colour);gpixel(x1,y,colour);}}
 static int graph_media_placeholder(const MDMEDIA*m,int ypos)
-{char d[64];int i,x=GP_TEXT_L+8;md_media_desc(m,d,sizeof(d));graph_frame(GP_TEXT_L,ypos-3,GP_TEXT_R,ypos+20,12);graph_role=GF_BODY;for(i=0;d[i]&&x+8<GP_TEXT_R-8;i++){gchar(x,ypos,(unsigned char)d[i],1,12,0);x+=8;}return 28;}
+{char d[64];int i,x=GP_TEXT_L+8;md_media_desc(m,d,sizeof(d));graph_frame(GP_TEXT_L,ypos-3,GP_TEXT_R,ypos+20,4);graph_role=GF_BODY;for(i=0;d[i]&&x+8<GP_TEXT_R-8;i++){gchar(x,ypos,(unsigned char)d[i],1,4,0);x+=8;}return 28;}
 static int graph_quote_line(int p,int row,int *skipmark)
 {char b[DOC_COLS+1];int n,i,r;if(skipmark)*skipmark=0;md_line(p,row,b,&n);i=md_lead(b,n);if(i<n&&b[i]=='>'){if(skipmark)*skipmark=1;return 1;}if(n<=i||row<=0)return 0;/* Markdown permits lazy continuation lines inside a blockquote paragraph.  Walk back to the nearest blank or explicit quote marker. */for(r=row-1;r>=0;r--){md_line(p,r,b,&n);i=md_lead(b,n);if(n<=i)return 0;if(i<n&&b[i]=='>')return 1;if(i<n&&(b[i]=='#'||(b[i]=='`'&&i+2<n&&b[i+1]=='`'&&b[i+2]=='`')))return 0;}return 0;}
 static int graph_rows_consumed=1;
@@ -576,10 +618,10 @@ static int graph_line(int p,int row,int ypos,int in_fence)
    s[sl]=0;n=sl;graph_rows_consumed++;rr++;
   }
  }
- lead=md_lead(s,n);if(in_fence){i=0;graph_role=GF_CODE;graph_box(GP_TEXT_L-8,ypos-2,GP_TEXT_R+7,ypos+height+2,0);while(i<n&&x+gchar_width(scale)<GP_TEXT_R){gchar(x,ypos,(unsigned char)s[i++],scale,7,0);x+=gchar_width(scale);}return height+5;}if(md_media_parse(s,n,&media))return graph_media_placeholder(&media,ypos);tctx=md_table_context(p,row,&tt,&tborder);if(tctx){n=md_table_make_row(p,row,&tt,tctx==2?tborder:0,tb);graph_role=GF_CODE;x=GP_TEXT_L;for(i=0;i<n&&x+8<GP_TEXT_R;i++){gchar(x,ypos,(unsigned char)tb[i],1,0,0);x+=8;}return height;}indent_code=md_indented_code(p,row);block_code=indent_code;
+ lead=md_lead(s,n);if(in_fence){i=0;graph_role=GF_CODE;graph_box(GP_TEXT_L-8,ypos-2,GP_TEXT_R+7,ypos+height+2,graph_fg());while(i<n&&x+gchar_width(scale)<GP_TEXT_R){gchar(x,ypos,(unsigned char)s[i++],scale,graph_bg(),0);x+=gchar_width(scale);}return height+5;}if(md_media_parse(s,n,&media))return graph_media_placeholder(&media,ypos);tctx=md_table_context(p,row,&tt,&tborder);if(tctx){n=md_table_make_row(p,row,&tt,tctx==2?tborder:0,tb);graph_role=GF_CODE;x=GP_TEXT_L;for(i=0;i<n&&x+8<GP_TEXT_R;i++){gchar(x,ypos,(unsigned char)tb[i],1,graph_fg(),0);x+=8;}return height;}indent_code=md_indented_code(p,row);block_code=indent_code;
  if(block_code){
-  i=4;graph_role=GF_CODE;graph_box(GP_TEXT_L-8,ypos-2,GP_TEXT_R+7,ypos+height+2,0);
-  while(i<n&&x+gchar_width(scale)<GP_TEXT_R){gchar(x,ypos,(unsigned char)s[i++],scale,7,0);x+=gchar_width(scale);}return height+5;
+  i=4;graph_role=GF_CODE;graph_box(GP_TEXT_L-8,ypos-2,GP_TEXT_R+7,ypos+height+2,graph_fg());
+  while(i<n&&x+gchar_width(scale)<GP_TEXT_R){gchar(x,ypos,(unsigned char)s[i++],scale,graph_bg(),0);x+=gchar_width(scale);}return height+5;
  }
  if(i+2<n&&s[i]=='['&&s[i+1]=='^'){base_role=GF_TINY;x=GP_TEXT_L;}
  if(md_definition_term(p,row)){base_role=GF_BOLD;i=lead;x=GP_TEXT_L+lead*8;}
@@ -588,24 +630,24 @@ static int graph_line(int p,int row,int ypos,int in_fence)
   i=lead;x=GP_TEXT_L+lead*8;
   if(lead<=3&&i<n&&s[i]=='#'){while(i<n&&s[i]=='#'&&h<6){h++;i++;}while(i<n&&s[i]==' ')i++;base_role=h==1?GF_H1:(h==2?GF_H2:(h==3?GF_H3:(h==4?GF_H4:(h==5?GF_H5:GF_BOLD))));height=graph_font_height[base_role];x=GP_TEXT_L;}
   else if(md_list_marker(s,n,i,&after,&ordered)){
-   if(!ordered){graph_role=GF_BODY;gchar(x,ypos,7,1,0,0);x+=16;i=after;}
-   else {graph_role=GF_BODY;while(i<after-1&&x+8<GP_TEXT_R){gchar(x,ypos,(unsigned char)s[i++],1,0,0);x+=8;}x+=8;i=after;}
+   if(!ordered){graph_role=GF_BODY;gchar(x,ypos,7,1,graph_fg(),0);x+=16;i=after;}
+   else {graph_role=GF_BODY;while(i<after-1&&x+8<GP_TEXT_R){gchar(x,ypos,(unsigned char)s[i++],1,graph_fg(),0);x+=8;}x+=8;i=after;}
   }
-  else if(graph_quote_line(p,row,&qskip)){quote=1;base_role=GF_QUOTE;for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,0);x=GP_TEXT_L+12;if(qskip){i++;while(i<n&&s[i]==' ')i++;}}
+  else if(graph_quote_line(p,row,&qskip)){quote=1;base_role=GF_QUOTE;for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,graph_fg());x=GP_TEXT_L+12;if(qskip){i++;while(i<n&&s[i]==' ')i++;}}
  }
  base_x=x;
  if(!h&&lead<=3&&i+3<=n&&((s[i]=='-'&&s[i+1]=='-'&&s[i+2]=='-')||(s[i]=='*'&&s[i+1]=='*'&&s[i+2]=='*'))){graph_rule(ypos+height/2,3);return height+4;}
  while(i<n){
   if(inline_code){
-   if(s[i]=='`'){inline_code=0;i++;continue;}w=8;if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,0);}graph_box(x,ypos-1,x+7,ypos+height,0);graph_role=GF_CODE;gchar(x,ypos,(unsigned char)s[i++],1,7,0);x+=8;continue;
+   if(s[i]=='`'){inline_code=0;i++;continue;}w=8;if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,graph_fg());}graph_box(x,ypos-1,x+7,ypos+height,graph_fg());graph_role=GF_CODE;gchar(x,ypos,(unsigned char)s[i++],1,graph_bg(),0);x+=8;continue;
   }
   if(s[i]=='`'){
    int e=i+1,j,chunk,fit;while(e<n&&s[e]!='`')e++;
-   if(e<n){i++;while(i<e){fit=(GP_TEXT_R-x)/8;if(fit<=0){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,0);fit=(GP_TEXT_R-x)/8;}chunk=e-i;if(chunk>fit)chunk=fit;if(chunk<=0)break;/* Paint the complete inverse span first, then draw all glyphs.  Per-character background fills could erase neighbouring ProFont pixels on real VGA adapters. */graph_box(x,ypos-1,x+chunk*8-1,ypos+height,0);graph_role=GF_CODE;for(j=0;j<chunk;j++)gchar(x+j*8,ypos,(unsigned char)s[i+j],1,7,0);x+=chunk*8;i+=chunk;if(i<e){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,0);}}i=e+1;continue;}inline_code=1;i++;continue;
+   if(e<n){i++;while(i<e){fit=(GP_TEXT_R-x)/8;if(fit<=0){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,graph_fg());fit=(GP_TEXT_R-x)/8;}chunk=e-i;if(chunk>fit)chunk=fit;if(chunk<=0)break;/* Paint the complete inverse span first, then draw all glyphs.  Per-character background fills could erase neighbouring ProFont pixels on real VGA adapters. */graph_box(x,ypos-1,x+chunk*8-1,ypos+height,graph_fg());graph_role=GF_CODE;for(j=0;j<chunk;j++)gchar(x+j*8,ypos,(unsigned char)s[i+j],1,graph_bg(),0);x+=chunk*8;i+=chunk;if(i<e){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,graph_fg());}}i=e+1;continue;}inline_code=1;i++;continue;
   }
-  if(s[i]=='\\'&&i+1<n){i++;w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;}graph_role=base_role;doc_char(x,ypos,(unsigned char)s[i++],hstrike,scale,0,0);x+=w;continue;}
-  if(s[i]!=' '&&(i==0||s[i-1]==' ')){wordw=graph_word_width(s,i,n,hstrike,scale);if(x>base_x&&x+wordw>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,0);}}
-  w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,0);}
+  if(s[i]=='\\'&&i+1<n){i++;w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;}graph_role=base_role;doc_char(x,ypos,(unsigned char)s[i++],hstrike,scale,graph_fg(),0);x+=w;continue;}
+  if(s[i]!=' '&&(i==0||s[i-1]==' ')){wordw=graph_word_width(s,i,n,hstrike,scale);if(x>base_x&&x+wordw>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,graph_fg());}}
+  w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;if(quote)for(k=0;k<height;k++)gpixel(GP_TEXT_L,ypos+k,graph_fg());}
   if(i+3<=n&&!strnicmp(s+i,"<u>",3)){underline=1;i+=3;continue;}if(i+4<=n&&!strnicmp(s+i,"</u>",4)){underline=0;i+=4;continue;}
   if(i+5<=n&&!strnicmp(s+i,"<del>",5)){strike=1;i+=5;continue;}if(i+6<=n&&!strnicmp(s+i,"</del>",6)){strike=0;i+=6;continue;}
   if(i+2<=n&&s[i]=='~'&&s[i+1]=='~'){strike=!strike;i+=2;continue;}
@@ -613,26 +655,79 @@ static int graph_line(int p,int row,int ypos,int in_fence)
   if(i+2<=n&&s[i]=='*'&&s[i+1]=='*'){bold=!bold;i+=2;continue;}
   if(i+2<=n&&s[i]=='_'&&s[i+1]=='_'){italic=!italic;i+=2;continue;}
   if(s[i]=='*'||s[i]=='_'){italic=!italic;i++;continue;}
-  if(i+2<=n&&s[i]=='{'&&s[i+1]=='{'){int e=i+2,ub=bold,ui=italic;while(e+1<n&&!(s[e]=='}'&&s[e+1]=='}'))e++;if(e+1<n){i+=2;while(i<e){if(i+3<=e&&((s[i]=='*'&&s[i+1]=='*'&&s[i+2]=='*')||(s[i]=='_'&&s[i+1]=='_'&&s[i+2]=='_'))){ub=!ub;ui=!ui;i+=3;continue;}if(i+2<=e&&s[i]=='*'&&s[i+1]=='*'){ub=!ub;i+=2;continue;}if(i+2<=e&&s[i]=='_'&&s[i+1]=='_'){ub=!ub;i+=2;continue;}if(s[i]=='*'||s[i]=='_'){ui=!ui;i++;continue;}w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;}style=(ub?1:0)|(ui?2:0)|4|(strike?8:0);graph_role=base_role;doc_char(x,ypos,(unsigned char)s[i++],hstrike,scale,0,style);x+=w;}i=e+2;continue;}underline=1;i+=2;continue;}if(i+2<=n&&s[i]=='}'&&s[i+1]=='}'){underline=0;i+=2;continue;}
+  if(i+2<=n&&s[i]=='{'&&s[i+1]=='{'){int e=i+2,ub=bold,ui=italic;while(e+1<n&&!(s[e]=='}'&&s[e+1]=='}'))e++;if(e+1<n){i+=2;while(i<e){if(i+3<=e&&((s[i]=='*'&&s[i+1]=='*'&&s[i+2]=='*')||(s[i]=='_'&&s[i+1]=='_'&&s[i+2]=='_'))){ub=!ub;ui=!ui;i+=3;continue;}if(i+2<=e&&s[i]=='*'&&s[i+1]=='*'){ub=!ub;i+=2;continue;}if(i+2<=e&&s[i]=='_'&&s[i+1]=='_'){ub=!ub;i+=2;continue;}if(s[i]=='*'||s[i]=='_'){ui=!ui;i++;continue;}w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;}style=(ub?1:0)|(ui?2:0)|4|(strike?8:0);graph_role=base_role;doc_char(x,ypos,(unsigned char)s[i++],hstrike,scale,graph_fg(),style);x+=w;}i=e+2;continue;}underline=1;i+=2;continue;}if(i+2<=n&&s[i]=='}'&&s[i+1]=='}'){underline=0;i+=2;continue;}
   if(i+5<=n&&!strnicmp(s+i,"<sup>",5)){super=1;i+=5;continue;}if(i+6<=n&&!strnicmp(s+i,"</sup>",6)){super=0;i+=6;continue;}
   if(i+5<=n&&!strnicmp(s+i,"<sub>",5)){sub=1;i+=5;continue;}if(i+6<=n&&!strnicmp(s+i,"</sub>",6)){sub=0;i+=6;continue;}
-  if(i+3<n&&s[i]=='['&&s[i+1]=='^'){k=i+2;while(k<n&&s[k]!=']')k++;if(k<n){graph_role=GF_TINY;while(i<=k){gchar(x,ypos-3,(unsigned char)s[i++],1,0,0);x+=8;}continue;}}
-  if(s[i]=='['){k=i+1;while(k<n&&s[k]!=']')k++;if(k<n&&k+1<n&&s[k+1]=='('){int lx=x,ts=k+2,te=ts;char targ[48];while(te<n&&s[te]!=')'&&!isspace((unsigned char)s[te]))te++;i++;while(i<k){w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R)break;style=(bold?1:0)|(italic?2:0)|4|(strike?8:0);graph_role=base_role;doc_char(x,ypos,(unsigned char)s[i++],hstrike,scale,9,style);x+=w;}if(te-ts>0){int tl=te-ts;if(tl>47)tl=47;memcpy(targ,s+ts,tl);targ[tl]=0;if(targ[0]=='#')graph_link_add(lx,ypos,x-1,ypos+height,targ);}i=k+2;while(i<n&&s[i]!=')')i++;if(i<n)i++;continue;}}
-  if(s[i]=='<'&&i+7<n&&!strnicmp(s+i+1,"http",4)){k=i+1;while(k<n&&s[k]!='>')k++;if(k<n){i++;while(i<k){w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;}style=(bold?1:0)|(italic?2:0)|4|(strike?8:0);graph_role=base_role;doc_char(x,ypos,(unsigned char)s[i++],hstrike,scale,9,style);x+=w;}i++;continue;}}
-  style=(bold?1:0)|(italic?2:0)|(underline?4:0)|(strike?8:0);graph_role=(super||sub)?GF_TINY:base_role;doc_char(x,ypos+(super?-4:(sub?4:0)),(unsigned char)s[i++],hstrike,scale,0,style);x+=w;
+  if(i+3<n&&s[i]=='['&&s[i+1]=='^'){k=i+2;while(k<n&&s[k]!=']')k++;if(k<n){graph_role=GF_TINY;while(i<=k){gchar(x,ypos-3,(unsigned char)s[i++],1,graph_fg(),0);x+=8;}continue;}}
+  if(s[i]=='['){k=i+1;while(k<n&&s[k]!=']')k++;if(k<n&&k+1<n&&s[k+1]=='('){int lx=x,ts=k+2,te=ts;char targ[ACC_PATH];while(te<n&&s[te]!=')'&&!isspace((unsigned char)s[te]))te++;i++;while(i<k){w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R)break;style=(bold?1:0)|(italic?2:0)|4|(strike?8:0);graph_role=base_role;doc_char(x,ypos,(unsigned char)s[i++],hstrike,scale,graph_link_colour(),style);x+=w;}if(te-ts>0){int tl=te-ts;if(tl>=ACC_PATH)tl=ACC_PATH-1;memcpy(targ,s+ts,tl);targ[tl]=0;graph_link_add(lx,ypos,x-1,ypos+height,targ);}i=k+2;while(i<n&&s[i]!=')')i++;if(i<n)i++;continue;}}
+  if(s[i]=='<'&&i+7<n&&!strnicmp(s+i+1,"http",4)){k=i+1;while(k<n&&s[k]!='>')k++;if(k<n){i++;while(i<k){w=doc_width((unsigned char)s[i],hstrike,scale);if(x+w>=GP_TEXT_R){ypos+=height+4;x=base_x;lines++;}style=(bold?1:0)|(italic?2:0)|4|(strike?8:0);graph_role=base_role;doc_char(x,ypos,(unsigned char)s[i++],hstrike,scale,graph_link_colour(),style);x+=w;}i++;continue;}}
+  style=(bold?1:0)|(italic?2:0)|(underline?4:0)|(strike?8:0);graph_role=(super||sub)?GF_TINY:base_role;doc_char(x,ypos+(super?-4:(sub?4:0)),(unsigned char)s[i++],hstrike,scale,graph_fg(),style);x+=w;
  }
- if(quote)for(k=0;k<lines*height+(lines-1)*4+5;k++)gpixel(GP_TEXT_L,ystart+k,0);
+ if(quote)for(k=0;k<lines*height+(lines-1)*4+5;k++)gpixel(GP_TEXT_L,ystart+k,graph_fg());
  if(h==1){graph_rule(ypos+height+1,2);return lines*height+(lines-1)*4+8;}
  if(h==2){graph_rule(ypos+height+1,1);return lines*height+(lines-1)*4+6;}
  return lines*height+(lines-1)*4+(quote?5:4);
 }
 static int graph_last_row(int p){int r,n;char b[DOC_COLS+1];for(r=LINES-1;r>=0;r--){md_line(p,r,b,&n);if(n>0)return r;}return 0;}
 static void graph_render(int p,int first)
-{int row,ypos=GP_T+12,last=first+23,fence=code_fence_before(p,first),fk,endrow=graph_last_row(p),x;if(last>LINES)last=LINES;graph_link_count=0;graph_page();for(row=first;row<last&&ypos<GP_B-14;row++){fk=line_fence_kind(p,row);if(fk){if(!fence)fence=fk;else if(fence==fk)fence=0;ypos+=3;continue;}ypos+=graph_line(p,row,ypos,fence!=0);if(graph_rows_consumed>1)row+=graph_rows_consumed-1;if(row>=endrow){if(ypos<GP_B){for(x=GP_L;x<=GP_R;x++)gpixel(x,ypos,0);if(ypos+1<=GP_B){graph_box(0,ypos+1,639,479,8);graph_frame(GP_L-1,GP_T-1,GP_R+1,ypos,0);}}break;}}}
+{int row,ypos=GP_T+12,last=first+23,fence=code_fence_before(p,first),fk,endrow=graph_last_row(p);if(last>LINES)last=LINES;graph_link_count=0;graph_page();for(row=first;row<last&&ypos<GP_B-14;row++){fk=line_fence_kind(p,row);if(fk){if(!fence)fence=fk;else if(fence==fk)fence=0;ypos+=3;continue;}ypos+=graph_line(p,row,ypos,fence!=0);if(graph_rows_consumed>1)row+=graph_rows_consumed-1;if(row>=endrow){if(ypos<GP_B)graph_box(0,ypos,639,479,8);break;}}}
 static void graph_redraw(int p,int first)
 {union REGS r;if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=2;int86(0x33,&r,&r);}graph_render(p,first);if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=1;int86(0x33,&r,&r);}}
+#ifdef MDVIEW_BUILD
+static void mdview_dirname(const char *path,char *dir)
+{const char *a=strrchr(path,'\\'),*b=strrchr(path,'/'),*q=a;if(b&&(!q||b>q))q=b;if(q){int n=(int)(q-path);if(n>=ACC_PATH)n=ACC_PATH-1;memcpy(dir,path,n);dir[n]=0;}else dir[0]=0;}
+static void mdview_resolve_link(const char *base,const char *target,char *out,char *anchor)
+{char work[ACC_PATH],dir[ACC_PATH],*hash;int i;strncpy(work,target,ACC_PATH-1);work[ACC_PATH-1]=0;hash=strchr(work,'#');anchor[0]=0;if(hash){strncpy(anchor,hash,63);anchor[63]=0;*hash=0;}for(i=0;work[i];i++)if(work[i]=='/')work[i]='\\';if(strchr(work,':')||work[0]=='\\'){strncpy(out,work,ACC_PATH-1);out[ACC_PATH-1]=0;return;}mdview_dirname(base,dir);if(dir[0])sprintf(out,"%s\\%s",dir,work);else{strncpy(out,work,ACC_PATH-1);out[ACC_PATH-1]=0;}}
+static int mdview_follow_link(int *p,int *first,const char *target)
+{char next[ACC_PATH],anchor[64];int r;if(!target||!*target||md_link_is_web(target))return 0;if(target[0]=='#'){r=graph_find_anchor(*p,target);if(r>=0){*first=r;return 1;}return 0;}if(!md_link_is_markdown(target))return 0;mdview_resolve_link(paths[*p],target,next,anchor);if(!next[0]||!md_text_file(next)||!load_file(0,next))return 0;*p=0;current=0;count=1;*first=0;if(anchor[0]){r=graph_find_anchor(0,anchor);if(r>=0)*first=r;}return 1;}
+#endif
 static void graph_show(void)
-{union REGS r;unsigned key;int first=0,p=current,scan,mx,my,mb,lastmb=0,i,tr,endrow;char linktarget[48];if(!video_is_vga()){acc_notice("Show","VGA display adapter required.");return;}graph_links=(GLINK far *)_fmalloc((unsigned)(GLINK_MAX*sizeof(GLINK)));if(!graph_links){acc_notice("Show","Not enough memory for graphical view.");return;}if(!graph_fonts_load()){_ffree(graph_links);graph_links=0;acc_notice("Show","Unable to read FONT.DAT.");return;}acc_mouse_display(0);memset(&r,0,sizeof(r));r.h.ah=0;r.h.al=0x12;int86(0x10,&r,&r);graph_render(p,first);if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=1;int86(0x33,&r,&r);}for(;;){key=0;if(_bios_keybrd(_KEYBRD_READY))key=_bios_keybrd(_KEYBRD_READ);if(key){if((key&255)==27)break;scan=(key>>8)&255;if(scan==0x47){first=0;}else if(scan==0x4F){endrow=graph_last_row(p);first=endrow-21;if(first<0)first=0;}else if(scan==0x48||scan==0x49){first-=20;if(first<0)first=0;}else if(scan==0x50||scan==0x51){first+=20;endrow=graph_last_row(p);if(first>endrow)first=endrow;if(first<0)first=0;}else if(scan==0x4B&&p>0){p--;first=0;}else if(scan==0x4D&&p+1<count){p++;first=0;}else continue;graph_redraw(p,first);continue;}if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=3;int86(0x33,&r,&r);mx=r.x.cx;my=r.x.dx;mb=r.x.bx;if((mb&1)&&!(lastmb&1)){for(i=0;i<graph_link_count;i++)if(mx>=graph_links[i].x0&&mx<=graph_links[i].x1&&my>=graph_links[i].y0&&my<=graph_links[i].y1){_fmemcpy(linktarget,graph_links[i].target,48);linktarget[47]=0;tr=graph_find_anchor(p,linktarget);if(tr>=0){first=tr;graph_redraw(p,first);}break;}}lastmb=mb;}}if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=2;int86(0x33,&r,&r);}graph_fonts_free();_ffree(graph_links);graph_links=0;outp(0x3CE,5);outp(0x3CF,0);outp(0x3CE,8);outp(0x3CF,255);acc_restore_screen();acc_mouse_reapply_cursor();acc_mouse_display(1);}
+{
+ union REGS r;unsigned key;int first=0,p=current,scan,mx,my,mb,lastmb=0,i,tr,endrow;
+ char linktarget[ACC_PATH];
+ if(!video_is_vga()){acc_notice("Show","VGA display adapter required.");return;}
+ graph_links=(GLINK far *)_fmalloc((unsigned)(GLINK_MAX*sizeof(GLINK)));
+ if(!graph_links){acc_notice("Show","Not enough memory for graphical view.");return;}
+ if(!graph_fonts_load()){_ffree(graph_links);graph_links=0;acc_notice("Show","Unable to read FONT.DAT.");return;}
+ acc_mouse_display(0);memset(&r,0,sizeof(r));r.h.ah=0;r.h.al=0x12;int86(0x10,&r,&r);graph_render(p,first);
+ if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=1;int86(0x33,&r,&r);}
+ for(;;){
+  key=0;if(_bios_keybrd(_KEYBRD_READY))key=_bios_keybrd(_KEYBRD_READ);
+  if(key){
+   if((key&255)==27)break;scan=(key>>8)&255;
+   if(scan==0x3C&&!graph_colour_locked){graph_colour_scheme=(graph_colour_scheme+1)%6;graph_redraw(p,first);continue;}
+   if(scan==0x47){first=0;}
+   else if(scan==0x4F){endrow=graph_last_row(p);first=endrow-21;if(first<0)first=0;}
+   else if(scan==0x48||scan==0x49){first-=20;if(first<0)first=0;}
+   else if(scan==0x50||scan==0x51){first+=20;endrow=graph_last_row(p);if(first>endrow)first=endrow;if(first<0)first=0;}
+#ifndef MDVIEW_BUILD
+   else if(scan==0x4B&&p>0){p--;first=0;}
+   else if(scan==0x4D&&p+1<count){p++;first=0;}
+#endif
+   else continue;
+   graph_redraw(p,first);continue;
+  }
+  if(acc_mouse_present){
+   memset(&r,0,sizeof(r));r.x.ax=3;int86(0x33,&r,&r);mx=r.x.cx;my=r.x.dx;mb=r.x.bx;
+   if((mb&1)&&!(lastmb&1)){
+    for(i=0;i<graph_link_count;i++)if(mx>=graph_links[i].x0&&mx<=graph_links[i].x1&&my>=graph_links[i].y0&&my<=graph_links[i].y1){
+     _fmemcpy(linktarget,graph_links[i].target,ACC_PATH);linktarget[ACC_PATH-1]=0;
+#ifdef MDVIEW_BUILD
+     if(mdview_follow_link(&p,&first,linktarget))graph_redraw(p,first);
+#else
+     tr=graph_find_anchor(p,linktarget);if(tr>=0){first=tr;graph_redraw(p,first);}
+#endif
+     break;
+    }
+   }
+   lastmb=mb;
+  }
+ }
+ if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=2;int86(0x33,&r,&r);}
+ graph_fonts_free();_ffree(graph_links);graph_links=0;
+ outp(0x3CE,5);outp(0x3CF,0);outp(0x3CE,8);outp(0x3CF,255);
+ acc_restore_screen();acc_mouse_reapply_cursor();acc_mouse_display(1);
+}
 
 
 
@@ -777,9 +872,9 @@ static void md_scrollbar(int x,int y,int rows,int show_menu)
 static int focus_progress(void)
 {int y,last=-1,n;unsigned long before=0,total=0,pos;for(y=LINES-1;y>=0;y--)if(used(current,y)){last=y;break;}if(last<0)return 0;for(y=0;y<=last;y++){n=used(current,y);if(y<cy)before+=(unsigned long)n+1UL;total+=(unsigned long)n+(y<last?1UL:0UL);}if(cy>last)return 1000;pos=before+(unsigned long)(cx<used(current,cy)?cx:used(current,cy));if(!total)return 0;if(pos>=total)return 1000;return(int)((pos*1000UL)/total);}
 static void focus_draw(void)
-{char b[COLS+1],s[42];int r,c,line,left=(acc_cols-COLS)/2,panel=ACC_ATTR(acc_appearance.background,acc_appearance.labels),status=ACC_CONTROL,fill,prog,filled=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.controls_bg);long pos,lo=has_selection()?sel_low():-1L,hi=has_selection()?sel_high():-1L;unsigned long chars,words;for(r=0;r<24;r++){line=top+r;if(line<LINES){_fmemcpy(b,page[current][line],COLS);b[COLS]=0;acc_text(left,r,b,panel,COLS);if(lo>=0)for(c=0;c<COLS;c++){pos=(long)line*COLS+c;if(pos>=lo&&pos<hi)acc_put(left+c,r,b[c],ACC_SELECT);}}}if(cy>=top&&cy<top+24){acc_caret_set(left+cx,cy-top);}else acc_caret_hide();document_stats(&chars,&words);sprintf(s,"Chars: %lu   Words: %lu",chars,words);prog=focus_progress();fill=(prog*12+999)/1000;if(prog==0)fill=0;acc_fill(0,24,acc_cols,1,' ',status);for(c=0;c<12;c++)acc_put(c,24,c<fill?219:176,c<fill?filled:status);acc_text(acc_cols-(int)strlen(s),24,s,status,(int)strlen(s));}
+{char b[COLS+1],s[42];int r,c,line,left=(acc_cols-COLS)/2,panel=focus_attr(),status=ACC_CONTROL,fill,prog,filled=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.controls_bg);long pos,lo=has_selection()?sel_low():-1L,hi=has_selection()?sel_high():-1L;unsigned long chars,words;for(r=0;r<24;r++){line=top+r;if(line<LINES){_fmemcpy(b,page[current][line],COLS);b[COLS]=0;acc_text(left,r,b,panel,COLS);if(lo>=0)for(c=0;c<COLS;c++){pos=(long)line*COLS+c;if(pos>=lo&&pos<hi)acc_put(left+c,r,b[c],ACC_SELECT);}}}if(cy>=top&&cy<top+24){acc_caret_set(left+cx,cy-top);}else acc_caret_hide();document_stats(&chars,&words);sprintf(s,"Chars: %lu   Words: %lu",chars,words);prog=focus_progress();fill=(prog*12+999)/1000;if(prog==0)fill=0;acc_fill(0,24,acc_cols,1,' ',status);for(c=0;c<12;c++)acc_put(c,24,c<fill?219:176,c<fill?filled:status);acc_text(acc_cols-(int)strlen(s),24,s,status,(int)strlen(s));}
 static void focus_mode(void)
-{int key=0,mx,my;unsigned mb;acc_modal_begin();acc_input_bounds(0,0,acc_cols,acc_rows);acc_clear(ACC_ATTR(acc_appearance.background,acc_appearance.labels));focus_draw();while(key!=27){acc_wait(&key,&mx,&my,&mb);if(key!=27)editor_key(key,24);if(cy<top)top=cy;if(cy>=top+24)top=cy-23;if(key!=27)focus_draw();}acc_caret_hide();acc_modal_end();acc_restore_text_screen();acc_mouse_display(1);key=0;}
+{int key=0,mx,my;unsigned mb;acc_modal_begin();acc_input_bounds(0,0,acc_cols,acc_rows);focus_bright_backgrounds(1);acc_clear(focus_attr());focus_draw();while(key!=27){acc_wait(&key,&mx,&my,&mb);if(key==256+0x3C){focus_colour_scheme=(focus_colour_scheme+1)%6;acc_clear(focus_attr());focus_draw();key=0;continue;}if(key!=27)editor_key(key,24);if(cy<top)top=cy;if(cy>=top+24)top=cy-23;if(key!=27)focus_draw();}acc_caret_hide();focus_bright_backgrounds(0);acc_modal_end();acc_restore_text_screen();acc_mouse_display(1);key=0;}
 static void maximize_page_bar(void)
 {int i,xx=0,n,a,w,max;char s[6],shown[30],*base;acc_fill(0,24,80,1,' ',ACC_BG);for(i=0;i<count;i++){sprintf(s," %d ",i+1);w=(int)strlen(s);a=i==current?ACC_CONTROL:ACC_ATTR(acc_appearance.background,acc_appearance.titlebar_fg);acc_text(xx,24,s,a,w);xx+=w+1;}if(count<PAGES)acc_put(xx,24,'+',ACC_ATTR(acc_appearance.background,acc_appearance.titlebar_fg));if(external[current]&&paths[current][0]){base=strrchr(paths[current],'\\');if(!base)base=strrchr(paths[current],'/');base=base?base+1:paths[current];max=dirty[current]?79:80;n=(int)strlen(base);if(n>max){base+=n-max;n=max;}memcpy(shown,base,n);if(dirty[current])shown[n++]='*';shown[n]=0;acc_text(80-n,24,shown,dirty[current]?ACC_TITLE:ACC_HEADING,n);}else acc_text(73,24,"Unsaved",ACC_TITLE,7);}
 static void maximize_draw(void)
@@ -837,10 +932,33 @@ static void md_remove_current(void)
   int i;if(count<=1){blank_page(0);memset(softwrap[0],0,LINES);paths[0][0]=0;external[0]=0;dirty[0]=0;current=0;cx=cy=top=0;clear_selection();return;}
   if(page[current]){_ffree(page[current]);page[current]=0;}for(i=current;i<count-1;i++){page[i]=page[i+1];memcpy(softwrap[i],softwrap[i+1],LINES);wrap_width[i]=wrap_width[i+1];external[i]=external[i+1];dirty[i]=dirty[i+1];strcpy(paths[i],paths[i+1]);}page[count-1]=0;memset(softwrap[count-1],0,LINES);wrap_width[count-1]=COLS;count--;if(current>=count)current=count-1;cx=cy=top=0;clear_selection();
 }
+#ifdef MDVIEW_BUILD
+int main(int argc,char **argv)
+{
+ int rc=0,i,filearg=0,help_mode=0;
+ for(i=1;i<argc;i++){
+  if(!stricmp(argv[i],"/HELP")){help_mode=1;continue;}
+  if(!strcmp(argv[i],"/?")||!strcmp(argv[i],"-?")){
+   puts("!MDVIEW - Launch! Markdown viewer");
+   puts("Usage: !MDVIEW file.md");
+   return 0;
+  }
+  if(!filearg)filearg=i;
+ }
+ if(!filearg){puts("!MDVIEW - Launch! Markdown viewer");puts("Usage: !MDVIEW file.md");return 1;}
+ if(!md_link_is_markdown(argv[filearg])){puts("!MDVIEW: Markdown .MD file required.");return 1;}
+ if(help_mode){graph_colour_scheme=6;graph_colour_locked=1;}
+ if(!acc_begin(argv[0],"Markdown Viewer",0))return 1;
+ if(!init_pages()){acc_end();puts("!MDVIEW: not enough memory.");return 1;}
+ memset(external,0,sizeof(external));memset(paths,0,sizeof(paths));memset(dirty,0,sizeof(dirty));
+ if(!md_text_file(argv[filearg])||!load_file(0,argv[filearg])){free_pages();acc_end();puts("!MDVIEW: unable to open Markdown file.");return 1;}
+ count=1;current=0;graph_show();free_pages();acc_end();return rc;
+}
+#else
 int main(int argc,char **argv)
 {
   int x,y,key=0,mx=0,my=0,focus=0,i,argn=0,rows,editkey,oldtop,done=0,discarded=0,choice;unsigned mb=0;
-  if(acc_help(argc,argv,"!MKDOWN","Markdown editor with live preview, graphical pages and formatted printing."))return 0;
+  if(acc_help(argc,argv,"!MD","Markdown editor with live preview, graphical pages and formatted printing."))return 0;
   if(!acc_begin(argv[0],"Markdown",0))return 1;if(!init_pages()){acc_notice("Markdown","Not enough memory for document pages.");acc_end();return 1;}memset(external,0,sizeof(external));memset(paths,0,sizeof(paths));memset(dirty,0,sizeof(dirty));
   for(i=1;i<argc&&argn<PAGES;i++)if(argv[i][0]!='/'&&argv[i][0]!='-'){if(load_file(argn,argv[i]))argn++;}
   if(argn){count=argn;current=0;}else{count=1;current=0;blank_page(0);memset(softwrap[0],0,LINES);paths[0][0]=0;external[0]=0;dirty[0]=0;}
@@ -873,3 +991,5 @@ int main(int argc,char **argv)
   }
   if(clip){_ffree(clip);clip=0;}free_pages();acc_end();return 0;
 }
+
+#endif

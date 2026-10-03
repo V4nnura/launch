@@ -8,10 +8,10 @@ Launch! for DOS ---------------------
 */
 /*
  * MAINTAINER NOTES - Launch! 3.73
- * File: JOURBLD.C
- * Role: Build copy of !JOURNAL
- * Build/ownership: Derived from JOURNAL.C.
- * Maintainer contract: Keep synchronized with JOURNAL.C.
+ * File: JOURNAL.C
+ * Role: !JOURNAL persistent journal/typewriter
+ * Build/ownership: Canonical Journal source; build copy is JOURBLD.C.
+ * Maintainer contract: Persistent dated cards plus /PRINT typewriter mode. Typewriter mode sends keystrokes directly to LPT1 and has intentionally restricted editing.
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */

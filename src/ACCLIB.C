@@ -369,9 +369,25 @@ static void mouse_pointer_restore(void){union REGS r;if(!mouse_glyph_saved&&!mou
 static void mouse_pointer_install(void)
 {
   static const unsigned char arrow16[16]={0,0,0,0,0,0,0,0x10,0x18,0x1C,0x1E,0x1F,0x1E,0x12,3,1};
-  static const unsigned char target16[32]={0,0,0,0x18,0x18,0x18,0x3C,0xE7,0xE7,0x3C,0x18,0x18,0x18,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  static const unsigned char up16[32]={0,0,0x80,0xC0,0x70,0x38,0x1C,0x1E,0x0E,0x1C,0x38,0x71,0xE1,0xC0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  static const unsigned char up14[32]={0,0x80,0xC0,0x70,0x38,0x1C,0x1E,0x0E,0x1C,0x38,0x71,0xE1,0xC0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  static const unsigned char tri16[32]={0,0,0,0,0x80,0xC0,0xE0,0xF0,0xF8,0xFC,0xC0,0x80,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  static const unsigned char tri14[32]={0,0,0,0x80,0xC0,0xE0,0xF0,0xF8,0xFC,0xC0,0x80,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  static const unsigned char hand16[32]={0,0,0,0x20,0x50,0x50,0x5E,0xD5,0x81,0x81,0x81,0x7E,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  static const unsigned char hand14[32]={0,0,0,0x20,0x50,0x50,0x5E,0xD5,0x81,0x81,0x81,0x7E,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+  const unsigned char *cg=0;
   unsigned char height_far;unsigned char arrow[32];union REGS r;int i,height,source;
-  if(acc_appearance.mouse_cursor){memset(&r,0,sizeof(r));r.x.ax=0x000A;r.x.bx=0;if(acc_appearance.mouse_cursor==1){r.x.cx=0xFFFF;r.x.dx=0x7700;}else{r.x.cx=0xF000;r.x.dx=0x0FB8;}int86(0x33,&r,&r);return;}
+  if(mouse_glyph_saved||mouse_target_saved)mouse_pointer_restore();
+  if(acc_appearance.mouse_cursor){
+    if(acc_appearance.mouse_cursor>=2){
+      if(acc_appearance.mouse_cursor==2)cg=(acc_font_height()==14)?up14:up16;
+      else if(acc_appearance.mouse_cursor==3)cg=(acc_font_height()==14)?tri14:tri16;
+      else cg=(acc_font_height()==14)?hand14:hand16;
+      acc_glyph_read(127,mouse_old_glyph);mouse_glyph_saved=1;mouse_glyph_write(cg);
+      memset(&r,0,sizeof(r));r.x.ax=0x000A;r.x.bx=0;r.x.cx=0xF000;r.x.dx=0x0F7F;int86(0x33,&r,&r);return;
+    }
+    memset(&r,0,sizeof(r));r.x.ax=0x000A;r.x.bx=0;r.x.cx=0xFFFF;r.x.dx=0x7700;int86(0x33,&r,&r);return;
+  }
   acc_glyph_read(127,mouse_old_glyph);mouse_glyph_saved=1;
   memset(arrow,0,sizeof(arrow));height_far=*(unsigned char far *)MAKE_FP(0x40,0x85);height=height_far;if(height<8||height>32)height=16;
   for(i=0;i<height;i++){source=i*16/height;if(source>15)source=15;arrow[i]=arrow16[source];}mouse_glyph_write(arrow);
@@ -419,7 +435,7 @@ static void acc_load_config(void)
     else if(!stricmp(key,"CONTROLS_FG"))field=&acc_appearance.controls_fg;
     else if(!stricmp(key,"CONTROLS_BG"))field=&acc_appearance.controls_bg;
     else if(!stricmp(key,"LABELS"))field=&acc_appearance.labels;
-    else if(!stricmp(key,"MOUSE_CURSOR")){if(value>=0&&value<=2)acc_appearance.mouse_cursor=(unsigned char)value;}
+    else if(!stricmp(key,"MOUSE_CURSOR")){if(value>=0&&value<=4)acc_appearance.mouse_cursor=(unsigned char)value;}
     if(field&&value>=0&&value<=15){*field=(unsigned char)value;if(field==&acc_appearance.titlebar_fg)title_fg_set=1;if(field==&acc_appearance.titlebar_bg)title_bg_set=1;}
   }fclose(f);if(!title_fg_set)acc_appearance.titlebar_fg=acc_appearance.border;if(!title_bg_set)acc_appearance.titlebar_bg=acc_appearance.controls_bg;
 }

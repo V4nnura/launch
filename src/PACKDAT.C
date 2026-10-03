@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.73
+ * MAINTAINER NOTES - Launch! 3.77
  * File: PACKDAT.C
  * Role: Installer data packer
  * Build/ownership: Builds INSTALL.DAT from compiled executables and packaged resources.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Builds the compressed Launch! 3.71 INSTALL.DAT distribution archive.
+/* Builds the compressed Launch! 3.77 INSTALL.DAT distribution archive.
    Per-file LZSS compression: 4K history window, 3..18 byte matches.
    Microsoft C/C++ 7.0 / DOS small model. */
 #include <stdio.h>
@@ -32,12 +32,12 @@ Launch! for DOS ---------------------
 
 static const char *files[]={
   "!.EXE","!86.EXE","!KEY.COM","!KEYDB.COM","!KEY286.COM","!TKEY.COM","!TKEYDB.COM","!TKEY286.COM","!MNUGEN.EXE","AUTOGEN.DAT",
-  "PWROFF.BMP","FONT.DAT","FONT14.DAT","PROMPTS.CFG","COLORS.CFG","CAL.ICS","!CAL.EXE",
-  "!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MKDOWN.EXE","!NOTE.EXE","!STACK.EXE",
+  "PWROFF.BMP","FONT.DAT","FONT14.DAT","!FONT.COM","PROMPTS.CFG","COLORS.CFG","README.MD","MENU.MD","WININT.MD","ACCESS.MD","GAMES.MD","TSHOOT.MD","!MDVIEW.EXE","CAL.ICS","!CAL.EXE",
+  "!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE","!NOTE.EXE","!STACK.EXE",
   "!DFETCH.EXE","!TODOS.EXE","!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL",
   "!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE",
   "WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLY.LVL",
-  "!WIN16.EXE","!MGR16.EXE","LAUNCH.ICO","LAUNCH16.ICO","MENUMGR.ICO","LAUNCH.GRP",0
+  "!W30.EXE","!W31.EXE","!MNUMAN.EXE","MENUMGR.ICO","LAUNCH.GRP",0
 };
 
 
@@ -47,6 +47,7 @@ static void source_path(const char *name,char *out)
   if(!stricmp(name,"PWROFF.BMP")){sprintf(out,"res\\%s",name);return;}
   if(!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")){sprintf(out,"conf\\%s",name);return;}
   if(!stricmp(name,"CAL.ICS")){sprintf(out,"appdata\\%s",name);return;}
+  if(!stricmp(name,"README.MD")||!stricmp(name,"MENU.MD")||!stricmp(name,"WININT.MD")||!stricmp(name,"ACCESS.MD")||!stricmp(name,"GAMES.MD")||!stricmp(name,"TSHOOT.MD")){sprintf(out,"help\\%s",name);return;}
   if(dot&&!stricmp(dot,".LVL")){sprintf(out,"appdata\\%s",name);return;}
   strcpy(out,name);
 }
@@ -176,7 +177,7 @@ int main(void)
   FILE *in,*out;char name[13],source[64];unsigned long data_start,total_raw=0,total_cmp=0;
   int i,base_count=0,count,ok=1;
   while(files[base_count])base_count++;
-  collect_sample_dir("DRAW");collect_sample_dir("MKDOWN");collect_sample_dir("DB");
+  collect_sample_dir("DRAW");collect_sample_dir("MD");collect_sample_dir("DB");
   count=base_count+sample_count;
   if(count>MAX_FILES){puts("PACKDAT: too many archive members");return 1;}
   out=fopen("INSTALL.DAT","w+b");

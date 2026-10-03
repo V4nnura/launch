@@ -15,7 +15,7 @@
 from pathlib import Path
 root=Path(__file__).resolve().parent
 sources=[('launch_glyph16','res/LAUNCHUI.FNT',16),('launch_glyph14','res/LAUNCHUI.F14',14)]
-count=106
+count=111
 with (root/'GLYPHDAT.H').open('w') as o:
     o.write(f'/* Generated from res/LAUNCHUI.FNT / res/LAUNCHUI.F14. Do not hand edit. */\n#define LAUNCH_GLYPH_COUNT {count}\n#ifdef LAUNCH_GLYPH_FAR\n#define GLYPH_STORE far\n#else\n#define GLYPH_STORE\n#endif\n')
     for symbol,filename,height in sources:
