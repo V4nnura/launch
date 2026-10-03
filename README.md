@@ -13,8 +13,9 @@
 **Integrates with** Windows 3.x for a cohesive experience.
 
 <img width="640" alt="Menu (post boot)" src="https://github.com/user-attachments/assets/1ef29b23-0c63-43a0-b460-1d41a6af45ed" /><br/>
-<img width="640" alt="Launch! for DOS - in Windows" src="https://github.com/user-attachments/assets/b8151e9f-8e8a-4342-87df-2f380dfb0b33" /><br/>
-<img width="640" alt="Launch! 16" src="https://github.com/user-attachments/assets/c1318702-41d0-498f-9312-528539fb6b1f" />
+<img width="640" height="480" alt="DOS" src="https://github.com/user-attachments/assets/fc7fb196-e8f9-4752-8a05-bad280362b8d" /><br/>
+<img width="640" height="480" alt="menu" src="https://github.com/user-attachments/assets/12a216db-33b6-4a3e-92c2-b6d1dc89e7ee" />
+
 
 ----
 
@@ -31,7 +32,7 @@
 - Integrated [file searching](https://github.com/therenegar/launch/wiki/File-Open#file-search) including "Go Deep" mode for searching file contents as well.
 - Built in [Power Off/Reboot control](https://github.com/therenegar/launch/wiki/Shutdown) with retro Windows 95 power off experience.
 - 10 handy and modern text-mode [accessories](https://github.com/therenegar/launch/wiki/Accessories)
-    - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MKDOWN.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE) , [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE). 
+    - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MD.EXE) - and [Viewer](https://github.com/therenegar/launch/wiki/!MDVIEW.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE) , [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE). 
 - 9 fun and addictive text-mode [games](https://github.com/therenegar/launch/wiki/Games)
     - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE), [Jell-Oh](https://github.com/therenegar/launch/wiki/!JELLOH.EXE), [Metro](https://github.com/therenegar/launch/wiki/!METRO.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
 - 14 awesome [screensavers](https://github.com/therenegar/launch/wiki/Screen-Savers) including a 7-segment digital clock, starry night skyline, bouncing DOS logo, disk defrag simulation, 3D pipes, bouncing 3D ball, paintball, and more!
@@ -40,7 +41,7 @@
 - Maximum compatibility across DOS versions (back to DOS 3.3) on real or emulated hardware/virtual machines.
 - No libraries or dependencies including ANSI. Custom UI toolkit written in C. Fast and simple.
 - Extremely minimal memory footprint. All resident components can be disabled to have zero memory impact if desired.
-- Full and optional [Win 3.x integration](https://github.com/therenegar/launch/wiki/!WIN16.EXE); the DOS menu can be run windowed, or you can run a native Win16 Launch! Menu.
+- Full and optional [Win 3.x integration](https://github.com/therenegar/launch/wiki/!W3X.EXE); the DOS menu can be run windowed, or you can run a native Win16 Launch! Menu.
 
 **[Check out the wiki](https://github.com/therenegar/launch/wiki) for detailed information and documentation.**
 
