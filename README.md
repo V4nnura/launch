@@ -1,6 +1,10 @@
 <img height="100" alt="main-logo" src="https://github.com/user-attachments/assets/d7429665-3bf5-4ec2-a438-cb3289aa9614" />
 
+### [https://launchfordos.app](https://launchfordos.app)
+
 > A free lightweight command launcher for any DOS, with huge features to improve the usability of the command prompt -- plus accessories and games, to create a modern and useful desktop environment.
+
+----
 
 <img height="75" alt="Go get it!" src="https://github.com/user-attachments/assets/deef3126-a840-4c73-bf86-51d12d398ec1" />
 
@@ -12,10 +16,9 @@
 
 **Integrates with** Windows 3.x for a cohesive experience.
 
-<img width="640" height="533" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cc9c0a57-04bb-4fb6-ac64-fe281adf1431" /><br/>
-<img width="640" height="480" alt="Launch! for DOS" src="https://github.com/user-attachments/assets/fc7fb196-e8f9-4752-8a05-bad280362b8d" /><br/>
-<img width="640" height="480" alt="Launch! 16" src="https://github.com/user-attachments/assets/12a216db-33b6-4a3e-92c2-b6d1dc89e7ee" />
-
+<img width="640" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cc9c0a57-04bb-4fb6-ac64-fe281adf1431" /><br/>
+<img width="640" alt="Launch! for DOS" src="https://github.com/user-attachments/assets/fc7fb196-e8f9-4752-8a05-bad280362b8d" /><br/>
+<img width="640" alt="Launch! 16" src="https://github.com/user-attachments/assets/12a216db-33b6-4a3e-92c2-b6d1dc89e7ee" />
 
 ----
 
@@ -44,9 +47,10 @@
 - Full and optional [Win 3.x integration](https://github.com/therenegar/launch/wiki/!W3X.EXE); the DOS menu can be run windowed, or you can run a native Win16 Launch! Menu.
 
 **[Check out the wiki](https://github.com/therenegar/launch/wiki) for detailed information and documentation.**
+&nbsp;<br/>&nbsp;<br/>&nbsp;<br/>
 
+----
 
-<a id="install"></a>
 ### <img height="100" alt="Installation" src="https://github.com/user-attachments/assets/a14320e8-f790-4a82-95d6-1cee146512c9" />
 
 Extract [the release](https://github.com/therenegar/launch/releases/) zip file or mount the floppy image (or image it to a real floppy disk) and run
@@ -55,9 +59,11 @@ INSTALL.EXE
 ```
 **Read more about [Installation](https://github.com/therenegar/launch/wiki/INSTALL.EXE).**
 
-<img width="640" height="350" alt="Installation" src="https://github.com/user-attachments/assets/5c85c0f0-f9b7-4e9c-a401-b52399da275b" />
+<img width="720" alt="Installation" src="https://github.com/user-attachments/assets/a28f7bb6-78a4-4595-a78b-ae5cbab10940" />
 
-<a id="the-menu"></a>
+
+----
+
 ### <img height="100" alt="The menu" src="https://github.com/user-attachments/assets/eb20a623-f631-4b33-b340-90d470f6e7c1" />
 
 At the **command prompt**, display your menu by pressing the keyboard shortcut which by default is set to:
@@ -66,9 +72,10 @@ CTRL + ALT + \
 ```
 **Learn more about [the Menu](https://github.com/therenegar/launch/wiki/!.EXE).**
 
-<img width="720" alt="Menu (at boot)" src="https://github.com/user-attachments/assets/34da7f78-e761-432e-859c-c5af78eacd07" />
+<img width="720" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/5da8a792-c08f-4b97-96ce-42556ffd82d4" />
 
-<a id="config"></a>
+----
+
 ### <img height="100" alt="Config" src="https://github.com/user-attachments/assets/8b30b2a6-cb46-435e-b9e1-7fb47e5fc44e" />
 
 Everything in Launch! can be configured in one place by running
@@ -81,7 +88,8 @@ Configuration includes the menu, colors, screen savers, prompt customization, fo
 
 <img width="720" alt="Configuration" src="https://github.com/user-attachments/assets/e537e661-5e06-4c31-b3f4-b625f4dfd17f" />
 
-<a id="screen-savers"></a>
+----
+
 ### <img height="100" alt="Screen Savers" src="https://github.com/user-attachments/assets/447f06ad-4597-45bc-b4cf-3f3debcc02a1" />
 
 Some interesting graphical displays that give the real early 90s vibes.
@@ -103,8 +111,8 @@ Learn more about [Screen Savers](https://github.com/therenegar/launch/wiki/Scree
 <img width="360" height="300" alt="StarryNite" src="https://github.com/user-attachments/assets/f8db1076-934a-44ec-828d-24a633c52f6a" />
 <img width="360" height="300" alt="Warp" src="https://github.com/user-attachments/assets/79a98013-a37a-4690-9eef-cbe7f30f10a5" />
 
+----
 
-<a id="accessories"></a>
 ### <img height="100" alt="Accessories" src="https://github.com/user-attachments/assets/59ceb839-9cc4-456e-8e5f-99d103b871cb" />
 
 Handy accessories with a goal of turning an old DOS PC into something useful in the modern day.
@@ -123,7 +131,8 @@ Handy accessories with a goal of turning an old DOS PC into something useful in 
 <img width="360" height="300" alt="Todos" src="https://github.com/user-attachments/assets/400ab708-44c9-4c75-ba7c-cbcd9472afb5" />
 <img width="360" height="300" alt="Typo" src="https://github.com/user-attachments/assets/00b4d154-1d18-4cc1-b79d-6859a6b1a5bf" />
 
-<a id="games"></a>
+----
+
 ### <img height="100" alt="Games" src="https://github.com/user-attachments/assets/ad644a58-0e3b-4f34-b6cb-8de93f67bdcc" />
 
 Fun games with some more modern ideas taken back in time, to push text mode DOS to the absolute limits.
@@ -140,7 +149,8 @@ Fun games with some more modern ideas taken back in time, to push text mode DOS 
 <img width="360" height="300" alt="fcell" src="https://github.com/user-attachments/assets/acd785ad-0b7b-4e37-b1b5-203ec5eb166c" />
 <img width="360" height="300" alt="sol" src="https://github.com/user-attachments/assets/25ebb582-f0c1-400a-954b-85a2ac28e199" />
 
-<a id="tooling"></a>
+----
+
 ### <img height="100" alt="Tooling" src="https://github.com/user-attachments/assets/e96b1ec4-fcfb-4368-b9e1-801024401611" />
 
 Everything is separated out to keep `!.EXE` as streamlined as possible, and make things completely optional.
@@ -148,7 +158,8 @@ The shortcut key and menu generator are examples of tools that are completely op
 
 **Learn more about [Tooling](https://github.com/therenegar/launch/wiki/Tooling).**
 
-<a id="techinfo"></a>
+----
+
 ### <img height="100" alt="Tech Info" src="https://github.com/user-attachments/assets/702756ee-38aa-4eb7-b39b-d7e15cbf0ca2" />
 
 Behind the UI, everything is plain text configuration. You can configure everything yourself with any text editor. 
