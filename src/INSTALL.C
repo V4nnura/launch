@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.73
+ * MAINTAINER NOTES - Launch! 3.771
  * File: INSTALL.C
  * Role: Canonical installer source
  * Build/ownership: Authoritative installer source; GENBUILD produces INSTBLD.C.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.73 installer - Microsoft C/C++ 7.0, DOS small model. */
+/* Launch! 3.771 installer - Microsoft C/C++ 7.0, DOS small model. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -471,7 +471,7 @@ static int cpu_is_286(void){unsigned before,after;
 #endif
 }
 static const char *display_adapter(int *suitable){union REGS r;memset(&r,0,sizeof(r));r.x.ax=0x1A00;int86(0x10,&r,&r);if(r.h.al==0x1A){*suitable=1;return"VGA or compatible";}memset(&r,0,sizeof(r));r.h.ah=0x12;r.h.bl=0x10;int86(0x10,&r,&r);if(r.h.bl!=0x10){*suitable=1;return"EGA or compatible";}*suitable=0;return"CGA/MDA compatible";}
-static int write_initial_font_config(const char *install,int font_id){char path[PATH_SIZE];FILE*f;int persist=font_id?1:0;sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"wt");if(!f)return 0;fprintf(f,"suiteTitle=Launch!\nTITLEBAR_FG=15\nTITLEBAR_BG=7\nFONT_ID=%d\nFONT_PERSIST=%d\nfontPersist=%d\nshortcutEnabled=1\nshortcutCtrl=1\nshortcutAlt=1\nshortcutShift=0\nshortcutKey=\\\n",font_id,persist,persist);return fclose(f)==0;}
+static int write_initial_font_config(const char *install,int font_id){char path[PATH_SIZE];FILE*f;int persist=font_id?1:0;sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"wt");if(!f)return 0;fprintf(f,"suiteTitle=Launch!\nTITLEBAR_FG=15\nTITLEBAR_BG=7\nFONT_ID=%d\nFONT_PERSIST=%d\nfontPersist=%d\nPROMPT_STYLE=0\nPROMPT_SET=0\nshortcutEnabled=1\nshortcutCtrl=1\nshortcutAlt=1\nshortcutShift=0\nshortcutKey=\\\n",font_id,persist,persist);return fclose(f)==0;}
 
 /* Seed the standalone font service with the factory Launch! font.  !FONT.COM
    deliberately consumes FONT.CUR rather than parsing FONT.DAT itself, so a
@@ -716,8 +716,12 @@ static int startup_cfg_light(const char *install)
    conventional-memory hole, which Windows 3.0 reports as fragmentation. */
 static int write_start_batch(const char *install,int add_key,const char *key_spec,int add_font,int light_target,int show_menu)
 {
-  char path[PATH_SIZE];FILE *f;const char *keyprog=light_target?"!TKEY.COM":"!KEY.COM";
-  sprintf(path,"%s\\!START.BAT",install);f=fopen(path,"wt");if(!f)return 0;
+  char path[PATH_SIZE],line[300],prompt_line[300];FILE *f,*oldf;const char *keyprog=light_target?"!TKEY.COM":"!KEY.COM";
+  /* Preserve a prompt already managed by Launch! across an upgrade.  Clean
+     installs have no PROMPT line until Configuration > Prompt > Set is used. */
+  prompt_line[0]=0;sprintf(path,"%s\\!START.BAT",install);oldf=fopen(path,"rt");
+  if(oldf){while(fgets(line,sizeof(line),oldf)){char *q=line;while(*q==' '||*q=='\t')q++;if(!strnicmp(q,"PROMPT ",7)){q[strcspn(q,"\r\n")]=0;strncpy(prompt_line,q,sizeof(prompt_line)-1);prompt_line[sizeof(prompt_line)-1]=0;}}fclose(oldf);}
+  f=fopen(path,"wt");if(!f)return 0;
   if(fputs("@ECHO OFF\n",f)==EOF){fclose(f);return 0;}
   if(fprintf(f,"PATH %%PATH%%;%s\n",install)<0){fclose(f);return 0;}
   if(add_font)if(fprintf(f,"%s\\!FONT.COM\n",install)<0){fclose(f);return 0;}
@@ -726,6 +730,7 @@ static int write_start_batch(const char *install,int add_key,const char *key_spe
     if(key_spec&&*key_spec)if(fprintf(f," /KEY=%s",key_spec)<0){fclose(f);return 0;}
     if(fputc('\n',f)==EOF){fclose(f);return 0;}
   }
+  if(prompt_line[0])if(fprintf(f,"%s\n",prompt_line)<0){fclose(f);return 0;}
   if(show_menu)if(fprintf(f,"%s\\!.EXE\n",install)<0){fclose(f);return 0;}
   return fclose(f)==0;
 }
@@ -882,7 +887,7 @@ static void remove_sample_documents(const char *install)
   sprintf(p,"%s\\SAMPLES\\MD",install);rmdir(p);
   sprintf(p,"%s\\SAMPLES",install);rmdir(p);
   sprintf(p,"%s\\!HELP.BAT",install);remove(p);
-  sprintf(p,"%s\\HELP\\README.MD",install);remove(p);
+  {static const char *hd[]={"README.MD","MENU.MD","WININT.MD","ACCESS.MD","GAMES.MD","TSHOOT.MD",0};for(i=0;hd[i];i++){sprintf(p,"%s\\HELP\\%s",install,hd[i]);remove(p);}}
   sprintf(p,"%s\\HELP",install);rmdir(p);
 }
 
@@ -902,6 +907,12 @@ static void remove_unselected_components(const char *install,int accessories,int
   if(!shortcut_key){remove_named(install,"!KEY.COM");remove_named(install,"!TKEY.COM");remove_named(install,"!KEY86.COM");}
 }
 
+static int is_help_document(const char *name)
+{
+  return !stricmp(name,"README.MD")||!stricmp(name,"MENU.MD")||!stricmp(name,"WININT.MD")||
+         !stricmp(name,"ACCESS.MD")||!stricmp(name,"GAMES.MD")||!stricmp(name,"TSHOOT.MD");
+}
+
 static int selected_member(const char *name,int shortcut_build,int accessories,
                            int games,int fonts,int menu_generator,int sample_docs,
                            int vga_display,int windows_integration,int win_version,const char **dest_name)
@@ -911,7 +922,7 @@ static int selected_member(const char *name,int shortcut_build,int accessories,
   /* Help rides with component 7.  The read-only Markdown viewer is shared by
      Help and Accessories, so a minimal install that excludes both gets neither
      the viewer nor its font catalogue dependency. */
-  if(sample_docs&&!stricmp(name,"README.MD"))return 1;
+  if(sample_docs&&is_help_document(name))return 1;
   if((accessories||sample_docs)&&!stricmp(name,"!MDVIEW.EXE"))return 1;
   /* Windows integration is optional.  A DOS-only install does not extract
      the Win16 companion, icons or Program Manager group template. */
@@ -987,7 +998,7 @@ static int extract_install_files(const char *archive,const char *install,int sho
   for(i=0;i<count;i++){
     selected=selected_member(dat_entry[i].name,shortcut_build,accessories,games,fonts,menu_generator,sample_docs,vga_display,windows_integration,win_version,&dest_name);
     if(selected){
-      if(!stricmp(dest_name,"README.MD")){sprintf(destination,"%s\\HELP",install);if(!make_directories(destination)){fclose(in);return 0;}sprintf(destination,"%s\\HELP\\README.MD",install);}
+      if(is_help_document(dest_name)){sprintf(destination,"%s\\HELP",install);if(!make_directories(destination)){fclose(in);return 0;}sprintf(destination,"%s\\HELP\\%s",install,dest_name);}
       else if(sample_docs&&strlen(dest_name)>4&&!stricmp(dest_name+strlen(dest_name)-4,".BMP")&&stricmp(dest_name,"PWROFF.BMP")){sprintf(destination,"%s\\SAMPLES\\DRAW",install);make_directories(destination);sprintf(destination,"%s\\SAMPLES\\DRAW\\%s",install,dest_name);}
       else if(sample_docs&&strlen(dest_name)>3&&!stricmp(dest_name+strlen(dest_name)-3,".MD")){sprintf(destination,"%s\\SAMPLES\\MD",install);make_directories(destination);sprintf(destination,"%s\\SAMPLES\\MD\\%s",install,dest_name);}
       else if(sample_docs&&strlen(dest_name)>3&&!stricmp(dest_name+strlen(dest_name)-3,".DB")){sprintf(destination,"%s\\SAMPLES\\%s",install,dest_name);}
@@ -1189,10 +1200,11 @@ static int install_launch_group(const char *install,const char *winpath,int win_
       grp_set_word(out,new_items[i]+4,i==0?1:0);
     }
   }
-  /* Windows 3.0 intentionally omits the standalone Menu Manager program
-     item.  The template data can remain in the file; cItems controls the
-     visible item-offset array used by Program Manager. */
-  if(win_version<31)grp_set_word(out,32,2);
+  /* Release 3.77 intentionally withholds Launch! 16 and Menu Manager from
+     Windows 3.0.  Only the first Program Manager item (Launch! for DOS) is
+     visible there.  Windows 3.1/3.11 retains all three items.  The unused
+     template records may remain in the GRP; cItems controls visibility. */
+  if(win_version<31)grp_set_word(out,32,1);
   /* Checksum is the negative 16-bit sum of all little-endian WORDs. */
   grp_set_word(out,4,0);sum=0;words=(newsz+1)/2;
   for(i=0;i<words;i++){unsigned lo=out[i*2],hi=(i*2+1<newsz)?out[i*2+1]:0;sum=(sum+lo+(hi<<8))&0xFFFF;}
@@ -1269,7 +1281,7 @@ int main(int argc,char **argv)
   (void)argc;
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.77 Installation");
+  colour_text("Launch!",12);puts(" 3.771 Installation");
   installer_title_rule();
   puts("");
   cpu_ok=cpu_at_least_286();display_name=display_adapter(&display_ok);vga_display=!strncmp(display_name,"VGA",3);if((!cpu_ok||!display_ok)&&!hardware_warning())return 1;
@@ -1358,7 +1370,7 @@ int main(int argc,char **argv)
 
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.77 Installation");
+  colour_text("Launch!",12);puts(" 3.771 Installation");
   installer_title_rule();
   puts("\n Please wait while files are extracted and copied...");fflush(stdout);
   source_directory(argv[0],source_dir);sprintf(archive,"%sINSTALL.DAT",source_dir);

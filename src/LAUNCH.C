@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.73
+ * MAINTAINER NOTES - Launch! 3.771
  * File: COREBLD.C
  * Role: Generated/build copy of Launch! core
  * Build/ownership: Derived from LAUNCH.C; normal BUILD compiles this file. Keep behavioral edits in LAUNCH.C and synchronize/regenerate.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.77 - modal command menu for DOS
+/* Launch! 3.771 - modal command menu for DOS
  * Microsoft C/C++ 7.0, medium model (.EXE), 286/EGA or later.
  */
 #include <dos.h>
@@ -69,6 +69,8 @@ static int shortcut_target_light=0;
 /* Startup services are configured in LAUNCH.CFG and loaded directly by the DOS command processor. */
 static int shortcut_enabled=1,shortcut_ctrl=1,shortcut_alt=1,shortcut_shift=0;
 static unsigned char open_menu_at_boot=0;
+/* Prompt is only imposed at boot after the user explicitly presses Set. */
+static int prompt_style=0,prompt_boot_style=0,prompt_set=0;
 static char shortcut_key_cfg[16]="\\";
 static int shortcut_activation_pending=0;
 
@@ -211,6 +213,8 @@ static int shortcut_write_target(void);
 static int sync_startup_services(void);
 static int queue_service_apply(void);
 static int queue_shell_batch(const char *commands);
+static unsigned long dos_get_vector(unsigned char vector);
+static void dos_set_vector(unsigned char vector,unsigned seg,unsigned off);
 static int children(int parent,int *list);
 static void delete_tree(int node);
 static char write_path[MAX_CMD];
@@ -590,6 +594,8 @@ static int load_appearance(void)
        same file so future core features can use them. */
     if(!stricmp(p,"fontPersist")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} loaded.font_persist=(unsigned char)value;continue;}
     if(!stricmp(p,"OPEN_MENU_BOOT")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} open_menu_at_boot=(unsigned char)value;continue;}
+    if(!stricmp(p,"PROMPT_STYLE")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>=24){fclose(f);return 0;} prompt_style=prompt_boot_style=(int)value;continue;}
+    if(!stricmp(p,"PROMPT_SET")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} prompt_set=(int)value;continue;}
     if(!stricmp(p,"shortcutEnabled")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} shortcut_enabled=(int)value;continue;}
     if(!stricmp(p,"SAVERS_INSTALLED")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} screensavers_installed=(int)value;continue;}
     if(!stricmp(p,"FONTS_INSTALLED")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} fonts_installed=(int)value;continue;}
@@ -1473,31 +1479,6 @@ static void ega14_overlay_ui_bios(void)
   if(ega_target_override_active)ega14_glyph_write(8,(const unsigned char far *)ega_target_override_glyph);
 }
 
-static void ega14_rom_read(int code,unsigned char far *glyph)
-{
-#ifndef __GNUC__
-  unsigned fseg,foff;const unsigned char far *p;int j;
-  _asm {
-    push bp
-    push es
-    mov ax,1130h
-    mov bh,2
-    int 10h
-    mov ax,es
-    mov fseg,ax
-    mov foff,bp
-    pop es
-    pop bp
-  }
-  p=(const unsigned char far *)MAKE_FP(fseg,foff);
-  p+=(unsigned)code*14U;
-  for(j=0;j<14;j++)glyph[j]=p[j];
-  for(;j<32;j++)glyph[j]=0;
-#else
-  (void)code;(void)glyph;
-#endif
-}
-
 static void ega14_select_block0(void)
 {
   union REGS r;memset(&r,0,sizeof(r));r.x.ax=0x1103;r.x.bx=0;int86(0x10,&r,&r);
@@ -1505,7 +1486,12 @@ static void ega14_select_block0(void)
 
 static void ega14_rom_reset(void)
 {
-  union REGS r;memset(&r,0,sizeof(r));r.x.ax=0x1101;r.x.bx=0;int86(0x10,&r,&r);
+  union REGS r;
+  /* Restore the EGA BIOS 8x14 ROM font and 25-row geometry.  AL=01 is the
+     user-font loader and requires ES:BP; using it here leaves undefined glyphs
+     in the active character set.  AL=11 is the ROM 8x14 load-and-reprogram
+     service and is the proven Standard-font path on genuine EGA. */
+  memset(&r,0,sizeof(r));r.x.ax=0x1111;r.x.bx=0;int86(0x10,&r,&r);
   ega14_select_block0();
 }
 
@@ -1527,30 +1513,18 @@ static int launchui_active=0;
 static int ega14_build_and_load(int with_ui)
 {
   unsigned segment;unsigned char far *dst;const unsigned char far *src;
-  unsigned fseg,foff;int i,j;
+  int i,j;
+  /* Standard on genuine EGA must stay entirely on the EGA BIOS 8x14 path.
+     AX=1130h ROM-pointer copying is not safe here and was the source of the
+     garbled post-install display regression. */
+  if(!appearance.font_id){
+    ega14_rom_reset();
+    if(with_ui)ega14_overlay_ui_bios();
+    return 1;
+  }
   if(_dos_allocmem(224,&segment)!=0)return 0;
   dst=(unsigned char far *)MAKE_FP(segment,0);
-  if(appearance.font_id){
-    if(!font_read_ega(appearance.font_id,segment)){_dos_freemem(segment);return 0;}
-  } else {
-#ifndef __GNUC__
-    _asm {
-      push bp
-      push es
-      mov ax,1130h
-      mov bh,2
-      int 10h
-      mov ax,es
-      mov fseg,ax
-      mov foff,bp
-      pop es
-      pop bp
-    }
-    movedata(fseg,foff,segment,0,3584);
-#else
-    _dos_freemem(segment);return 0;
-#endif
-  }
+  if(!font_read_ega(appearance.font_id,segment)){_dos_freemem(segment);return 0;}
   if(with_ui){
     for(i=0;i<(int)sizeof(launchui_codes);i++){
       src=launch_glyph14[i];for(j=0;j<14;j++)dst[(unsigned)launchui_codes[i]*14U+j]=src[j];
@@ -1572,10 +1546,10 @@ static int ega14_build_and_load(int with_ui)
 
 static void ega14_apply_launchui(void)
 {
-  /* EGA is loaded atomically as one complete 256-character 8x14 font.
-     Do not issue per-character AH=11h calls: on real EGA BIOSes those calls
-     can change the active character-map state and leave Launch!'s live screen
-     displaying the wrong glyph bank. */
+  /* Custom EGA fonts are loaded as one complete 256-character 8x14 image.
+     Standard is the deliberate exception: restore the native BIOS 8x14 set
+     first, then apply only Launch!'s reserved glyphs through the proven EGA
+     BIOS single-glyph path. */
   (void)ega14_build_and_load(1);
 }
 /* Modify the active EGA/VGA character-generator RAM in place.  On genuine
@@ -2365,7 +2339,7 @@ static int write_current_config(const char *name)
 {
   FILE *f=fopen(name,"wt");int ok;
   if(!f)return 0;
-  ok=fputs("; Launch! 3.77 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
+  ok=fputs("; Launch! 3.771 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
   strcpy(write_path,"Launcher");
   if(ok)ok=write_section(f,-1,8);
   if(fclose(f)!=0)ok=0;
@@ -2408,7 +2382,7 @@ static int save_appearance(void)
       appearance.show_collections,appearance.show_explore,appearance.show_power,
       appearance.show_time,appearance.show_sysbar,appearance.font_id,appearance.font_persist,
       appearance.mouse_cursor)<0)ok=0;
-  if(ok && fprintf(f,"WinInst=%d\nWinPath=%s\nShortcutTarget=%s\nOPEN_MENU_BOOT=%u\nfontPersist=%u\nshortcutEnabled=%d\nshortcutCtrl=%d\nshortcutAlt=%d\nshortcutShift=%d\nshortcutKey=%s\nSAVERS_INSTALLED=%d\nFONTS_INSTALLED=%d\nSHORTCUT_INSTALLED=%d\n",win_inst_cfg?1:0,win_path_cfg,shortcut_target_light?"LIGHT":"STANDARD",open_menu_at_boot,appearance.font_persist,shortcut_enabled,shortcut_ctrl,shortcut_alt,shortcut_shift,shortcut_key_cfg,screensavers_installed,fonts_installed,shortcut_component_installed)<0)ok=0;
+  if(ok && fprintf(f,"WinInst=%d\nWinPath=%s\nShortcutTarget=%s\nOPEN_MENU_BOOT=%u\nPROMPT_STYLE=%d\nPROMPT_SET=%d\nfontPersist=%u\nshortcutEnabled=%d\nshortcutCtrl=%d\nshortcutAlt=%d\nshortcutShift=%d\nshortcutKey=%s\nSAVERS_INSTALLED=%d\nFONTS_INSTALLED=%d\nSHORTCUT_INSTALLED=%d\n",win_inst_cfg?1:0,win_path_cfg,shortcut_target_light?"LIGHT":"STANDARD",open_menu_at_boot,prompt_boot_style,prompt_set,appearance.font_persist,shortcut_enabled,shortcut_ctrl,shortcut_alt,shortcut_shift,shortcut_key_cfg,screensavers_installed,fonts_installed,shortcut_component_installed)<0)ok=0;
   if(fclose(f)!=0)ok=0;
   if(!ok){remove(appearance_temp_file);return 0;}
   remove(appearance_file);
@@ -3078,6 +3052,9 @@ static int resolve_windows_executable(const char *command,char *path)
 {
   char token[MAX_CMD],tryname[MAX_CMD];FILE *f;char *dot,*slash,*other;
   windows_command_token(command,token,sizeof(token));path[0]=0;if(!token[0])return 0;
+  /* Do not touch removable media merely to decorate Add/Edit with a Windows
+     glyph.  Floppy launchers are validated only when the user runs them. */
+  if((token[0]=='A'||token[0]=='a'||token[0]=='B'||token[0]=='b')&&token[1]==':'&&(token[2]=='\\'||token[2]=='/'))return 0;
   strcpy(tryname,token);
   f=fopen(tryname,"rb");if(f){fclose(f);strcpy(path,tryname);return 1;}
   slash=strrchr(token,'\\');other=strrchr(token,'/');if(other&&(!slash||other>slash))slash=other;
@@ -3531,7 +3508,6 @@ static void change_config_value(int tab,int item,int direction)
 }
 
 
-static int prompt_style=0;
 static int prompt_ansi=0;
 #define MAX_PROMPT_STYLES 24
 #define PROMPT_NAME_LEN 24
@@ -3615,10 +3591,10 @@ static void prompt_load_defaults(void)
 
 static void prompt_load_styles(void)
 {
-  char path[MAX_CMD],line[384];char *eq,*name,*value,*e;FILE *f;int n=0;
+  char path[MAX_CMD],*line=(char *)copy_buffer;char *eq,*name,*value,*e;FILE *f;int n=0;
   prompt_cfg_path(path);f=fopen(path,"rt");
   if(!f){prompt_load_defaults();return;}
-  while(n<MAX_PROMPT_STYLES&&fgets(line,sizeof(line),f)){
+  while(n<MAX_PROMPT_STYLES&&fgets(line,384,f)){
     name=line;while(*name==' '||*name=='\t')name++;
     if(!*name||*name==';'||*name=='#'||*name=='\r'||*name=='\n')continue;
     eq=strchr(name,'=');if(!eq)continue;*eq=0;value=eq+1;
@@ -3630,7 +3606,7 @@ static void prompt_load_styles(void)
     n++;
   }
   fclose(f);if(n)prompt_count=n;else prompt_load_defaults();
-  if(prompt_style>=prompt_count)prompt_style=0;
+  if(prompt_style>=prompt_count){prompt_style=0;prompt_boot_style=0;}
 }
 
 static int prompt_next_style(int current,int direction)
@@ -3643,11 +3619,11 @@ static int prompt_next_style(int current,int direction)
 
 static void prompt_value(int style,char *out)
 {
-  char path[MAX_CMD],line[384];char *eq,*name,*value,*e;FILE *f;int n=0;
+  char path[MAX_CMD],*line=(char *)copy_buffer;char *eq,*name,*value,*e;FILE *f;int n=0;
   if(style<0)style=0;
   prompt_cfg_path(path);f=fopen(path,"rt");
   if(f){
-    while(fgets(line,sizeof(line),f)){
+    while(fgets(line,384,f)){
       name=line;while(*name==' '||*name=='\t')name++;
       if(!*name||*name==';'||*name=='#'||*name=='\r'||*name=='\n')continue;
       eq=strchr(name,'=');if(!eq)continue;*eq=0;value=eq+1;
@@ -3661,58 +3637,16 @@ static void prompt_value(int style,char *out)
   prompt_builtin_value(style,out);
 }
 
-static int set_autoexec_prompt(int style)
+static int prepare_prompt_batch(int style,char *out)
 {
-  /* Keep the sizeable file/edit buffers out of the small MSC runtime stack. */
-  static char autoexec[20],temp[20],backup[20],line[512],check[512],value[256];
-  char *p,*comspec;
-  FILE *in,*out;int found=0,ok=1;
-  comspec=getenv("COMSPEC");autoexec[0]=(comspec&&comspec[1]==':')?(char)toupper(comspec[0]):'C';
-  strcpy(autoexec+1,":\\AUTOEXEC.BAT");strcpy(temp,autoexec);strcpy(strrchr(temp,'.'),".$P$");
-  strcpy(backup,autoexec);strcpy(strrchr(backup,'.'),".L!P");
-  prompt_value(style,value);
-  in=fopen(autoexec,"rt");out=fopen(temp,"wt");if(!out){if(in)fclose(in);return 0;}
-  /* Determine whether AUTOEXEC already has SET PROMPT=.  If it does, the
-     replacement is written at exactly that line position.  If it does not,
-     write the new prompt as line 1 before copying the existing file. */
-  if(in){
-    while(fgets(line,sizeof(line),in)){
-      strcpy(check,line);p=check;while(*p==' '||*p=='\t')p++;
-      if(!strnicmp(p,"SET",3)){p+=3;while(*p==' '||*p=='\t')p++;
-        if(!strnicmp(p,"PROMPT",6)){p+=6;while(*p==' '||*p=='\t')p++;
-          if(*p=='='){found=1;break;}
-        }
-      }
-    }
-    rewind(in);
-  }
-  if(!found){if(fprintf(out,"SET PROMPT=%s\n",value)<0)ok=0;}
-  if(in&&ok){
-    while(fgets(line,sizeof(line),in)){
-      strcpy(check,line);p=check;while(*p==' '||*p=='\t')p++;
-      if(!strnicmp(p,"SET",3)){p+=3;while(*p==' '||*p=='\t')p++;if(!strnicmp(p,"PROMPT",6)){p+=6;while(*p==' '||*p=='\t')p++;if(*p=='='){if(fprintf(out,"SET PROMPT=%s\n",value)<0)ok=0;continue;}}}
-      if(fputs(line,out)==EOF){ok=0;break;}
-    }
-    if(ferror(in))ok=0;fclose(in);
-  }
-  if(fclose(out)!=0)ok=0;if(!ok){remove(temp);return 0;}
-  remove(backup);if(in&&rename(autoexec,backup)!=0){remove(temp);return 0;}
-  if(rename(temp,autoexec)!=0){if(in)rename(backup,autoexec);remove(temp);return 0;}
+  /* out is the existing MAX_MACRO main buffer; no large automatic buffer is
+     allocated here.  The completed line is consumed by !APPLY.BAT. */
+  strcpy(out,"PROMPT ");
+  prompt_value(style,out+7);
+  if((int)strlen(out)+2>=MAX_MACRO)return 0;
+  strcat(out,"\r");
   return 1;
 }
-
-static int prepare_prompt_macro(int style)
-{
-  char value[256];
-  prompt_value(style,value);
-  if((int)strlen(value)+8>=MAX_CMD)return 0;
-  strcpy(run_command,"PROMPT ");
-  strcat(run_command,value);
-  run_node=-1;
-  prompt_macro_pending=1;
-  return 1;
-}
-
 static void draw_prompt_preview(int x,int y,int w,int style)
 {
   int i,j,cx=x+1,cy=y+2;char dosver[24],line[64];
@@ -3913,7 +3847,7 @@ static void config_about_box(void)
   bx=x+3;subdialog_box(x,y,w,h,"About Launch!");
   textout(x+3,y+2,"(C)Copyright 2026 Ben Renegar",C_INPUT_LABEL,34);
   textout(x+3,y+3,"www.benrenegar.com",C_INPUT_LABEL,34);
-  textout(x+3,y+6,"Version 3.77 - 2026-10-03",C_INPUT_LABEL,34);
+  textout(x+3,y+6,"Version 3.771 - 2026-10-04",C_INPUT_LABEL,34);
   for(;;){
     draw_button(bx,y+h-3,"  OK  ",6,focus==0);
     wait_input(&k,&mx,&my,&mb);
@@ -4057,7 +3991,7 @@ static void config_select_control(int tab,int item,int x,int y)
       for(i=2;i<n-1;i++)for(j=i+1;j<n;j++)
         if(stricmp(font_name_at(font_map[i]),font_name_at(font_map[j]))>0){int t=font_map[i];font_map[i]=font_map[j];font_map[j]=t;}
     }
-    current=0;for(i=0;i<n;i++){opts[i]=font_name_at(font_map[i]);if(font_map[i]==appearance.font_id)current=i;}
+    current=0;for(i=0;i<n;i++){opts[i]=font_name_at(font_map[i]);if(font_map[i]==(int)appearance.font_id)current=i;}
   }
   if(tab==0){if(item==5)sy=y+13;else if(item==7){sy=y+9;sx=x+47;}else if(item==8)sy=y+15;}
   else if(tab==1){static const int ry[14]={4,6,7,8,8,9,10,11,12,13,13,14,14,15};static const int rx[14]={25,45,25,25,45,25,25,25,25,25,45,25,45,25};sy=y+ry[item];sx=x+rx[item];}
@@ -4146,8 +4080,12 @@ static int configure_appearance(void)
         } else if(tab==3&&item==0){prompt_style=prompt_next_style(prompt_style,1);
         } else if(tab==3&&item==1){
           press_button(x+43,y+4,"  Set  ",7);
-          if(!set_autoexec_prompt(prompt_style)){notice_box("Write Error","AUTOEXEC.BAT could not be updated.");redraw=2;continue;}
-          if(!prepare_prompt_macro(prompt_style)){notice_box("Prompt Error","The selected prompt is too long.");redraw=2;continue;}
+          prompt_boot_style=prompt_style;prompt_set=1;
+          /* Do not perform any file I/O or prompt expansion from this deep
+             modal stack.  Return to main first; it saves LAUNCH.CFG, rewrites
+             !START.BAT and creates !APPLY.BAT after Configuration has fully
+             unwound. */
+          prompt_macro_pending=1;
           mouse_pointer_restore();close_menu();return 2;
         } else change_config_value(tab,item,1);
         redraw=2;continue;
@@ -4264,8 +4202,8 @@ static int configure_appearance(void)
         if(k==13||k==' '){run_screensaver();redraw=2;}
       } else if(tab==3&&item==0&&(k==0x4B00||k==0x4D00||k==' ')){prompt_style=prompt_next_style(prompt_style,k==0x4B00?-1:1);redraw=2;
       } else if(tab==3&&item==1&&(k==13||k==' ')){
-        if(!set_autoexec_prompt(prompt_style)){notice_box("Write Error","AUTOEXEC.BAT could not be updated.");redraw=2;continue;}
-        if(!prepare_prompt_macro(prompt_style)){notice_box("Prompt Error","The selected prompt is too long.");redraw=2;continue;}
+        prompt_boot_style=prompt_style;prompt_set=1;
+        prompt_macro_pending=1;
         mouse_pointer_restore();close_menu();return 2;
       } else if(!config_is_select(tab,item)&&k==0x4B00){change_config_value(tab,item,-1);redraw=2;}
       else if(!config_is_select(tab,item)&&(k==0x4D00||k==' ')){change_config_value(tab,item,1);redraw=2;}
@@ -4520,12 +4458,80 @@ static int parameter_prompt(int node)
   return parameter_prompt_command(nodes[node].title,nodes[node].command);
 }
 
+/* Keep removable-media launch support out of the primary COREBLD_TEXT
+   segment.  The core is already close to the 64K per-segment ceiling under
+   Microsoft C 7 medium model; this feature is self-contained and is called
+   through the normal far-code model. */
+#pragma code_seg("FLOPPY_TEXT")
+
+/* Floppy launchers are deliberately explicit.  Accessing an empty A:/B:\ via
+   DOS can otherwise raise the intrusive Abort/Retry/Fail critical-error UI. */
+static void far floppy_hard_error(unsigned deverr,unsigned errcode,unsigned far *devhdr)
+{
+  (void)deverr;(void)errcode;(void)devhdr;_hardresume(_HARDERR_FAIL);
+}
+
+static int floppy_command_info(const char *command,char *drive,char *executable)
+{
+  windows_command_token(command,executable,MAX_CMD);
+  if((executable[0]=='A'||executable[0]=='a'||executable[0]=='B'||executable[0]=='b') &&
+     executable[1]==':' && (executable[2]=='\\'||executable[2]=='/')){
+    *drive=(char)toupper((unsigned char)executable[0]);return 1;
+  }
+  *drive=0;return 0;
+}
+
+static int floppy_executable_ready(const char *executable)
+{
+  unsigned long old24=dos_get_vector(0x24);FILE *f;int ok;
+  _harderr(floppy_hard_error);
+  f=fopen(executable,"rb");ok=f!=0;if(f)fclose(f);
+  dos_set_vector(0x24,(unsigned)(old24>>16),(unsigned)old24);
+  return ok;
+}
+
+static int floppy_insert_dialog(const char *title,const char *command)
+{
+  char executable[MAX_CMD];char drive;int x,y,k=0,mx=0,my=0,focus=0,failed=0;unsigned mb=0;
+  int okx,cancelx,by,suffixx;
+  if(!floppy_command_info(command,&drive,executable))return 1;
+  /* Use the same question-dialog treatment as the rest of Launch!: titlebar,
+     question icon, toolbar divider/shadow and left-aligned action buttons. */
+  x=(screen_cols-60)/2;y=(screen_rows-10)/2;okx=x+3;cancelx=x+10;by=y+7;
+  for(;;){
+    subdialog_box(x,y,60,10,"Insert Floppy Disk");
+    message_icon(x+3,y+2,2);
+    textout(x+7,y+2,"Insert the floppy disk for",C_INPUT_LABEL,26);
+    textout(x+7,y+3,title,C_ITEM,(int)strlen(title));
+    suffixx=x+7+(int)strlen(title);
+    textout(suffixx,y+3," into drive ",C_INPUT_LABEL,12);
+    cell(suffixx+12,y+3,drive,C_INPUT_LABEL);
+    if(failed)textout(x+7,y+5,"Program not found. Change disk and try again.",C_BORDER,45);
+    else textout(x+7,y+5,"                                                  ",C_INPUT_LABEL,50);
+    draw_button(okx,by,"  OK  ",6,focus==0);draw_button(cancelx,by,"  Cancel  ",10,focus==1);
+    wait_input(&k,&mx,&my,&mb);
+    if(mb&MOUSE_MOVED){if(my==by&&mx>=okx&&mx<okx+6)focus=0;else if(my==by&&mx>=cancelx&&mx<cancelx+10)focus=1;continue;}
+    if(mb&1){
+      if(my==by&&mx>=cancelx&&mx<cancelx+10){press_button(cancelx,by,"  Cancel  ",10);return 0;}
+      if(!(my==by&&mx>=okx&&mx<okx+6))continue;
+      press_button(okx,by,"  OK  ",6);
+      if(floppy_executable_ready(executable))return 1;failed=1;continue;
+    }
+    if(k==27)return 0;
+    if(k==9||k==0x0F00||k==0x4B00||k==0x4D00){focus=!focus;continue;}
+    if(k==13){if(focus==1)return 0;if(floppy_executable_ready(executable))return 1;failed=1;}
+  }
+}
+
 static int prepare_launcher(int node)
 {
+  if(!floppy_insert_dialog(nodes[node].title,nodes[node].command))return 0;
   if(nodes[node].prompt_params)return parameter_prompt(node);
   strncpy(run_command,nodes[node].command,MAX_CMD-1);run_command[MAX_CMD-1]=0;
   return 1;
 }
+
+#pragma code_seg()
 
 static int explore_ram_label(unsigned drive)
 {
@@ -6328,15 +6334,20 @@ static int path_has_directory(const char *directory)
 
 static void build_macro(int node,const char *command,char *text)
 {
-  char directory[MAX_CMD];text[0]=0;
+  char directory[MAX_CMD],floppy_exe[MAX_CMD],floppy_drive=0;int force_floppy=0;
+  text[0]=0;
+  if(node>=0)force_floppy=floppy_command_info(command,&floppy_drive,floppy_exe);(void)floppy_exe;
   if(node>=0 && nodes[node].add_path){
     command_directory(command,directory);
     if(*directory && !path_has_directory(directory)){macro_append(text,"SET PATH=%PATH%;");macro_append(text,directory);macro_append(text,"\r");}
   }
+  command_directory(command,directory);
+  if(force_floppy){
+    char drivecmd[4];drivecmd[0]=floppy_drive;drivecmd[1]=':';drivecmd[2]='\r';drivecmd[3]=0;macro_append(text,drivecmd);
+  }
   if(node<0 || nodes[node].change_dir){
-    command_directory(command,directory);
     if(*directory){
-      if(directory[1]==':'){
+      if(directory[1]==':' && !force_floppy){
         char drive[4];drive[0]=directory[0];drive[1]=':';drive[2]='\r';drive[3]=0;
         macro_append(text,drive);
       }
@@ -6571,7 +6582,11 @@ static void font_bios_standard_vga(void)
 
 static void font_bios_standard_ega(void)
 {
-  union REGS r;memset(&r,0,sizeof(r));r.x.ax=0x1101;r.x.bx=0;int86(0x10,&r,&r);
+  union REGS r;
+  /* EGA Standard is the adapter BIOS 8x14 ROM font.  AX=1101h is the
+     user-font loader and requires ES:BP; it must never be used as a ROM
+     font selector.  AX=1111h explicitly loads the BIOS ROM 8x14 set. */
+  memset(&r,0,sizeof(r));r.x.ax=0x1111;r.x.bx=0;int86(0x10,&r,&r);
   memset(&r,0,sizeof(r));r.x.ax=0x1103;r.x.bx=0;int86(0x10,&r,&r);
 }
 
@@ -7303,7 +7318,7 @@ static void shortcut_idle_sync(void)
    Configuration rewrites the generated !START.BAT only. */
 static int sync_startup_services(void)
 {
-  char path[MAX_CMD],dir[MAX_CMD],spec[64];FILE *f;int n;
+  char path[MAX_CMD],dir[MAX_CMD],spec[64],value[256];FILE *f;int n;
   if(!program_dir[0])return 0;
   strncpy(dir,program_dir,sizeof(dir)-1);dir[sizeof(dir)-1]=0;n=(int)strlen(dir);while(n>3&&(dir[n-1]=='\\'||dir[n-1]=='/'))dir[--n]=0;
   strcpy(path,program_dir);strcat(path,"!START.BAT");f=fopen(path,"wt");if(!f)return 0;
@@ -7314,6 +7329,7 @@ static int sync_startup_services(void)
     spec[0]=0;if(shortcut_ctrl)strcat(spec,"CTRL+");if(shortcut_alt)strcat(spec,"ALT+");if(shortcut_shift)strcat(spec,"SHIFT+");strcat(spec,shortcut_key_cfg);
     if(fprintf(f,"%s\\%s /KEY=%s\n",dir,shortcut_target_light?"!TKEY.COM":"!KEY.COM",spec)<0){fclose(f);return 0;}
   }
+  if(prompt_set){prompt_value(prompt_boot_style,value);if(fprintf(f,"PROMPT %s\n",value)<0){fclose(f);return 0;}}
   if(open_menu_at_boot)if(fprintf(f,"%s\\!.EXE\n",dir)<0){fclose(f);return 0;}
   return fclose(f)==0;
 }
@@ -7363,12 +7379,12 @@ static int queue_shell_batch(const char *commands)
 static void show_help(void)
 {
 #ifdef LIGHT86
-  puts("Launch! 86 Light 3.77 - lightweight command menu for DOS\n");
+  puts("Launch! 86 Light 3.771 - lightweight command menu for DOS\n");
   puts("Usage: !86 [menu.mnu] [/CONFIG | /OPENTO=folder | /?]\n");
   puts("Menu management: Ctrl+A Add, Ctrl+D Delete, Ctrl+E Edit, Ctrl+Up/Down Move, Ctrl+S Sort");
 #else
 
-  puts("Launch! 3.77 - a lightweight command menu for DOS\n");
+  puts("Launch! 3.771 - a lightweight command menu for DOS\n");
   puts("Usage: ! [menu.mnu] [/CONFIG | /EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
   puts("Menu management shortcuts:");
   puts("  Ctrl+A        Add a folder, launcher or separator");
@@ -7448,7 +7464,7 @@ int main(int argc,char **argv)
     /* Normal menu startup no longer scans APPDATA for external fonts unless
        the configured font is actually external and must be loaded here.
        Config still performs a full scan when its Fonts page is opened. */
-    if(!appearance.font_persist && appearance.font_id >= (font_is_ega()?EGA_BUILTIN_FONT_COUNT:VGA_BUILTIN_FONT_COUNT))scan_external_fonts();
+    if(!appearance.font_persist && (int)appearance.font_id >= (font_is_ega()?EGA_BUILTIN_FONT_COUNT:VGA_BUILTIN_FONT_COUNT))scan_external_fonts();
   }
 #endif
 #ifdef LIGHT86
@@ -7504,8 +7520,11 @@ int main(int argc,char **argv)
     }
 #endif
     if(result==2 && prompt_macro_pending){
-      build_macro(-1,run_command,macro);
-      if(!dispatch_command_text(macro)){puts("Launch!: cannot install keyboard macro helper");return 1;}
+      if(!save_appearance()){puts("Launch!: prompt configuration could not be saved.");return 1;}
+      if(!sync_startup_services()){puts("Launch!: DOS startup services could not be updated.");return 1;}
+      if(!prepare_prompt_batch(prompt_boot_style,macro)){puts("Launch!: selected prompt is too long.");return 1;}
+      if(!queue_shell_batch(macro)){puts("Launch!: cannot queue prompt application");return 1;}
+      prompt_macro_pending=0;
     }
     return 0;
   }
@@ -7569,7 +7588,12 @@ int main(int argc,char **argv)
 #ifndef LIGHT86
       if(config_status==1 && (font_activation_pending||shortcut_activation_pending)){result=0;break;}
 #endif
-      if(config_status==2 && prompt_macro_pending){result=0;break;}
+      if(config_status==2 && prompt_macro_pending){
+        if(!save_appearance()){puts("Launch!: prompt configuration could not be saved.");return 1;}
+        if(!sync_startup_services()){puts("Launch!: DOS startup services could not be updated.");return 1;}
+        if(!prepare_prompt_batch(prompt_boot_style,macro)){puts("Launch!: selected prompt is too long.");return 1;}
+        result=0;break;
+      }
     }
   } while(result==BUILTIN_CONFIG);
 #ifndef LIGHT86
@@ -7582,8 +7606,8 @@ int main(int argc,char **argv)
     strcpy(macro,"TIME\r");
     if(!dispatch_command_text(macro)){puts("Launch!: cannot install keyboard macro helper");return 1;}
   } else if(prompt_macro_pending){
-    build_macro(-1,run_command,macro);
-    if(!dispatch_command_text(macro)){puts("Launch!: cannot install keyboard macro helper");return 1;}
+    if(!queue_shell_batch(macro)){puts("Launch!: cannot queue prompt application");return 1;}
+    prompt_macro_pending=0;
   } else if(result>=0){
     if(run_node==BUILTIN_COLLECTIONS && collection_macro_direct){char d[4];macro[0]=0;d[0]=run_command[0];d[1]=':';d[2]='\r';d[3]=0;macro_append(macro,d);macro_append(macro,"CD ");macro_append(macro,run_command);macro_append(macro,"\r");}
     else build_macro(run_node==BUILTIN_COLLECTIONS?collection_run_launcher:run_node,run_command,macro);

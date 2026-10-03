@@ -556,7 +556,7 @@ static int squiral_defrag(unsigned start_x,unsigned start_y)
            cluster colour.  Both flashes stay inside the cell, so no border
            pixels can accumulate. */
         for(flash=0;flash<2;flash++){
-          squiral_cursor(source,(flash&1)?14:15);
+          squiral_cursor(source,(unsigned char)((flash&1)?14:15));
           tick=bios_ticks();
           while(bios_ticks()==tick)if(saver_input(start_x,start_y))return 1;
           squiral_draw_cell(source,squiral_cells[source]);
