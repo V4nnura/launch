@@ -35,13 +35,13 @@
 - Built in [file opener](https://github.com/therenegar/launch/wiki/File-Open) to create associations between files and launchers for easy open.
 - Integrated [file searching](https://github.com/therenegar/launch/wiki/File-Open#file-search) including "Go Deep" mode for searching file contents as well.
 - Built in [Power Off/Reboot control](https://github.com/therenegar/launch/wiki/Shutdown) with retro Windows 95 power off experience.
-- 10 handy and modern text-mode [accessories](https://github.com/therenegar/launch/wiki/Accessories)
+- Handy and modern text-mode [accessories](https://github.com/therenegar/launch/wiki/Accessories)
     - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MD.EXE) - and [Viewer](https://github.com/therenegar/launch/wiki/!MDVIEW.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE) , [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE). 
-- 9 fun and addictive text-mode [games](https://github.com/therenegar/launch/wiki/Games)
+- Fun and addictive text-mode [games](https://github.com/therenegar/launch/wiki/Games)
     - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE), [Jell-Oh](https://github.com/therenegar/launch/wiki/!JELLOH.EXE), [Metro](https://github.com/therenegar/launch/wiki/!METRO.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
-- 14 awesome [screensavers](https://github.com/therenegar/launch/wiki/Screen-Savers) including a 7-segment digital clock, starry night skyline, bouncing DOS logo, disk defrag simulation, 3D pipes, bouncing 3D ball, paintball, and more!
+- Awesome [screensavers](https://github.com/therenegar/launch/wiki/Screen-Savers) including a 7-segment digital clock, starry night skyline, bouncing DOS logo, disk defrag simulation, 3D pipes, bouncing 3D ball, paintball, and more!
 - Various [Command Prompt styles](https://github.com/therenegar/launch/wiki/Configuration#prompt) to choose from to uplift your C:\
-- 30+ Custom [EGA & VGA display fonts](https://github.com/therenegar/launch/wiki/Fonts) to change the look of your whole DOS environment.
+- Custom [EGA & VGA display fonts](https://github.com/therenegar/launch/wiki/Fonts) to change the look of your whole DOS environment.
 - Maximum compatibility across DOS versions (back to DOS 3.3) on real or emulated hardware/virtual machines.
 - No libraries or dependencies including ANSI. Custom UI toolkit written in C. Fast and simple.
 - Extremely minimal memory footprint. All resident components can be disabled to have zero memory impact if desired.
