@@ -87,7 +87,7 @@ Configuration includes the menu, colors, screen savers, prompt customization, fo
 
 **Learn more about [Configuration](https://github.com/therenegar/launch/wiki/Configuration).**
 
-<img width="720" alt="Configuration" src="https://github.com/user-attachments/assets/e537e661-5e06-4c31-b3f4-b625f4dfd17f" />
+<img width="720" alt="Configuration" src="https://github.com/user-attachments/assets/bb8bc7e1-a34b-4137-b394-436e6bc9c324" />
 
 ----
 
