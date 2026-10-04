@@ -177,4 +177,5 @@ Compiled with Microsoft C/C++ Optimizing Compiler 7.00 from 1992 (Takes approx 3
 Screenshots taken on this machine using [Screen Thief](http://www.win3x.org/win3board/viewtopic.php?t=2710&view=min).<br/>
 Builds transferred using FTP to a Linux host where a simple Python script integrates the build into (this) GIT repository- and automates creation of release zip/img files. Automated regression testing executed with 86Box across 10 different DOS environments/hardware configs (still a work in progress itself).
 
-<img width="360" height="300" alt="About Launch!" src="https://github.com/user-attachments/assets/2bce7bf5-7204-4281-acae-6d80d574c567" />
+<img width="720" alt="About Launch!" src="https://github.com/user-attachments/assets/1681a081-3eae-4890-a672-ca8dc04d1626" />
+
