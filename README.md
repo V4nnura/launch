@@ -11,7 +11,7 @@
 
 **Download the latest release [here](https://github.com/therenegar/launch/releases/latest)**
 
-**Requires** DOS 3.3, 80286, EGA or better. 220KB-1.5MB free disk space for install (depending on selected options).
+**Requires** any real-mode DOS - DOS 3.3+, 80286+, EGA/VGA compatible display adapter. 220KB-1.5MB free disk space for install (depending on selected options).
 
 **Works with** MS-DOS, PC DOS, DR-DOS and FreeDOS on real hardware and virtual machines, including DOSBox, 86Box and DOSEMU. Compatible with third-party command interpreters such as 4DOS/NDOS and FreeCOM.
 
