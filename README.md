@@ -1,5 +1,3 @@
- [https://launchfordos.app](https://launchfordos.app)
-
 <a id="launch"></a>
 <img id="launch" height="100" alt="main-logo" src="https://github.com/user-attachments/assets/d7429665-3bf5-4ec2-a438-cb3289aa9614" />
 
@@ -28,7 +26,7 @@
 - Displays a hierarchical folder based menu, modally over the top of the existing console contents.
 - Supports trigger by a customizable keyboard shortcut.
 - Launches commands using the existing command interpreter and shell.
-- [Quick Launch](https://github.com/therenegar/launch/wiki/Quick-Launch#quick-launch) type to search the menu and run with minimal keystrokes.
+- [Quick Launch](https://github.com/therenegar/launch/wiki/Quick-Launch#quick-launch) to search the menu and run with minimal keystrokes.
 - Easy [visual menu editing](https://github.com/therenegar/launch/wiki/Menu-Management).
 - Automatic [menu generator](https://github.com/therenegar/launch/wiki/!MNUGEN.COM) with comprehensive DOS program database to automatically identify programs.
 - Built in [executable explorer](https://github.com/therenegar/launch/wiki/Explore-and-Run) to browse and run programs anywhere.
@@ -45,7 +43,7 @@
 - Maximum compatibility across DOS versions (back to DOS 3.3) on real or emulated hardware/virtual machines.
 - No libraries or dependencies including ANSI. Custom UI toolkit written in C. Fast and simple.
 - Extremely minimal memory footprint. All resident components can be disabled to have zero memory impact if desired.
-- Full and optional [Win 3.x integration](https://github.com/therenegar/launch/wiki/!W3X.EXE); the DOS menu can be run windowed, or you can run a native Win16 Launch! Menu.
+- And there's full and optional [Win 3.x integration](https://github.com/therenegar/launch/wiki/!W3X.EXE); the DOS menu can be run windowed, or you can run a native Win16 Launch! Menu.
 
 **[Check out the wiki](https://github.com/therenegar/launch/wiki) for detailed information and documentation.**
 &nbsp;<br/>&nbsp;<br/>&nbsp;<br/>
