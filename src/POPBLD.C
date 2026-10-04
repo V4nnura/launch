@@ -129,7 +129,7 @@ static void gravity(void)
 static void draw_cell(int bx,int by,int x,int y,int flash_bg)
 {
   int v=board[y][x],bg=0,attr;if(!v){acc_put(bx+x*2,by+y,' ',0);acc_put(bx+x*2+1,by+y,' ',0);return;}
-  if(flash_bg>=0)bg=flash_bg;else if(sel_count>=2&&mark[y][x])bg=15;
+  if(flash_bg>=0)bg=flash_bg;else if(sel_count>=2&&mark[y][x])bg=acc_flashing?15:7; /* No blink bit when disabled. */
   attr=ACC_ATTR(bg,bubble_fg(v));acc_put(bx+x*2,by+y,GLYPH_L,attr);acc_put(bx+x*2+1,by+y,GLYPH_R,attr);
 }
 
@@ -161,6 +161,7 @@ static void pop_pause(unsigned long ticks){unsigned long t=acc_ticks();while((un
 static void flash_group(int bx,int by)
 {
   static const int bg[4]={15,12,14,15};int k,x,y;
+  if(!acc_flashing)return;
   for(k=0;k<4;k++){for(y=0;y<BH;y++)for(x=0;x<BW;x++)if(mark[y][x])draw_cell(bx,by,x,y,bg[k]);pop_pause(1);}
 }
 

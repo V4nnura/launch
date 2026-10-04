@@ -103,12 +103,16 @@ load_done:
     pop ax
     ret
 
-resident_mode_is_80x25:
+resident_mode_is_text25:
     push ax
     push ds
     mov ax,0x0040
     mov ds,ax
     mov al,byte ptr [0x49]
+    cmp al,0
+    je mode_columns
+    cmp al,1
+    je mode_columns
     cmp al,2
     je mode_columns
     cmp al,3
@@ -116,8 +120,11 @@ resident_mode_is_80x25:
     cmp al,7
     jne mode_bad
 mode_columns:
+    cmp word ptr [0x4a],40
+    je mode_rows
     cmp word ptr [0x4a],80
     jne mode_bad
+mode_rows:
     cmp byte ptr cs:[active_height],14
     je mode_good
     /* VGA BIOS data area reports 25 rows as 24 and 16 scanlines. */
@@ -156,7 +163,7 @@ int10_mode_set:
     push es
     cmp byte ptr cs:[active_id],0
     je mode_reload_done
-    call resident_mode_is_80x25
+    call resident_mode_is_text25
     jc mode_reload_done
     call resident_load_custom
 mode_reload_done:

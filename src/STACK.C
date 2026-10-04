@@ -34,6 +34,7 @@ static int count=1,current=0;
 static unsigned char stack_softwrap[CARDS][TEXT_LINES];
 #define STACK_CLIP_MAX (CW*TEXT_LINES+TEXT_LINES*2+1)
 static int stack_sel_anchor=-1,stack_sel_caret=-1,stack_clip_len=0,stack_sel_repaint=0;
+static FILE *stack_print_override=0;
 static char far stack_clip[STACK_CLIP_MAX];
 
 static void defaults(void)
@@ -218,7 +219,13 @@ static void stack_delete_current(void)
 }
 static int stack_print_current(void)
 {
- FILE *f;int r,q;f=fopen("LPT1","wb");if(!f)return 0;fputs(cards[current].title,f);fputs("\r\n",f);for(q=0;q<72;q++)fputc('=',f);fputs("\r\n",f);for(r=0;r<TEXT_LINES;r++){q=CW;while(q&&cards[current].text[r*CW+q-1]==' ')q--;if(q)fwrite(cards[current].text+r*CW,1,q,f);fputs("\r\n",f);}fputc('\f',f);fclose(f);return 1;
+ FILE *f;int r,q;f=stack_print_override?stack_print_override:fopen("LPT1","wb");if(!f)return 0;fputs(cards[current].title,f);fputs("\r\n",f);for(q=0;q<72;q++)fputc('=',f);fputs("\r\n",f);for(r=0;r<TEXT_LINES;r++){q=CW;while(q&&cards[current].text[r*CW+q-1]==' ')q--;if(q)fwrite(cards[current].text+r*CW,1,q,f);fputs("\r\n",f);}fputc('\f',f);fclose(f);return 1;
+}
+static int stack_print_mode(int mode)
+{
+ FILE *f,*in;char tmp[ACC_PATH];int ok;
+ if(mode==ACC_PRINT_PS){acc_path(tmp,"DATA","STACKPRN.TMP");f=fopen(tmp,"wb");if(!f)return 0;stack_print_override=f;ok=stack_print_current();stack_print_override=0;if(!ok){remove(tmp);return 0;}in=fopen(tmp,"rb");if(!in){remove(tmp);return 0;}ok=acc_ps_export(in,"STACK.PS");fclose(in);remove(tmp);return ok;}
+ f=fopen("LPT1","wb");if(!f)return 0;if(mode==ACC_PRINT_ESCP)acc_escp_begin(f);stack_print_override=f;ok=stack_print_current();stack_print_override=0;return ok;
 }
 static void stack_full_draw(int focus,int title_edit,int tp,int cx,int cy,int top)
 {
@@ -263,7 +270,7 @@ static void stack_fullscreen(char *exported,char *message)
     if(key==1){stack_add_card();cx=cy=top=0;focus=1;title_edit=0;stack_full_draw(focus,title_edit,tp,cx,cy,top);key=0;continue;}
     if(key==4){stack_delete_current();cx=cy=top=0;focus=1;title_edit=0;stack_full_draw(focus,title_edit,tp,cx,cy,top);key=0;continue;}
     if(key==19){if(!export_cards(exported))acc_notice("Export","Unable to export stack.");else{sprintf(message,"Card Stack exported to\n%s",exported);acc_notice("Export",message);}stack_full_draw(focus,title_edit,tp,cx,cy,top);key=0;continue;}
-    if(key==16){if(!stack_print_current())acc_notice("Print","Unable to open LPT1.");stack_full_draw(focus,title_edit,tp,cx,cy,top);key=0;continue;}
+    if(key==16){int pm=acc_print_popup(44,23);if(pm&&!stack_print_mode(pm))acc_notice("Print","Unable to print card.");stack_full_draw(focus,title_edit,tp,cx,cy,top);key=0;continue;}
 
     /* Mouse editing uses the same active-card controls as the normal view. */
     if((mb&1)&&my==ay+1&&mx>=ax+2&&mx<ax+2+CT){
@@ -363,13 +370,13 @@ int main(int argc,char **argv)
     /* ACCLIBX suppresses bare Esc at top level.  A returned 27 here is the
        suite-wide Ctrl+Q / Alt+F4 close request. */
     if(key==27){quit=1;continue;}
-    if(key==256+0x85||key==256+0x57){stack_fullscreen(exported,message);acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;key=0;continue;}
+    if(key==256+0x85||key==256+0x57||((mb&1)&&my==y-6&&mx>=x+57&&mx<x+59)){stack_fullscreen(exported,message);acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;key=0;continue;}
     if(key==256+0x73){stack_selection_clear();select_card(higher_card());cx=cy=top=0;focus=0;dirty=1;key=0;continue;}
     if(key==256+0x74){stack_selection_clear();select_card(lower_card(1));cx=cy=top=0;focus=0;dirty=1;key=0;continue;}
     if(key==1){stack_add_card();cx=cy=top=0;focus=0;dirty=1;key=0;continue;}
     if(key==4){stack_delete_current();cx=cy=top=0;focus=0;dirty=1;key=0;continue;}
     if(key==19){if(!export_cards(exported))acc_notice("Export","Unable to export stack.");else{sprintf(message,"Card Stack exported to\n%s",exported);acc_notice("Export",message);}acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;key=0;continue;}
-    if(key==16){if(!stack_print_current())acc_notice("Print","Unable to open LPT1.");acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;key=0;continue;}
+    if(key==16){int pm=acc_print_popup(x+44,y+13);if(pm&&!stack_print_mode(pm))acc_notice("Print","Unable to print card.");acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;key=0;continue;}
 
     if((mb&1)&&count>=2&&my==y-1&&mx>=px+4&&mx<px+26){stack_selection_clear();select_card(lower_card(1));cx=cy=top=0;focus=0;title_edit=0;dirty=1;key=0;continue;}
     if((mb&1)&&count>=3&&my==y-3&&mx>=px+6&&mx<px+28){stack_selection_clear();select_card(lower_card(2));cx=cy=top=0;focus=0;title_edit=0;dirty=1;key=0;continue;}
@@ -411,7 +418,7 @@ int main(int argc,char **argv)
       else if(focus==4&&count<CARDS){stack_add_card();cx=cy=top=0;}
       else if(focus==5&&count>1){stack_delete_current();cx=cy=top=0;}
       else if(focus==6){if(!export_cards(exported))acc_notice("Export","Unable to export stack.");else{sprintf(message,"Card Stack exported to\n%s",exported);acc_notice("Export",message);}}
-      else if(focus==7){if(!stack_print_current())acc_notice("Print","Unable to open LPT1.");}
+      else if(focus==7){int pm=acc_print_popup(x+44,y+13);if(pm&&!stack_print_mode(pm))acc_notice("Print","Unable to print card.");}
       else if(focus==8){quit=1;continue;}
       dirty=1;key=0;continue;
     }

@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.771
+ * MAINTAINER NOTES - Launch! 3.772
  * File: COREBLD.C
  * Role: Generated/build copy of Launch! core
  * Build/ownership: Derived from LAUNCH.C; normal BUILD compiles this file. Keep behavioral edits in LAUNCH.C and synchronize/regenerate.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.771 - modal command menu for DOS
+/* Launch! 3.772 - modal command menu for DOS
  * Microsoft C/C++ 7.0, medium model (.EXE), 286/EGA or later.
  */
 #include <dos.h>
@@ -23,6 +23,7 @@ Launch! for DOS ---------------------
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include "FLASHCFG.H"
 #include <conio.h>
 #include <io.h>
 #include <malloc.h>
@@ -37,7 +38,7 @@ Launch! for DOS ---------------------
 #define MAX_CMD 128
 #define MAX_MACRO 384
 #define MAX_DEPTH 4
-#define MAX_CHILD 22
+#define MAX_CHILD 24
 #define MENU_CAPACITY 20
 #define MENU_WIDTH 20
 #define MAX_EXPLORE_ENTRIES 256
@@ -162,6 +163,10 @@ static NODE nodes[MAX_NODES];
 static int node_count;
 static int screen_cols, screen_rows;
 static unsigned short far *video;
+static int flashing_enabled=1;
+static int screen_columns=80; /* Persisted separately: preserve accessory ABI. */
+static int menu_first_panel=0;
+static int menu_scroll[MAX_DEPTH];
 static unsigned short far *saved;
 static unsigned short far *render_buffer;
 static unsigned short far *render_real;
@@ -270,6 +275,21 @@ static void mouse_stop(void);
 static void mouse_pointer_restore(void);
 static unsigned mouse_poll(int *column,int *row);
 void wait_vertical_retrace(void);
+
+/* BIOS 40-column text mode doubles glyph width without changing font data.
+   Never change a Windows-owned display or monochrome mode 7. */
+static int display_columns(unsigned columns)
+{
+  union REGS r;int mode;
+  if(windows_session)return 0;
+  mode=*(unsigned char far *)MAKE_FP(0x40,0x49);
+  if(mode>3)return 0;
+  if(*(unsigned short far *)MAKE_FP(0x40,0x4A)==columns)return 1;
+  memset(&r,0,sizeof(r));r.h.al=(unsigned char)(columns==40?1:3);
+  int86(0x10,&r,&r);
+  memset(&r,0,sizeof(r));r.x.ax=0x1003;int86(0x10,&r,&r);
+  return *(unsigned short far *)MAKE_FP(0x40,0x4A)==columns;
+}
 
 static void video_init(void)
 {
@@ -582,7 +602,7 @@ static int appearance_value(APPEARANCE *a,const char *key,int value)
 static int load_appearance(void)
 {
   FILE *f;static char line[80];char *p,*q,*end;long value;APPEARANCE loaded;int title_fg_set=0,title_bg_set=0;
-  appearance=default_appearance;strcpy(suite_title,"Launch!");
+  appearance=default_appearance;screen_columns=80;flashing_enabled=1;strcpy(suite_title,"Launch!");
   f=fopen(appearance_file,"rt");if(!f)return 1;
   loaded=default_appearance;
   while(fgets(line,sizeof(line),f)){
@@ -592,6 +612,8 @@ static int load_appearance(void)
     /* Windows integration keys are intentionally silent configuration items.
        They are strings/flags rather than appearance fields, but live in the
        same file so future core features can use them. */
+    if(!stricmp(p,"flashing")){flashing_enabled=flashing_value(q);continue;}
+    if(!stricmp(p,"SCREEN_COLUMNS")){value=strtol(q,&end,10);end=trim(end);if(!*q||*end||(value!=40&&value!=80)){fclose(f);return 0;}screen_columns=(int)value;continue;}
     if(!stricmp(p,"fontPersist")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} loaded.font_persist=(unsigned char)value;continue;}
     if(!stricmp(p,"OPEN_MENU_BOOT")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} open_menu_at_boot=(unsigned char)value;continue;}
     if(!stricmp(p,"PROMPT_STYLE")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>=24){fclose(f);return 0;} prompt_style=prompt_boot_style=(int)value;continue;}
@@ -2262,7 +2284,7 @@ static unsigned mouse_poll(int *column,int *row)
   if(!mouse_present)return 0;
   r.x.ax=3;int86(0x33,&r,&r);
   mouse_raw_x=r.x.cx;mouse_raw_y=r.x.dx;
-  *column=r.x.cx/8;*row=r.x.dx/8;
+  *column=r.x.cx/(screen_cols==40?16:8);*row=r.x.dx/8;
   pressed=r.x.bx&~mouse_last_buttons;mouse_last_buttons=r.x.bx;
   return pressed;
 }
@@ -2271,7 +2293,7 @@ static void wait_input(int *key,int *column,int *row,unsigned *buttons)
 {
   int start_column,start_row;
   *key=0;*buttons=0;
-  start_column=(int)(mouse_raw_x/8);start_row=(int)(mouse_raw_y/8);
+  start_column=(int)(mouse_raw_x/(screen_cols==40?16:8));start_row=(int)(mouse_raw_y/8);
   mouse_show();
   do {
     if(key_waiting()){*key=keyread();edit_caret_hide();mouse_stop();return;}
@@ -2343,7 +2365,7 @@ static int write_current_config(const char *name)
 {
   FILE *f=fopen(name,"wt");int ok;
   if(!f)return 0;
-  ok=fputs("; Launch! 3.771 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
+  ok=fputs("; Launch! 3.772 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
   strcpy(write_path,"Launcher");
   if(ok)ok=write_section(f,-1,8);
   if(fclose(f)!=0)ok=0;
@@ -2370,7 +2392,8 @@ static int save_appearance(void)
   remove(appearance_temp_file);
   f=fopen(appearance_temp_file,"wt");if(!f)return 0;
   if(fputs("; Launch! 3.5 appearance settings\n",f)==EOF)ok=0;
-  if(ok && fprintf(f,"suiteTitle=%s\n",suite_title)<0)ok=0;
+  if(ok && fprintf(f,"flashing=%s\n",flashing_enabled?"true":"false")<0)ok=0;
+  if(ok && fprintf(f,"suiteTitle=%s\nSCREEN_COLUMNS=%d\n",suite_title,screen_columns)<0)ok=0;
   if(ok && fprintf(f,"BACKGROUND=%u\nBORDER=%u\nTITLEBAR_FG=%u\nTITLEBAR_BG=%u\nMAIN_TITLE=%u\nTITLES=%u\n"
       "FOLDERS=%u\nLAUNCHERS=%u\nSELECTED_FG=%u\nSELECTED_BG=%u\n"
       "CONTROLS_FG=%u\nCONTROLS_BG=%u\nLABELS=%u\nMENU_TOP=%u\n"
@@ -3430,7 +3453,7 @@ static int config_count(int tab)
   if(tab==1)return 14; /* Colors */
   if(tab==2)return screensavers_installed?(appearance.screensaver==1?4:3):0; /* Savers */
   if(tab==3)return 2; /* Prompt style + Set */
-  if(tab==4)return (fonts_installed&&font_custom_supported())?2:0; /* Font */
+  if(tab==4)return (fonts_installed&&font_custom_supported())?3:0; /* Font */
   if(tab==SHORTCUT_TAB)return shortcut_component_installed?3:0; /* Shortcut */
 #endif
   return 0;
@@ -3479,7 +3502,7 @@ static unsigned char *config_field(int tab,int item,int *limit)
   }
   if(tab==4){
     if(item==0){*limit=total_fonts()>0?total_fonts()-1:0;return &appearance.font_id;}
-    if(item==1){*limit=1;return &appearance.font_persist;}
+    if(item==2){*limit=1;return &appearance.font_persist;}
   }
 #endif
   return 0;
@@ -3499,11 +3522,12 @@ static void change_config_value(int tab,int item,int direction)
     value+=direction;if(value<0)value=14;if(value>14)value=0;
     appearance.screensaver=screensaver_id_from_ui(value);return;
   }
+  if(tab==4&&item==1){screen_columns=screen_columns==40?80:40;return;}
   field=config_field(tab,item,&limit);if(!field)return;
 #ifdef LIGHT86
   if(tab==0 && (item==1||item==2)){*field=!*field;return;}
 #else
-  if((tab==0 && ((item>=1 && item<=4)||item==6)) || (tab==4 && item==1)){*field=!*field;return;}
+  if((tab==0 && ((item>=1 && item<=4)||item==6)) || (tab==4 && item==2)){*field=!*field;return;}
 #endif
   value=(int)*field+direction;if(value<0)value=limit;if(value>limit)value=0;
   *field=(unsigned char)value;
@@ -3692,7 +3716,7 @@ static void config_toolbar_geometry(int x,TOOLBAR_RECT *okb,TOOLBAR_RECT *cancel
 
 static void draw_config_page(int x,int y,int tab,int focus,int hover,int full)
 {
-  int f=focus-CONFIG_CONTROL_BASE,h=hover-CONFIG_CONTROL_BASE,i;
+  int f=focus-CONFIG_CONTROL_BASE,h=hover-CONFIG_CONTROL_BASE;
   if(full){char cap[48];sprintf(cap,"%s Configuration",suite_title);dialog_box(x,y,66,20,cap);textout(x+3,y,suite_title,ATTR(appearance.titlebar_bg,appearance.main_title),(int)strlen(suite_title));}
   draw_config_tabs(x,y+1,tab,focus,hover);
   if(tab==0){
@@ -3718,6 +3742,7 @@ static void draw_config_page(int x,int y,int tab,int focus,int hover,int full)
   }
 #ifndef LIGHT86
   else if(tab==1){
+    int i;
     static const char *labels[10]={"Panels","Border","Titlebar","Accent","Titles","Folders","Launchers","Selected items","Controls","Labels"};
     int scheme=colour_scheme_index();
     textout(x+5,y+4,"Color scheme",C_INPUT_LABEL,18);
@@ -3758,7 +3783,8 @@ static void draw_config_page(int x,int y,int tab,int focus,int hover,int full)
     textout(x+7,y+9,"Fonts not installed.",C_BORDER,50);
   } else if(tab==4&&font_custom_supported()){
     textout(x+5,y+4,font_is_ega()?"EGA display font":"VGA display font",C_INPUT_LABEL,18);cycle_control(x+25,y+4,font_name_at((int)appearance.font_id<total_fonts()?(int)appearance.font_id:0),f==0||h==0);
-    check_line(x+25,y+6,"Persist",appearance.font_persist,f==1||h==1);draw_character_preview(x+5,y+9);
+    textout(x+5,y+6,"Screen columns",C_INPUT_LABEL,18);cycle_control(x+25,y+6,screen_columns==40?"40 cpl":"80 cpl",f==1||h==1);
+    check_line(x+25,y+8,"Persist",appearance.font_persist,f==2||h==2);draw_character_preview(x+5,y+10);
   } else if(tab==4)textout(x+7,y+9,"Font customization requires a VGA display adapter",C_INPUT_LABEL,52);
 #endif
   if(tab==SHORTCUT_TAB&&!shortcut_component_installed){
@@ -3827,7 +3853,8 @@ static int config_hit(int x,int y,int tab,int mx,int my)
     if(my==y+4&&mx>=x+43&&mx<x+50)return CONFIG_CONTROL_BASE+1;
   } else if(tab==4&&font_custom_supported()){
     if(my==y+4&&mx>=x+25&&mx<x+40)return CONFIG_CONTROL_BASE;
-    if(my==y+6&&mx>=x+25&&mx<x+36)return CONFIG_CONTROL_BASE+1;
+    if(my==y+6&&mx>=x+25&&mx<x+45)return CONFIG_CONTROL_BASE+1;
+    if(my==y+8&&mx>=x+25&&mx<x+36)return CONFIG_CONTROL_BASE+2;
   } else if(tab==SHORTCUT_TAB){
     if(my==y+5&&mx>=x+31&&mx<x+48)return CONFIG_CONTROL_BASE;
     if(my==y+9&&mx>=x+31&&mx<x+41)return CONFIG_CONTROL_BASE+1;
@@ -3851,7 +3878,7 @@ static void config_about_box(void)
   bx=x+3;subdialog_box(x,y,w,h,"About Launch!");
   textout(x+3,y+2,"(C)Copyright 2026 Ben Renegar",C_INPUT_LABEL,34);
   textout(x+3,y+3,"www.benrenegar.com",C_INPUT_LABEL,34);
-  textout(x+3,y+6,"Version 3.771 - 2026-10-04",C_INPUT_LABEL,34);
+  textout(x+3,y+6,"Version 3.772 - 2026-10-04",C_INPUT_LABEL,34);
   for(;;){
     draw_button(bx,y+h-3,"  OK  ",6,focus==0);
     wait_input(&k,&mx,&my,&mb);
@@ -3968,7 +3995,7 @@ static int config_is_select(int tab,int item)
   if(tab==0)return item==0||item==5||item==7||item==8;
   if(tab==1)return 1;
   if(tab==2){if(item==0||item==1)return 1;if(appearance.screensaver==1&&item==2)return 1;return 0;}
-  if(tab==3)return item==0;if(tab==4)return item==0;return 0;
+  if(tab==3)return item==0;if(tab==4)return item==0||item==1;return 0;
 }
 static void config_select_control(int tab,int item,int x,int y)
 {
@@ -3985,6 +4012,7 @@ static void config_select_control(int tab,int item,int x,int y)
   else if(tab==2&&item==0){for(i=0;i<15;i++)opts[i]=screensaver_names[i];n=15;current=screensaver_ui_index(appearance.screensaver);}
   else if(tab==2){field=config_field(tab,item,&limit);if(appearance.screensaver==1&&item==1){for(i=0;i<=limit;i++)opts[i]=colour_names[i];}else{for(i=0;i<=limit;i++)opts[i]=saver_delay_names[i];}n=limit+1;current=field?*field:0;}
   else if(tab==3&&item==0){for(i=0;i<prompt_count;i++)opts[i]=prompt_names[i];n=prompt_count;current=prompt_style;}
+  else if(tab==4&&item==1){opts[0]="40 cpl";opts[1]="80 cpl";n=2;current=screen_columns==40?0:1;sy=y+6;}
   else if(tab==4&&item==0){
     /* Presentation order only: Standard first, Launch! second, then all
        remaining built-in/external fonts alphabetically.  Font IDs stay
@@ -4003,6 +4031,7 @@ static void config_select_control(int tab,int item,int x,int y)
   if(!n)return;chosen=select_popup(sx,sy,opts,n,current,20);if(chosen==current)return;
   if(tab==1&&item==0){apply_colour_scheme(chosen);return;}if(tab==3&&item==0){prompt_style=chosen;return;}
   if(tab==2&&item==0){appearance.screensaver=screensaver_id_from_ui(chosen);return;}
+  if(tab==4&&item==1){screen_columns=chosen==0?40:80;return;}
   if(tab==4&&item==0){appearance.font_id=(unsigned char)font_map[chosen];mouse_pointer_restore();font_preview(appearance.font_id);mouse_pointer_install();return;}
   field=config_field(tab,item,&limit);if(field)*field=(unsigned char)chosen;if(tab==0&&item==8)mouse_pointer_install();
 }
@@ -4038,9 +4067,11 @@ static int config_reset_box(void)
 
 #pragma code_seg()
 
-static int configure_appearance(void)
+/* Keep the modal controller out of the 64K default code segment. */
+#pragma code_seg("CFGRUN_TEXT")
+static int configure_appearance_wide(void)
 {
-  APPEARANCE original,before_reset;unsigned char original_open_menu;int x,y,k=0,mx=0,my=0,tab=0,focus=-1,hover=-1;
+  APPEARANCE original,before_reset;unsigned char original_open_menu;int original_columns=screen_columns,before_columns;int x,y,k=0,mx=0,my=0,tab=0,focus=-1,hover=-1;
   int hit,count,item,redraw=2,reset_choice;unsigned mb=0;
 #ifndef LIGHT86
   font_activation_pending=0;
@@ -4103,7 +4134,7 @@ static int configure_appearance(void)
 #else
         if(shortcut_enabled&&!config_shortcut_active)shortcut_activation_pending=1;
         if(font_commit(appearance.font_id)&&save_appearance()){
-          if((config_shortcut_changed || appearance.font_persist!=original.font_persist || open_menu_at_boot!=original_open_menu) && !sync_startup_services()){
+          if((config_shortcut_changed || appearance.font_persist!=original.font_persist || open_menu_at_boot!=original_open_menu || screen_columns!=original_columns) && !sync_startup_services()){
             mouse_pointer_install();notice_box("Write Error","DOS startup services could not be updated.");redraw=2;continue;
           }
           close_menu();return 1;
@@ -4112,7 +4143,7 @@ static int configure_appearance(void)
         mouse_pointer_install();
         notice_box("Write Error","Could not save the configuration.");redraw=2;continue;
       }
-      if(hit==21){TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(bcancel.x,y+17,"  Cancel  ",bcancel.w);mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;
+      if(hit==21){TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(bcancel.x,y+17,"  Cancel  ",bcancel.w);mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;screen_columns=original_columns;
 #ifndef LIGHT86
       font_restore();
 #endif
@@ -4121,9 +4152,9 @@ static int configure_appearance(void)
         int reset_ok=1;
         {TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(breset.x,y+17,"  Reset  ",breset.w);}reset_choice=config_reset_box();
         if(reset_choice==1||reset_choice==3){
-          {char before_title[SUITE_TITLE_MAX];strcpy(before_title,suite_title);before_reset=appearance;mouse_pointer_restore();appearance=default_appearance;strcpy(suite_title,"Launch!");
-          if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;mouse_pointer_install();}
-          else {appearance=before_reset;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
+          {char before_title[SUITE_TITLE_MAX];strcpy(before_title,suite_title);before_reset=appearance;before_columns=screen_columns;mouse_pointer_restore();appearance=default_appearance;screen_columns=80;strcpy(suite_title,"Launch!");
+          if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;original_columns=screen_columns;sync_startup_services();mouse_pointer_install();}
+          else {appearance=before_reset;screen_columns=before_columns;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
         }
         if((reset_choice==2||reset_choice==3)&&!default_menu_file(1)){notice_box("Reset Error","Could not rebuild LAUNCH.MNU.");reset_ok=0;}
         if(reset_ok&&reset_choice==1)notice_box("Reset","Configuration has been reset to default.");
@@ -4134,7 +4165,7 @@ static int configure_appearance(void)
       if(hit==23){TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(bhelp.x,y+17,"  ?  ",bhelp.w);config_about_box();redraw=2;continue;}
       continue;
     }
-    if(k==27){mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;
+    if(k==27){mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;screen_columns=original_columns;
 #ifndef LIGHT86
       font_restore();
 #endif
@@ -4225,13 +4256,13 @@ static int configure_appearance(void)
 #else
         if(shortcut_enabled&&!config_shortcut_active)shortcut_activation_pending=1;
         if(font_commit(appearance.font_id)&&save_appearance()){
-          if((config_shortcut_changed || appearance.font_persist!=original.font_persist || open_menu_at_boot!=original_open_menu) && !sync_startup_services()){mouse_pointer_install();notice_box("Write Error","DOS startup services could not be updated.");redraw=2;continue;}
+          if((config_shortcut_changed || appearance.font_persist!=original.font_persist || open_menu_at_boot!=original_open_menu || screen_columns!=original_columns) && !sync_startup_services()){mouse_pointer_install();notice_box("Write Error","DOS startup services could not be updated.");redraw=2;continue;}
           close_menu();return 1;
         }
 #endif
         mouse_pointer_install();
       notice_box("Write Error","Could not save the configuration.");redraw=2;
-    } else if((k==13||k==' ')&&focus==21){mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;
+    } else if((k==13||k==' ')&&focus==21){mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;screen_columns=original_columns;
 #ifndef LIGHT86
       font_restore();
 #endif
@@ -4240,9 +4271,9 @@ static int configure_appearance(void)
       int reset_ok=1;
       reset_choice=config_reset_box();
       if(reset_choice==1||reset_choice==3){
-        {char before_title[SUITE_TITLE_MAX];strcpy(before_title,suite_title);before_reset=appearance;mouse_pointer_restore();appearance=default_appearance;strcpy(suite_title,"Launch!");
-        if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;mouse_pointer_install();}
-        else {appearance=before_reset;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
+        {char before_title[SUITE_TITLE_MAX];strcpy(before_title,suite_title);before_reset=appearance;before_columns=screen_columns;mouse_pointer_restore();appearance=default_appearance;screen_columns=80;strcpy(suite_title,"Launch!");
+        if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;original_columns=screen_columns;sync_startup_services();mouse_pointer_install();}
+        else {appearance=before_reset;screen_columns=before_columns;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
       }
       if((reset_choice==2||reset_choice==3)&&!default_menu_file(1)){notice_box("Reset Error","Could not rebuild LAUNCH.MNU.");reset_ok=0;}
       if(reset_ok&&reset_choice==1)notice_box("Reset","Configuration has been reset to default.");
@@ -4252,6 +4283,8 @@ static int configure_appearance(void)
     } else if((k==13||k==' ')&&focus==23){config_about_box();redraw=2;}
   }
 }
+
+#pragma code_seg()
 
 static int place_overflow(int parent,int depth,int new_node)
 {
@@ -5916,8 +5949,8 @@ static int menu_entry_attribute(int node,int selected)
 
 static int menu_item_offset(int depth,int node,int index)
 {
-  if(depth)return 1+index;
-  return 2+index+(node<0?1:0);
+  if(depth)return 1+index-menu_scroll[depth];
+  return 2+index+(node<0?1:0)-menu_scroll[depth];
 }
 
 #ifndef __GNUC__
@@ -5927,12 +5960,43 @@ static unsigned sysbar_first_mcb(void){union REGS r;struct SREGS sr;memset(&r,0,
 static unsigned sysbar_largest_kb(void){unsigned seg=sysbar_first_mcb(),owner,size;unsigned char type;unsigned long run=0,best=0;int guard=0;if(!seg)return 0;while(guard++<256){type=*(unsigned char far*)MAKE_FP(seg,0);owner=*(unsigned short far*)MAKE_FP(seg,1);size=*(unsigned short far*)MAKE_FP(seg,3);if(owner==0||owner==_psp){run+=(unsigned long)size+1UL;if(run>best)best=run;}else run=0;if(type=='Z')break;if(type!='M')break;seg=(unsigned)(seg+size+1);}return(unsigned)(best/64UL);}
 static unsigned sysbar_env_free_kb(void){unsigned parent=*(unsigned short far*)MAKE_FP(_psp,0x16),eseg,paras;unsigned long bytes,used=0;char far*p;if(!parent)parent=_psp;eseg=*(unsigned short far*)MAKE_FP(parent,0x2C);if(!eseg)return 0;paras=*(unsigned short far*)MAKE_FP(eseg-1,3);bytes=(unsigned long)paras*16UL;p=(char far*)MAKE_FP(eseg,0);while(used+1<bytes){if(p[used]==0&&p[used+1]==0){used+=2;break;}used++;}return bytes>used?(unsigned)((bytes-used+1023UL)/1024UL):0;}
 static int sysbar_packet_driver(void){unsigned v,off,seg,i;static const char sig[]="PKT DRVR";for(v=0x60;v<=0x80;v++){off=*(unsigned short far*)MAKE_FP(0,v*4);seg=*(unsigned short far*)MAKE_FP(0,v*4+2);if(!seg)continue;for(i=0;i<8;i++)if(*(unsigned char far*)MAKE_FP(seg,off+3+i)!=(unsigned char)sig[i])break;if(i==8)return 1;}return 0;}
-static void sysbar_drive_free(char*out){char*cs=getenv("COMSPEC");unsigned drive;union REGS r;unsigned long bytes;if(cs&&cs[0]&&cs[1]==':')drive=(unsigned)(toupper((unsigned char)cs[0])-'A'+1);else{memset(&r,0,sizeof(r));r.h.ah=0x19;int86(0x21,&r,&r);drive=(unsigned)r.h.al+1;}memset(&r,0,sizeof(r));r.h.ah=0x36;r.h.dl=(unsigned char)drive;int86(0x21,&r,&r);if(r.x.ax==0xFFFF){sprintf(out,"%c: ?",(char)('A'+drive-1));return;}bytes=(unsigned long)r.x.ax*(unsigned long)r.x.bx*(unsigned long)r.x.cx;if(bytes>=1024UL*1024UL*1024UL)sprintf(out,"%c: %luGB",(char)('A'+drive-1),(bytes+(512UL*1024UL*1024UL))/(1024UL*1024UL*1024UL));else if(bytes>=1024UL*1024UL)sprintf(out,"%c: %luMB",(char)('A'+drive-1),(bytes+512UL*1024UL)/(1024UL*1024UL));else sprintf(out,"%c: %luKB",(char)('A'+drive-1),(bytes+512UL)/1024UL);}
+static void sysbar_drive_free(char*out){char*cs=getenv("COMSPEC");unsigned drive;union REGS r;unsigned long bytes;drive=3;(void)cs;memset(&r,0,sizeof(r));r.h.ah=0x36;r.h.dl=(unsigned char)drive;int86(0x21,&r,&r);if(r.x.ax==0xFFFF){sprintf(out,"%c: ?",(char)('A'+drive-1));return;}bytes=(unsigned long)r.x.ax*(unsigned long)r.x.bx*(unsigned long)r.x.cx;if(bytes>=1024UL*1024UL*1024UL)sprintf(out,"%c: %luGB",(char)('A'+drive-1),(bytes+(512UL*1024UL*1024UL))/(1024UL*1024UL*1024UL));else if(bytes>=1024UL*1024UL)sprintf(out,"%c: %luMB",(char)('A'+drive-1),(bytes+512UL*1024UL)/(1024UL*1024UL));else sprintf(out,"%c: %luKB",(char)('A'+drive-1),(bytes+512UL)/1024UL);}
 #ifndef __GNUC__
 #pragma code_seg()
 #endif
 
-static void draw_sysbar(void){char s[80],cc[8]="INT",video[4],disk[16];unsigned char country_info[34];union REGS r;unsigned mem,env,locks,ctry=0;int net,w,x,base=ATTR(appearance.controls_bg,appearance.controls_fg),dim=ATTR(appearance.controls_bg,(appearance.controls_fg&7)|8),active=ATTR(appearance.controls_bg,appearance.launchers);mem=sysbar_largest_kb();env=sysbar_env_free_kb();sysbar_drive_free(disk);net=sysbar_packet_driver();locks=*(unsigned char far *)MAKE_FP(0x40,0x17);memset(&r,0,sizeof(r));r.x.ax=0x1A00;int86(0x10,&r,&r);strcpy(video,r.h.al==0x1A?"VGA":"EGA");memset(country_info,0,sizeof(country_info));memset(&r,0,sizeof(r));r.h.ah=0x38;r.h.al=0;r.x.dx=(unsigned)country_info;int86(0x21,&r,&r);ctry=r.x.bx;if(ctry==61)strcpy(cc,"AUS");else if(ctry==1)strcpy(cc,"USA");else if(ctry==44)strcpy(cc,"GBR");sprintf(s,"  MEM %uKB | ENV %uKB | %s | CL NL SL | MOUSE %s NET | %u-%s  ",mem,env,disk,video,ctry,cc);w=(int)strlen(s);if(w>screen_cols)w=screen_cols;x=screen_cols-w;textout(x,0,s,base,w);{char*p;p=strstr(s,"|");while(p){cell(x+(int)(p-s),0,179,ATTR(appearance.controls_bg,0));p=strstr(p+1,"|");}p=strstr(s,"CL");if(p)textout(x+(int)(p-s),0,"CL",(locks&0x40)?active:dim,2);p=strstr(s,"NL");if(p)textout(x+(int)(p-s),0,"NL",(locks&0x20)?active:dim,2);p=strstr(s,"SL");if(p)textout(x+(int)(p-s),0,"SL",(locks&0x10)?active:dim,2);p=strstr(s,"MOUSE");if(p)textout(x+(int)(p-s),0,"MOUSE",mouse_present?active:dim,5);p=strstr(s,video);if(p)textout(x+(int)(p-s),0,video,active,3);p=strstr(s,"NET");if(p)textout(x+(int)(p-s),0,"NET",net?active:dim,3);}}
+#pragma code_seg("SYSBAR_TEXT")
+#include "SYSBAR.H"
+#pragma code_seg()
+
+static int configure_appearance(void)
+{
+  int result,was=*(unsigned short far *)MAKE_FP(0x40,0x4A);
+  unsigned short far *under=0;unsigned i,n=0,shape=0,position=0;union REGS r;
+  if(was==40){
+    memset(&r,0,sizeof(r));r.h.ah=3;int86(0x10,&r,&r);shape=r.x.cx;position=r.x.dx;
+    n=40U*(unsigned)(*(unsigned char far *)MAKE_FP(0x40,0x84)+1);
+    if(n>2400)n=1000;
+    under=(unsigned short far *)_fmalloc(n*2U);
+    if(!under)return 0;
+    for(i=0;i<n;i++)under[i]=((unsigned short far *)MAKE_FP(0xB800,0))[i];
+    if(!display_columns(80)){_ffree(under);return 0;}font_restore();
+  }
+  result=configure_appearance_wide();
+#ifndef LIGHT86
+  display_columns(screen_columns);font_restore();
+#else
+  display_columns(was);
+#endif
+  if(under){if(*(unsigned short far *)MAKE_FP(0x40,0x4A)==40)
+    for(i=0;i<n;i++)((unsigned short far *)MAKE_FP(0xB800,0))[i]=under[i];
+    if(*(unsigned short far *)MAKE_FP(0x40,0x4A)==40){
+      memset(&r,0,sizeof(r));r.h.ah=1;r.x.cx=shape;int86(0x10,&r,&r);
+      memset(&r,0,sizeof(r));r.h.ah=2;r.x.dx=position;int86(0x10,&r,&r);
+    }
+    _ffree(under);}
+  return result;
+}
 
 static int menu_position_at(int depth,int *list,int n,int panel_y,int mouse_y)
 {
@@ -5943,7 +6007,7 @@ static int menu_position_at(int depth,int *list,int n,int panel_y,int mouse_y)
 static void change_menu_selection(int depth,int *list,int n,int *selection,
                                   int direction,int panel_y)
 {
-  int old=*selection,next,x=depth*MENU_WIDTH;
+  int old=*selection,next,x=(depth-menu_first_panel)*MENU_WIDTH;
   if(!n)return;
   next=(old+n+direction)%n;if(next==old)return;
   if(x+MENU_WIDTH>screen_cols)x=screen_cols-MENU_WIDTH;
@@ -5956,7 +6020,7 @@ static void change_menu_selection(int depth,int *list,int n,int *selection,
 static void set_menu_selection(int depth,int *list,int *selection,
                                int next,int panel_y)
 {
-  int old=*selection,x=depth*MENU_WIDTH;
+  int old=*selection,x=(depth-menu_first_panel)*MENU_WIDTH;
   if(next==old)return;
   if(x+MENU_WIDTH>screen_cols)x=screen_cols-MENU_WIDTH;
   wait_vertical_retrace();
@@ -6009,6 +6073,97 @@ static int quick_launchers(const char *find,int *list)
   return n;
 }
 
+#pragma code_seg("WIDE_TEXT")
+/* Fixed-width core dialogs temporarily use 80 columns. Keep the menu's
+   backing store separate; a mode change must never resize it in place. */
+typedef struct {
+  unsigned short far *under;
+  unsigned short far *menu_saved;
+  unsigned short far *menu_render;
+  int rows;
+} WIDE_DIALOG;
+static int wide_begin(WIDE_DIALOG *state)
+{
+  unsigned i,n;union REGS r;
+  memset(state,0,sizeof(*state));if(screen_cols!=40)return 1;
+  render_end();mouse_stop();mouse_pointer_restore();
+  n=(unsigned)(screen_cols*screen_rows);
+  state->under=(unsigned short far *)_fmalloc(n*2U);
+  if(!state->under){mouse_pointer_install();return 0;}
+  for(i=0;i<n;i++)state->under[i]=video[i];
+  state->menu_saved=saved;state->menu_render=render_buffer;state->rows=screen_rows;
+  launchui_restore();
+  if(!display_columns(80)){_ffree(state->under);state->under=0;video_init();mouse_pointer_install();return 0;}
+  font_restore();video_init();
+  saved=0;render_buffer=0;
+  if(!save_screen())return 0;
+  memset(&r,0,sizeof(r));r.h.ah=1;r.h.ch=0x20;int86(0x10,&r,&r);
+  mouse_present=mouse_start();mouse_stop();return 1;
+}
+static void wide_end(WIDE_DIALOG *state)
+{
+  unsigned i,n;union REGS r;
+  if(!state->under)return;
+  render_end();mouse_stop();mouse_pointer_restore();launchui_restore();
+  if(saved)_ffree(saved);if(render_buffer)_ffree(render_buffer);
+  display_columns(40);font_restore();video_init();screen_rows=state->rows;
+  saved=state->menu_saved;render_buffer=state->menu_render;render_real=0;render_active=0;
+  n=(unsigned)(40*screen_rows);for(i=0;i<n;i++)video[i]=state->under[i];
+  _ffree(state->under);state->under=0;
+  memset(&r,0,sizeof(r));r.h.ah=1;r.h.ch=0x20;int86(0x10,&r,&r);
+  mouse_present=mouse_start();mouse_stop();
+}
+static int wide_add_dialog(int parent,int depth)
+{
+  WIDE_DIALOG state;int result;
+  if(!wide_begin(&state)){wide_end(&state);return 0;}
+  result=add_dialog(parent,depth);wide_end(&state);return result;
+}
+static int wide_edit_dialog(int node)
+{
+  WIDE_DIALOG state;int result;
+  if(!wide_begin(&state)){wide_end(&state);return 0;}
+  result=edit_dialog(node);wide_end(&state);return result;
+}
+static int wide_prepare_launcher(int node)
+{
+  WIDE_DIALOG state;int result;
+  if(!wide_begin(&state)){wide_end(&state);return 0;}
+  result=prepare_launcher(node);wide_end(&state);return result;
+}
+static int wide_collections_dialog(void)
+{
+  WIDE_DIALOG state;int result;
+  if(!wide_begin(&state)){wide_end(&state);return 0;}
+  result=collections_dialog();wide_end(&state);return result;
+}
+static int wide_explore_dialog(void)
+{
+  WIDE_DIALOG state;int result;
+  if(!wide_begin(&state)){wide_end(&state);return 0;}
+  result=explore_dialog();wide_end(&state);return result;
+}
+static int wide_power_dialog(void)
+{
+  WIDE_DIALOG state;int result;
+  if(!wide_begin(&state)){wide_end(&state);return 0;}
+  result=power_dialog();wide_end(&state);return result;
+}
+static int wide_confirm_box(const char *title,const char *message)
+{
+  WIDE_DIALOG state;int result;
+  if(!wide_begin(&state)){wide_end(&state);return 0;}
+  result=confirm_box(title,message);wide_end(&state);return result;
+}
+static void wide_notice_box(const char *title,const char *message)
+{
+  WIDE_DIALOG state;if(wide_begin(&state))notice_box(title,message);wide_end(&state);
+}
+
+ #pragma code_seg()
+
+/* Medium model already uses far calls; isolate the menu event loop. */
+#pragma code_seg("MENU_TEXT")
 static int menu(const char *open_to)
 {
   static int parent[MAX_DEPTH],sel[MAX_DEPTH],list[MAX_CHILD];
@@ -6020,15 +6175,18 @@ static int menu(const char *open_to)
   char qtext[MAX_TITLE];
   unsigned mb,last_mouse_x,last_mouse_y;unsigned char last_second=255;
   unsigned long last_activity,now;
+  memset(menu_scroll,0,sizeof(menu_scroll));menu_first_panel=0;
   parent[0]=-1; sel[0]=0;qtext[0]=0;depth=menu_open_folder(open_to,parent,sel);
   video_init();if(!save_screen()){puts("Launch!: insufficient memory");return -1;}
   cursor_hide();mouse_present=mouse_start();mouse_stop();
   last_mouse_x=mouse_raw_x;last_mouse_y=mouse_raw_y;last_activity=bios_ticks();
   for(;;){
+    i=depth+1-screen_cols/MENU_WIDTH;if(i<0)i=0;
+    if(i!=menu_first_panel){menu_first_panel=i;redraw=2;}
     if(quick){
       qn=quick_launchers(qtext,qlist);if(qsel>=qn)qsel=qn?qn-1:0;
-      qh=(qn?qn:1)+5;if(qh>screen_rows)qh=screen_rows;
-      qy=appearance.menu_top?0:screen_rows-qh;qinput_y=qy+qh-2;
+      qh=(qn?qn:1)+5;if(qh>screen_rows-sysbar_rows())qh=screen_rows-sysbar_rows();
+      qy=appearance.menu_top?sysbar_rows():screen_rows-qh;qinput_y=qy+qh-2;
       if(redraw){
         /* Quick Launch can shrink as the result count changes.  Always restore
            the saved DOS screen before redrawing it so pixels from a taller
@@ -6054,7 +6212,9 @@ static int menu(const char *open_to)
         if(qfocus){int cx=1+strlen(qtext);if(cx>MENU_WIDTH-2)cx=MENU_WIDTH-2;cell(cx,qinput_y,'_',C_INPUT_FIELD);}
         redraw=0;
       }
-      k=keyread();cursor_hide();last_activity=bios_ticks();
+      wait_input(&k,&mx,&my,&mb);cursor_hide();last_activity=bios_ticks();
+      if(mb&1){int action=sysbar_click(mx,my);if(action==2){close_menu();return -1;}if(action){redraw=2;continue;}}
+      if(!k)continue;
       if(k==27){quick=0;depth=0;parent[0]=-1;sel[0]=0;redraw=2;continue;}
       if(qfocus){
         if(k==0x4800&&qn){qfocus=0;qsel=qn-1;redraw=1;continue;}
@@ -6066,14 +6226,14 @@ static int menu(const char *open_to)
       if(k=='\\'){qfocus=1;redraw=1;continue;}
       if(k==0x4800&&qn){qsel=(qsel+qn-1)%qn;redraw=1;continue;}
       if(k==0x5000&&qn){qsel=(qsel+1)%qn;redraw=1;continue;}
-      if((key_shift&0x04)&&key_scan==0x12&&qn){node=qlist[qsel];if(edit_dialog(node)&&!save_config())notice_box("Write Error","Could not update LAUNCH.MNU.");redraw=2;continue;}
+      if((key_shift&0x04)&&key_scan==0x12&&qn){node=qlist[qsel];if(wide_edit_dialog(node)&&!save_config())wide_notice_box("Write Error","Could not update LAUNCH.MNU.");redraw=2;continue;}
       if((key_shift&0x04)&&key_scan==0x20&&qn){
         char question[64];node=qlist[qsel];sprintf(question,"Remove %s from the menu?",nodes[node].title);
         strncpy(remove_item_name,nodes[node].title,MAX_TITLE-1);remove_item_name[MAX_TITLE-1]=0;remove_item_colour=C_ITEM;
-        if(confirm_box("Remove Item",question)){int pp=nodes[node].parent;delete_tree(node);normalize_order(pp);if(!save_config())notice_box("Write Error","Could not update LAUNCH.MNU.");}
+        if(wide_confirm_box("Remove Item",question)){int pp=nodes[node].parent;delete_tree(node);normalize_order(pp);if(!save_config())wide_notice_box("Write Error","Could not update LAUNCH.MNU.");}
         remove_item_name[0]=0;qsel=0;redraw=2;continue;
       }
-      if(k==13&&qn){node=qlist[qsel];if(prepare_launcher(node)){run_node=node;close_menu();return node;}redraw=2;continue;}
+      if(k==13&&qn){node=qlist[qsel];if(wide_prepare_launcher(node)){run_node=node;close_menu();return node;}redraw=2;continue;}
       continue;
     }
     n=menu_children(parent[depth],list);
@@ -6085,24 +6245,33 @@ static int menu(const char *open_to)
         int tn,j;
         tn=menu_children(parent[i],draw_list);h=tn?tn+2:3;
         if(i==0){h+=2;if(appearance.show_collections||appearance.show_explore||appearance.show_power)h++;}
-        if(h>screen_rows) h=screen_rows;
-        if(i==0) y=appearance.menu_top?0:screen_rows-h;
+        if(h>screen_rows-sysbar_rows()) h=screen_rows-sysbar_rows();
+        if(i==0) y=appearance.menu_top?sysbar_rows():screen_rows-h;
         else {
           int pn=menu_children(parent[i-1],hitlist);
           y=panel_y[i-1]+menu_item_offset(i-1,pn?hitlist[sel[i-1]]:0,sel[i-1])-1;
           if(y+h>screen_rows) y=screen_rows-h;
-          if(y<0) y=0;
+          if(y<sysbar_rows())y=sysbar_rows();
+        }
+        if(tn){
+          int selected_row=menu_item_offset(i,draw_list[sel[i]],sel[i]);
+          int first_row=i==0?2:1;
+          if(selected_row>h-2)menu_scroll[i]+=selected_row-(h-2);
+          else if(selected_row<first_row)menu_scroll[i]-=first_row-selected_row;
+          if(menu_scroll[i]<0)menu_scroll[i]=0;
         }
         panel_y[i]=y;panel_h[i]=h;
-        x=i*MENU_WIDTH;
+        if(i<menu_first_panel)continue;
+        x=(i-menu_first_panel)*MENU_WIDTH;
         if(x+MENU_WIDTH>screen_cols) x=screen_cols-MENU_WIDTH;
         menu_box(x,y,MENU_WIDTH,h,(i==0)?suite_title:0,
                  (i==0)?C_ROOT_TITLE:C_TITLE,i==0);
-        for(j=0;j<tn && j<h-2;j++){
+        for(j=0;j<tn;j++){
           int item_y;
           node=draw_list[j];
           item_y=y+menu_item_offset(i,node,j);
-          if(i==0&&node<0&&(j==0||draw_list[j-1]>=0)){
+          if(item_y<y+(i==0?2:1)||item_y>=y+h-1)continue;
+          if(i==0&&node<0&&item_y>y+2&&(j==0||draw_list[j-1]>=0)){
             int sx;for(sx=1;sx<MENU_WIDTH-1;sx++)cell(x+sx,item_y-1,196,C_BORDER);
           }
           if(node==BUILTIN_COLLECTIONS){
@@ -6125,7 +6294,7 @@ static int menu(const char *open_to)
         }
         if(!tn)textout(x+1,y+(i==0?2:1),"Empty",C_EMPTY,18);
       }
-      if(appearance.show_time)last_second=draw_clock(panel_y[0]+panel_h[0]-1,255);
+      if(appearance.show_time&&menu_first_panel==0)last_second=draw_clock(panel_y[0]+panel_h[0]-1,255);
       else last_second=255;
       last_activity=bios_ticks();
       redraw=0;
@@ -6137,8 +6306,8 @@ static int menu(const char *open_to)
       if(mouse_raw_x!=last_mouse_x || mouse_raw_y!=last_mouse_y){
         last_mouse_x=mouse_raw_x;last_mouse_y=mouse_raw_y;last_activity=bios_ticks();
         hit=-1;pos=-1;
-        for(i=depth;i>=0;i--){
-          x=i*MENU_WIDTH;if(x+MENU_WIDTH>screen_cols)x=screen_cols-MENU_WIDTH;
+        for(i=depth;i>=menu_first_panel;i--){
+          x=(i-menu_first_panel)*MENU_WIDTH;if(x+MENU_WIDTH>screen_cols)x=screen_cols-MENU_WIDTH;
           if(mx>=x && mx<x+MENU_WIDTH && my>panel_y[i] &&
              my<panel_y[i]+panel_h[i]){
             int hn=menu_children(parent[i],hitlist);
@@ -6155,7 +6324,7 @@ static int menu(const char *open_to)
           }
         }
       }
-      if(appearance.show_time){
+      if(appearance.show_time&&menu_first_panel==0){
         memset(&clock_regs,0,sizeof(clock_regs));clock_regs.h.ah=0x2C;
         int86(0x21,&clock_regs,&clock_regs);
         if(clock_regs.h.dh!=last_second){
@@ -6178,15 +6347,16 @@ static int menu(const char *open_to)
     if(!k && !mb && redraw==2)continue;
 
     if(mb){
+      if(mb&1){int action=sysbar_click(mx,my);if(action==2){close_menu();return -1;}if(action){redraw=2;continue;}}
       hit=-1;pos=-1;
-      for(i=depth;i>=0;i--){
-        x=i*MENU_WIDTH;if(x+MENU_WIDTH>screen_cols)x=screen_cols-MENU_WIDTH;
+      for(i=depth;i>=menu_first_panel;i--){
+        x=(i-menu_first_panel)*MENU_WIDTH;if(x+MENU_WIDTH>screen_cols)x=screen_cols-MENU_WIDTH;
         if(mx>=x && mx<x+MENU_WIDTH && my>=panel_y[i] && my<panel_y[i]+panel_h[i]){
           int hn=menu_children(parent[i],hitlist);
           hit=i;pos=menu_position_at(i,hitlist,hn,panel_y[i],my);break;
         }
       }
-      if((mb&2) && appearance.show_time && my==panel_y[0]+panel_h[0]-1 && mx>=8 && mx<=18){
+      if((mb&2) && appearance.show_time && menu_first_panel==0 && my==panel_y[0]+panel_h[0]-1 && mx>=8 && mx<=18){
         /* Right-clicking the clock behaves exactly like launching a command:
            close Launch!, restore the command prompt, then feed TIME + Enter
            through the resident keyboard-macro helper.  Do not execute a child
@@ -6204,15 +6374,15 @@ static int menu(const char *open_to)
         if(pos<hn){
           depth=hit;sel[hit]=pos;node=hitlist[pos];
           if(node==BUILTIN_COLLECTIONS && (mb&1)){
-            if(collections_dialog()){run_node=BUILTIN_COLLECTIONS;close_menu();return 0;}
+            if(wide_collections_dialog()){run_node=BUILTIN_COLLECTIONS;close_menu();return 0;}
             redraw=2;continue;
           }
           if(node==BUILTIN_EXPLORE && (mb&1)){
-            if(explore_dialog()){run_node=BUILTIN_EXPLORE;close_menu();return 0;}
+            if(wide_explore_dialog()){run_node=BUILTIN_EXPLORE;close_menu();return 0;}
             redraw=2;continue;
           }
           if(node==BUILTIN_POWER && (mb&1)){
-            int action=power_dialog();
+            int action=wide_power_dialog();
             if(action){
               close_menu();
               if(action==1){if(!power_off())safe_to_turn_off();}
@@ -6222,13 +6392,13 @@ static int menu(const char *open_to)
             redraw=2;continue;
           }
           if(mb&2){
-            if(node>=0 && !nodes[node].separator && edit_dialog(node) && !save_config())notice_box("Write Error","Could not update LAUNCH.MNU.");
+            if(node>=0 && !nodes[node].separator && wide_edit_dialog(node) && !save_config())wide_notice_box("Write Error","Could not update LAUNCH.MNU.");
             redraw=2;continue;
           }
           if(mb&1){
             if(nodes[node].folder && depth<MAX_DEPTH-1){depth++;parent[depth]=node;sel[depth]=0;redraw=2;continue;}
             if(!nodes[node].folder && !nodes[node].separator){
-              if(prepare_launcher(node)){run_node=node;close_menu();return node;}
+              if(wide_prepare_launcher(node)){run_node=node;close_menu();return node;}
               redraw=2;continue;
             }
           }
@@ -6240,8 +6410,8 @@ static int menu(const char *open_to)
     if(k=='\\'){quick=1;qfocus=1;qtext[0]=0;qsel=0;depth=0;redraw=2;continue;}
     if(k==27){close_menu();return -1;}
     if((key_shift&0x04) && key_scan==0x1E){
-      if(add_dialog(parent[depth],depth)){
-        if(!save_config())notice_box("Write Error","Could not update LAUNCH.MNU.");
+      if(wide_add_dialog(parent[depth],depth)){
+        if(!save_config())wide_notice_box("Write Error","Could not update LAUNCH.MNU.");
         n=menu_children(parent[depth],list);for(i=0;i<n;i++)if(list[i]==added_visible_node)sel[depth]=i;
       }
       redraw=2;
@@ -6254,8 +6424,8 @@ static int menu(const char *open_to)
         remove_item_name[0]=0;
         if(nodes[node].separator)strcpy(question,"Remove this separator from the menu?");
         else {sprintf(question,"Remove %s from the menu?",nodes[node].title);strncpy(remove_item_name,nodes[node].title,MAX_TITLE-1);remove_item_name[MAX_TITLE-1]=0;remove_item_colour=nodes[node].folder?C_FOLDER:C_ITEM;}
-        if(confirm_box("Remove Item",question)){
-          delete_tree(node);normalize_order(parent[depth]);if(!save_config())notice_box("Write Error","Could not update LAUNCH.MNU.");
+        if(wide_confirm_box("Remove Item",question)){
+          delete_tree(node);normalize_order(parent[depth]);if(!save_config())wide_notice_box("Write Error","Could not update LAUNCH.MNU.");
         }
         remove_item_name[0]=0;
       }
@@ -6263,50 +6433,52 @@ static int menu(const char *open_to)
     }
     else if((key_shift&0x04) && key_scan==0x12 && n>0){
       node=list[sel[depth]];
-      if(node>=0 && !nodes[node].separator && edit_dialog(node) && !save_config())notice_box("Write Error","Could not update LAUNCH.MNU.");
+      if(node>=0 && !nodes[node].separator && wide_edit_dialog(node) && !save_config())wide_notice_box("Write Error","Could not update LAUNCH.MNU.");
       redraw=2;
     }
     else if((key_shift&0x04) && (key_scan==0x48 || key_scan==0x8D) && n>0){
       node=list[sel[depth]];
-      if(node>=0){sel[depth]=move_item(parent[depth],sel[depth],-1);if(!save_config())notice_box("Write Error","Could not update LAUNCH.MNU.");}
+      if(node>=0){sel[depth]=move_item(parent[depth],sel[depth],-1);if(!save_config())wide_notice_box("Write Error","Could not update LAUNCH.MNU.");}
       redraw=1;
     }
     else if((key_shift&0x04) && (key_scan==0x50 || key_scan==0x91) && n>0){
       node=list[sel[depth]];
-      if(node>=0){sel[depth]=move_item(parent[depth],sel[depth],1);if(!save_config())notice_box("Write Error","Could not update LAUNCH.MNU.");}
+      if(node>=0){sel[depth]=move_item(parent[depth],sel[depth],1);if(!save_config())wide_notice_box("Write Error","Could not update LAUNCH.MNU.");}
       redraw=1;
     }
     else if((key_shift&0x04) && key_scan==0x1F){
-      if(n>0){node=list[sel[depth]];sort_menu(parent[depth]);n=menu_children(parent[depth],list);for(i=0;i<n;i++)if(list[i]==node)sel[depth]=i;if(!save_config())notice_box("Write Error","Could not update LAUNCH.MNU.");}
+      if(n>0){node=list[sel[depth]];sort_menu(parent[depth]);n=menu_children(parent[depth],list);for(i=0;i<n;i++)if(list[i]==node)sel[depth]=i;if(!save_config())wide_notice_box("Write Error","Could not update LAUNCH.MNU.");}
       redraw=1;
     }
-    else if(k==0x4800 && n>0)change_menu_selection(depth,list,n,&sel[depth],-1,panel_y[depth]);
-    else if(k==0x5000 && n>0)change_menu_selection(depth,list,n,&sel[depth],1,panel_y[depth]);
+    else if(k==0x4800 && n>0){sel[depth]=(sel[depth]+n-1)%n;redraw=1;}
+    else if(k==0x5000 && n>0){sel[depth]=(sel[depth]+1)%n;redraw=1;}
     else if(k==0x4B00){if(depth){depth--;redraw=2;}}
     else if((k==13 || k==0x4D00) && n>0){
       node=list[sel[depth]];
       if(node==BUILTIN_COLLECTIONS && k==13){
-        if(collections_dialog()){run_node=BUILTIN_COLLECTIONS;close_menu();return 0;}
+        if(wide_collections_dialog()){run_node=BUILTIN_COLLECTIONS;close_menu();return 0;}
         redraw=2;
       }
       else if(node==BUILTIN_EXPLORE && k==13){
-        if(explore_dialog()){run_node=BUILTIN_EXPLORE;close_menu();return 0;}
+        if(wide_explore_dialog()){run_node=BUILTIN_EXPLORE;close_menu();return 0;}
         redraw=2;
       }
       else if(node==BUILTIN_POWER && k==13){
-        int action=power_dialog();
+        int action=wide_power_dialog();
         if(action){close_menu();if(action==1){if(!power_off())safe_to_turn_off();}else cold_reboot();return -1;}
         redraw=2;
       }
       else if(node<0){redraw=1;}
       else if(nodes[node].folder && depth<MAX_DEPTH-1){depth++;parent[depth]=node;sel[depth]=0;redraw=1;}
       else if(k==13 && !nodes[node].folder && !nodes[node].separator){
-        if(prepare_launcher(node)){run_node=node;close_menu();return node;}
+        if(wide_prepare_launcher(node)){run_node=node;close_menu();return node;}
         redraw=2;
       }
     }
   }
 }
+
+#pragma code_seg()
 
 static void macro_append(char *text,const char *part)
 {
@@ -7324,6 +7496,8 @@ static int sync_startup_services(void)
   strcpy(path,program_dir);strcat(path,"!START.BAT");f=fopen(path,"wt");if(!f)return 0;
   if(fputs("@ECHO OFF\n",f)==EOF){fclose(f);return 0;}
   if(fprintf(f,"PATH %%PATH%%;%s\n",dir)<0){fclose(f);return 0;}
+  if(fprintf(f,"MODE CON COLS=%d\n",screen_columns)<0){fclose(f);return 0;}
+  if(fprintf(f,"%s\\!.EXE /DISPLAY\n",dir)<0){fclose(f);return 0;}
   if(fonts_installed&&appearance.font_persist)if(fprintf(f,"%s\\!FONT.COM\n",dir)<0){fclose(f);return 0;}
   if(shortcut_component_installed&&shortcut_enabled){
     spec[0]=0;if(shortcut_ctrl)strcat(spec,"CTRL+");if(shortcut_alt)strcat(spec,"ALT+");if(shortcut_shift)strcat(spec,"SHIFT+");strcat(spec,shortcut_key_cfg);
@@ -7379,12 +7553,12 @@ static int queue_shell_batch(const char *commands)
 static void show_help(void)
 {
 #ifdef LIGHT86
-  puts("Launch! 86 Light 3.771 - lightweight command menu for DOS\n");
+  puts("Launch! 86 Light 3.772 - lightweight command menu for DOS\n");
   puts("Usage: !86 [menu.mnu] [/CONFIG | /OPENTO=folder | /?]\n");
   puts("Menu management: Ctrl+A Add, Ctrl+D Delete, Ctrl+E Edit, Ctrl+Up/Down Move, Ctrl+S Sort");
 #else
 
-  puts("Launch! 3.771 - a lightweight command menu for DOS\n");
+  puts("Launch! 3.772 - a lightweight command menu for DOS\n");
   puts("Usage: ! [menu.mnu] [/CONFIG | /EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
   puts("Menu management shortcuts:");
   puts("  Ctrl+A        Add a folder, launcher or separator");
@@ -7397,6 +7571,7 @@ static void show_help(void)
   puts("  /EXPLORE      Open Explore & Run directly");
   puts("  /OPEN         Open the File Open dialog");
   puts("  /BYE          Open Shutdown... directly");
+  puts("  /DISPLAY      Apply saved screen columns and font, then return to DOS");
   puts("  /NOW          Start the selected screensaver immediately");
   puts("  menu.mnu      Use another menu file beside !.EXE (or a full path)");
   puts("  /OPENTO=name  Open directly to the first folder with this name");
@@ -7444,7 +7619,7 @@ static int dispatch_command_text(const char *text)
 
 int main(int argc,char **argv)
 {
-  int i,result,config_status,config_mode=0,explore_mode=0,open_mode=0,bye_mode=0,now_mode=0,initmenu_mode=0;
+  int i,result,config_status,config_mode=0,explore_mode=0,open_mode=0,bye_mode=0,now_mode=0,initmenu_mode=0,display_mode=0;
   static char macro[MAX_MACRO],open_to[MAX_TITLE];
   config_path(argv[0]);
 #ifndef LIGHT86
@@ -7480,6 +7655,7 @@ int main(int argc,char **argv)
     if(!stricmp(argv[i],"/?") || !stricmp(argv[i],"-?")){show_help();return 0;}
     if(!stricmp(argv[i],"/CONFIG"))config_mode=1;
 #ifndef LIGHT86
+    else if(!stricmp(argv[i],"/DISPLAY"))display_mode=1;
     else if(!stricmp(argv[i],"/EXPLORE"))explore_mode=1;
     else if(!stricmp(argv[i],"/OPEN"))open_mode=1;
     else if(!stricmp(argv[i],"/BYE"))bye_mode=1;
@@ -7495,6 +7671,12 @@ int main(int argc,char **argv)
     }
     else {printf("Launch!: unknown option %s (use ! /?)\n",argv[i]);return 1;}
   }
+#ifndef LIGHT86
+  if(!windows_session){
+    if(!config_mode)display_columns((explore_mode||open_mode||bye_mode)?80:screen_columns);
+    if(display_mode){font_restore();return 0;}
+  }
+#endif
   if(initmenu_mode){
     if(!default_menu_file(0)){puts("Launch!: could not create or update the default menu.");return 1;}
     return 0;
@@ -7533,7 +7715,7 @@ int main(int argc,char **argv)
     video_init();if(!save_screen()){puts("Launch!: insufficient memory");return 1;}
     cursor_hide();mouse_present=mouse_start();mouse_stop();
     action=power_dialog();
-    close_menu();
+    close_menu();display_columns(screen_columns);font_restore();
     if(action==1){if(!power_off())safe_to_turn_off();}
     else if(action==2)cold_reboot();
     return 0;
@@ -7553,7 +7735,7 @@ int main(int argc,char **argv)
     cursor_hide();mouse_present=mouse_start();mouse_stop();
     result=collections_dialog();
     if(result)run_node=BUILTIN_COLLECTIONS;
-    close_menu();
+    close_menu();display_columns(screen_columns);font_restore();
     if(result){
       if(collection_macro_direct){char d[4];macro[0]=0;d[0]=run_command[0];d[1]=':';d[2]='\r';d[3]=0;macro_append(macro,d);macro_append(macro,"CD ");macro_append(macro,run_command);macro_append(macro,"\r");}
       else build_macro(collection_run_launcher,run_command,macro);
@@ -7566,7 +7748,7 @@ int main(int argc,char **argv)
     cursor_hide();mouse_present=mouse_start();mouse_stop();
     result=explore_dialog();
     if(result)run_node=BUILTIN_EXPLORE;
-    close_menu();
+    close_menu();display_columns(screen_columns);font_restore();
     if(result){
       build_macro(run_node,run_command,macro);
       if(!dispatch_command_text(macro)){puts("Launch!: cannot install keyboard macro helper");return 1;}
@@ -7602,7 +7784,9 @@ int main(int argc,char **argv)
     font_activation_pending=0;shortcut_activation_pending=0;
   } else
 #endif
-  if(time_macro_pending){
+  if(sysbar_command[0]){
+    if(!dispatch_command_text(sysbar_command)){puts("Launch!: cannot queue SysBar command");return 1;}
+  } else if(time_macro_pending){
     strcpy(macro,"TIME\r");
     if(!dispatch_command_text(macro)){puts("Launch!: cannot install keyboard macro helper");return 1;}
   } else if(prompt_macro_pending){

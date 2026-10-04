@@ -244,14 +244,24 @@ static void draw_console_content(int x,int y)
       {char c=stream_char(base+i);if(c)acc_put(inner+i,y+3,c,ACC_ATTR(0,acc_appearance.launchers));}
   if(last_bad)acc_put(inner+center,y+3,last_bad,ACC_ATTR(0,acc_appearance.main_title));
 }
-static void draw_console(int x,int y)
+static int speed_border_colour(int wpm)
 {
-  int i;
-  acc_put(x,y,218,ACC_BORDER);for(i=1;i<66;i++)acc_put(x+i,y,196,ACC_BORDER);acc_put(x+66,y,191,ACC_BORDER);
-  for(i=1;i<4;i++){acc_put(x,y+i,179,ACC_BORDER);acc_put(x+66,y+i,179,ACC_BORDER);}
-  acc_put(x,y+4,192,ACC_BORDER);for(i=1;i<66;i++)acc_put(x+i,y+4,196,ACC_BORDER);acc_put(x+66,y+4,217,ACC_BORDER);
-  draw_console_content(x,y);
+ if(wpm>=135)return 14; /* Bright Yellow */
+ if(wpm>=125)return 13; /* Bright Magenta */
+ if(wpm>=100)return 12; /* Bright Red */
+ if(wpm>=85)return 4;   /* Red */
+ if(wpm>=70)return 6;   /* Brown */
+ return acc_appearance.border;
 }
+static void draw_console_border(int x,int y)
+{
+ int i,a=ACC_ATTR(acc_appearance.background,speed_border_colour(current_wpm()));
+ acc_put(x,y,218,a);for(i=1;i<66;i++)acc_put(x+i,y,196,a);acc_put(x+66,y,191,a);
+ for(i=1;i<4;i++){acc_put(x,y+i,179,a);acc_put(x+66,y+i,179,a);}
+ acc_put(x,y+4,192,a);for(i=1;i<66;i++)acc_put(x+i,y+4,196,a);acc_put(x+66,y+4,217,a);
+}
+static void draw_console(int x,int y)
+{draw_console_border(x,y);draw_console_content(x,y);}
 
 static int base_key(int c)
 {
@@ -395,7 +405,7 @@ int main(int argc,char **argv)
   if(!acc_begin(argv[0],"Typo",0))return 1;acc_mouse_display(1);typo_font(1);load_records();if(!scan_levels()||!load_level_text(0)){acc_notice("Typo Error","No valid TYPO*.LVL level files were found.");typo_font(0);acc_end_screen();acc_end();return 1;}x=(acc_cols-DLG_W)/2;y=(acc_rows-DLG_H)/2;acc_box(x,y,DLG_W,DLG_H,"Typo");reset_level();
   while(!quit){
     sec=elapsed();if(running&&sec>=(unsigned long)level_secs){finish_session(0);acc_box(x,y,DLG_W,DLG_H,"Typo");need=1;}
-    if(sec!=last_second){last_second=sec;draw_status(x,y);}
+    if(sec!=last_second){last_second=sec;draw_status(x,y);draw_console_border(x+3,y+6);}
     kflags=keyboard_flags();
     if(kflags!=last_kflags){
       last_kflags=kflags;
@@ -426,7 +436,7 @@ int main(int argc,char **argv)
         draw_console_content(x+3,y+6);
         draw_metrics(x,y);
         draw_keyboard_key(x+5,y+12,old_key,0);
-        key=0;
+        draw_console_border(x+3,y+6);key=0;
       } else if(key>=32&&key<127&&!finished){
         focus=0;old_key=last_key;process_char(key);
         if(finished){
@@ -437,6 +447,7 @@ int main(int argc,char **argv)
           draw_metrics(x,y);
           if(old_key!=last_key)draw_keyboard_key(x+5,y+12,old_key,0);
           draw_keyboard_key(x+5,y+12,last_key,1);
+          draw_console_border(x+3,y+6);
         }
         key=0;
       }
@@ -445,6 +456,7 @@ int main(int argc,char **argv)
     if(acc_mouse_present){
       acc_mouse(&mx,&my,&buttons);if(buttons&ACC_MOUSE_OUTSIDE){key=27;break;}
       if((buttons&1)&&!(last_buttons&1)){
+        
         if((buttons&1)&&my==y&&(mx==x+DLG_W-5||mx==x+DLG_W-4)){quit=1;need=1;}
         else {hit=button_hit(x,y,mx,my);if(hit){focus=hit;last_key=0;
           if(hit==F_RESET)reset_level();

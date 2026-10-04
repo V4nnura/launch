@@ -36,6 +36,7 @@ typedef struct {
 } ACC_APPEARANCE;
 
 extern ACC_APPEARANCE acc_appearance;
+extern int acc_flashing; /* LAUNCH.CFG flashing=true/false; no UI control. */
 extern int acc_cols,acc_rows,acc_mouse_present;
 extern char acc_directory[ACC_PATH];
 extern char acc_suite_title[24];
@@ -85,6 +86,15 @@ void acc_modal_begin(void);
 void acc_modal_end(void);
 void acc_region_save(int x,int y,int width,int height,void *buffer);
 void acc_region_restore(int x,int y,int width,int height,const void *buffer);
+/* Core-style anchored drop-down: returns the selected zero-based item, or -1. */
+int acc_select_popup(int x,int anchor_y,const char **items,int count,int current,int width);
+/* Shared print-mode contract: Basic, Epson ESC/P, Postscript PS. */
+#define ACC_PRINT_BASIC 1
+#define ACC_PRINT_ESCP 2
+#define ACC_PRINT_PS 3
+int acc_print_popup(int x,int anchor_y);
+void acc_escp_begin(FILE *f);
+int acc_ps_export(FILE *source,const char *name);
 void acc_mouse_display(int show);
 void acc_canvas_cursor_region(int x,int y,int width,int height,int colour);
 void acc_mouse_reapply_cursor(void);

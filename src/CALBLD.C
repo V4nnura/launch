@@ -8,10 +8,10 @@ Launch! for DOS ---------------------
 */
 /*
  * MAINTAINER NOTES - Launch! 3.73
- * File: CALBLD.C
- * Role: Build copy of !CAL
- * Build/ownership: Derived from CAL.C.
- * Maintainer contract: Keep synchronized with CAL.C.
+ * File: CAL.C
+ * Role: !CAL read-only ICS calendar
+ * Build/ownership: Canonical Calendar source; build copy is CALBLD.C.
+ * Maintainer contract: Aggregates one or more ICS files supplied on command line. Calendar data is read-only; navigation/dialogs do not rewrite source ICS.
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
@@ -26,7 +26,7 @@ Launch! for DOS ---------------------
 typedef struct {int y,m,d,all_day,start_min,end_min,recur,interval;char summary[64],location[64];} EVENT;
 static EVENT ev[MAX_EVENTS];static EVENT *day_list[MAX_EVENTS];static int ev_count;
 static const char *months[12]={"January","February","March","April","May","June","July","August","September","October","November","December"};
-static const char *days[7]={"SUN","MON","TUE","WED","THU","FRI","SAT"};static unsigned char calendar_lines[13][57];
+static const char *days[7]={"SUN","MON","TUE","WED","THU","FRI","SAT"};static unsigned char calendar_lines[13][57];static FILE *cal_print_override=0;
 static int leap(int y){return y%4==0&&(y%100!=0||y%400==0);}static int mdays(int m,int y){static int d[12]={31,28,31,30,31,30,31,31,30,31,30,31};return m==1&&leap(y)?29:d[m];}
 static int weekday(int y,int m,int d){int t[12]={0,3,2,5,0,3,5,1,4,6,2,4};if(m<2)y--;return(y+y/4-y/100+y/400+t[m]+d)%7;}
 static void unescape(char *d,const char*s,int n){int i=0;while(*s&&i<n-1){if(*s=='\\'&&s[1]){s++;if(*s=='n'||*s=='N')d[i++]=' ';else if(*s==','||*s==';'||*s=='\\')d[i++]=*s;else d[i++]=*s;s++;}else d[i++]=*s++;}d[i]=0;}
@@ -99,7 +99,7 @@ static void day_dialog(int year,int mon,int day)
     if(key==27)return;
     if((mb&1)&&my==y+2&&mx>=x+w-17&&mx<x+w-12){focus=0;day_shift(&year,&mon,&day,-1);top=0;key=0;continue;}
     if((mb&1)&&my==y+2&&mx>=x+w-9&&mx<x+w-4){focus=1;day_shift(&year,&mon,&day,1);top=0;key=0;continue;}
-    if(key==9||key==271){if(focus<0)focus=(key==271)?1:0;else focus=!focus;key=0;continue;}
+if(key==9||key==271){if(focus<0)focus=(key==271)?1:0;else focus=!focus;key=0;continue;}
     if(key==13&&focus>=0){day_shift(&year,&mon,&day,focus==0?-1:1);top=0;key=0;continue;}
     if(key==256+75){day_shift(&year,&mon,&day,-1);top=0;key=0;continue;}
     if(key==256+77){day_shift(&year,&mon,&day,1);top=0;key=0;continue;}
@@ -110,11 +110,23 @@ static void day_dialog(int year,int mon,int day)
   }
 }
 static void print_rule(FILE*f,int left,int join,int right){int c,i;fputc(left,f);for(c=0;c<7;c++){for(i=0;i<9;i++)fputc(196,f);fputc(c==6?right:join,f);}fputs("\r\n",f);}
-static int print_month(int m,int year){FILE*f;char title[32],b[100],t[16];int r,c,d,i,start=weekday(year,m,1),n=mdays(m,year),pad,j;f=fopen("LPT1","wb");if(!f)return 0;sprintf(title,"%s %d",months[m],year);pad=(71-(int)strlen(title))/2;for(i=0;i<pad;i++)fputc(' ',f);fputs(title,f);fputs("\r\n\r\n",f);fputc(' ',f);for(c=0;c<7;c++)fprintf(f,"%-9s%c",days[c],c==6?'\r':' ');fputs("\n",f);print_rule(f,218,194,191);for(r=0;r<6;r++){for(i=0;i<7;i++){for(c=0;c<7;c++){fputc(179,f);d=r*7+c-start+1;if(i==0&&d>=1&&d<=n){sprintf(b,"%d%s",d,has_event(year,m,d)?" \004":"");fprintf(f,"%-9s",b);}else fputs("         ",f);}fputc(179,f);fputs("\r\n",f);}print_rule(f,r==5?192:195,r==5?193:197,r==5?217:180);}fputs("\r\nEvents\r\n------\r\n",f);for(d=1;d<=n;d++)if(has_event(year,m,d)){fprintf(f,"\r\n%d %s %d\r\n",d,months[m],year);for(j=0;j<ev_count;j++)if(occurs(&ev[j],year,m,d)){if(ev[j].all_day)fprintf(f,"  [ %s ]\r\n",ev[j].summary);else{fmt_time(t,ev[j].start_min);fprintf(f,"  %s - %s\r\n",t,ev[j].summary);if(ev[j].location[0])fprintf(f,"           %s\r\n",ev[j].location);}}}fputc('\f',f);fclose(f);return 1;}
+static int print_month(int m,int year){FILE*f;char title[32],b[100],t[16];int r,c,d,i,start=weekday(year,m,1),n=mdays(m,year),pad,j;f=cal_print_override?cal_print_override:fopen("LPT1","wb");if(!f)return 0;sprintf(title,"%s %d",months[m],year);pad=(71-(int)strlen(title))/2;for(i=0;i<pad;i++)fputc(' ',f);fputs(title,f);fputs("\r\n\r\n",f);fputc(' ',f);for(c=0;c<7;c++)fprintf(f,"%-9s%c",days[c],c==6?'\r':' ');fputs("\n",f);print_rule(f,218,194,191);for(r=0;r<6;r++){for(i=0;i<7;i++){for(c=0;c<7;c++){fputc(179,f);d=r*7+c-start+1;if(i==0&&d>=1&&d<=n){sprintf(b,"%d%s",d,has_event(year,m,d)?" \004":"");fprintf(f,"%-9s",b);}else fputs("         ",f);}fputc(179,f);fputs("\r\n",f);}print_rule(f,r==5?192:195,r==5?193:197,r==5?217:180);}fputs("\r\nEvents\r\n------\r\n",f);for(d=1;d<=n;d++)if(has_event(year,m,d)){fprintf(f,"\r\n%d %s %d\r\n",d,months[m],year);for(j=0;j<ev_count;j++)if(occurs(&ev[j],year,m,d)){if(ev[j].all_day)fprintf(f,"  [ %s ]\r\n",ev[j].summary);else{fmt_time(t,ev[j].start_min);fprintf(f,"  %s - %s\r\n",t,ev[j].summary);if(ev[j].location[0])fprintf(f,"           %s\r\n",ev[j].location);}}}fputc('\f',f);fclose(f);return 1;}
+static int print_month_mode(int m,int year,int mode)
+{
+ FILE *f,*in;char tmp[ACC_PATH];int ok;
+ if(mode==ACC_PRINT_PS){
+  acc_path(tmp,"DATA","CALPRN.TMP");f=fopen(tmp,"wb");if(!f)return 0;
+  cal_print_override=f;ok=print_month(m,year);cal_print_override=0;if(!ok){remove(tmp);return 0;}
+  in=fopen(tmp,"rb");if(!in){remove(tmp);return 0;}ok=acc_ps_export(in,"CALENDAR.PS");fclose(in);remove(tmp);return ok;
+ }
+ f=fopen("LPT1","wb");if(!f)return 0;if(mode==ACC_PRINT_ESCP)acc_escp_begin(f);
+ cal_print_override=f;ok=print_month(m,year);cal_print_override=0;return ok;
+}
 int main(int argc,char**argv){union REGS q;int m,yr,tm,ty,td,calday,key=0,x,y,mx=0,my=0,focus=-1,dirty=1,i,d,st;unsigned b=0;char path[ACC_PATH];if(acc_help(argc,argv,"!CAL","Displays, prints and views iCalendar events."))return 0;if(!acc_begin(argv[0],"Calendar",0))return 1;ev_count=0;if(argc>1){for(i=1;i<argc&&ev_count<MAX_EVENTS;i++){if(strchr(argv[i],'\\')||strchr(argv[i],'/')||strchr(argv[i],':')){strncpy(path,argv[i],ACC_PATH-1);path[ACC_PATH-1]=0;}else acc_path(path,"",argv[i]);load_ics(path);}}else{acc_path(path,"","CAL.ICS");load_ics(path);}q.h.ah=0x2A;int86(0x21,&q,&q);tm=q.h.dh-1;ty=q.x.cx;td=q.h.dl;m=tm;yr=ty;calday=td;x=(acc_cols-61)/2;y=(acc_rows-21)/2;acc_box(x,y,61,21,"Calendar");while(key!=27){if(dirty){draw_month(x,y,m,yr,tm,ty,td,calday,focus==0);dirty=0;}acc_button(x+3,y+18,"  \021  ",focus==1);acc_button(x+10,y+18,"  Today  ",focus==2);acc_button(x+21,y+18,"  \020  ",focus==3);acc_button(x+28,y+18,"  Print  ",focus==4);acc_button(x+51,y+18,"  Exit  ",focus==5);acc_wait(&key,&mx,&my,&b);
+if(key==16){int pm=acc_print_popup(x+28,y+18);if(pm&&!print_month_mode(m,yr,pm))acc_notice("Print","Unable to print calendar.");key=0;continue;}
 if((b&1)&&my>=y+5&&my<y+17&&mx>=x+2&&mx<x+59){int cc=(mx-(x+2))/8,rr=(my-(y+4))/2;st=weekday(yr,m,1);d=rr*7+cc-st+1;if(d>=1&&d<=mdays(m,yr)){calday=d;focus=0;dirty=1;if(has_event(yr,m,d)){day_dialog(yr,m,d);acc_box(x,y,61,21,"Calendar");dirty=1;}key=0;continue;}}
 if((b&1)&&my==y+18){if(mx>=x+2&&mx<x+8)focus=1;else if(mx>=x+9&&mx<x+19)focus=2;else if(mx>=x+20&&mx<x+26)focus=3;else if(mx>=x+27&&mx<x+37)focus=4;else if(mx>=x+51&&mx<x+59)focus=5;key=13;}
 if(key==9||key==271){if(focus<0)focus=(key==271)?5:0;else focus=(key==271)?(focus+5)%6:(focus+1)%6;dirty=1;key=0;continue;}
 if(key==256+71){m=tm;yr=ty;calday=td;focus=0;dirty=1;key=0;continue;}
 if(focus==0&&(key==256+75||key==256+77||key==256+72||key==256+80)){int delta=(key==256+75)?-1:(key==256+77)?1:(key==256+72)?-7:7;day_shift(&yr,&m,&calday,delta);dirty=1;key=0;continue;}
-if(key==13){if(focus==0){day_dialog(yr,m,calday);acc_box(x,y,61,21,"Calendar");dirty=1;}else if(focus==1){if(--m<0){m=11;yr--;}if(calday>mdays(m,yr))calday=mdays(m,yr);dirty=1;}else if(focus==2){m=tm;yr=ty;calday=td;dirty=1;}else if(focus==3){if(++m>11){m=0;yr++;}if(calday>mdays(m,yr))calday=mdays(m,yr);dirty=1;}else if(focus==4){if(!print_month(m,yr))acc_notice("Print","Unable to print calendar to LPT1.");}else key=27;if(key!=27)key=0;}else if(key!=27)key=0;}acc_end();return 0;}
+if(key==13){if(focus==0){day_dialog(yr,m,calday);acc_box(x,y,61,21,"Calendar");dirty=1;}else if(focus==1){if(--m<0){m=11;yr--;}if(calday>mdays(m,yr))calday=mdays(m,yr);dirty=1;}else if(focus==2){m=tm;yr=ty;calday=td;dirty=1;}else if(focus==3){if(++m>11){m=0;yr++;}if(calday>mdays(m,yr))calday=mdays(m,yr);dirty=1;}else if(focus==4){int pm=acc_print_popup(x+28,y+18);if(pm&&!print_month_mode(m,yr,pm))acc_notice("Print","Unable to print calendar.");}else key=27;if(key!=27)key=0;}else if(key!=27)key=0;}acc_end();return 0;}

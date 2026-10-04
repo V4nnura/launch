@@ -66,39 +66,9 @@ static int write_launch36(void)
 
 static int write_install36(void)
 {
-  FILE *in=fopen("INSTALL.C","rt"),*out;char *line=gen_line;int in_status=0,startup_hits=0,icon_lead=0,icon_tail=0;
-  if(!in){puts("GENBUILD: cannot open INSTALL.C");return 0;}
-  out=fopen("INSTBLD.C","wt");if(!out){fclose(in);puts("GENBUILD: cannot create INSTBLD.C");return 0;}
-  while(fgets(line,GEN_LINE,in)){
-    if(replace_once(line,GEN_LINE,"strcpy(autoexec+1,\":\\\\AUTOEXEC.BAT\")","strcpy(autoexec+1,startup_batch_suffix())")>0)startup_hits++;
-    replace_all(line,GEN_LINE,"AUTOEXEC.BAT file","startup batch file");
-    replace_all(line,GEN_LINE,"AUTOEXEC.BAT","startup batch file");
-    if(strstr(line,"/* Launch! 3.5 installer")){
-      fputs("/* Launch! 3.72 installer - Microsoft C/C++ 7.0, DOS small model. */\n",out);continue;
-    }
-    if(strstr(line,"#define PATH_SIZE 128")){
-      emit_startup_batch_helpers(out);fputs(line,out);continue;
-    }
-    if(strstr(line,"static void status_icon(int indent,int colour,int symbol)"))in_status=1;
-    if(in_status&&strstr(line,"for(i=0;i<indent;i++)putchar(' ');")){
-      fputs("  for(i=0;i<indent;i++)putchar(' ');colour_text(\" \",7);\n",out);icon_lead=1;continue;
-    }
-    if(in_status&&strstr(line,"  putchar(' ');")){
-      fputs("  colour_text(\" \",7);\n",out);icon_tail=1;continue;
-    }
-
-    if(strstr(line,"puts(\"Launch! 3.5 Installation\");")){
-      fputs("  puts(\"Launch! 3.65 Installation\");\n",out);continue;
-    }
-    fputs(line,out);
-    if(in_status&&!strcmp(line,"}\n"))in_status=0;
-  }
-  if(startup_hits<1||!icon_lead||!icon_tail){fclose(out);fclose(in);remove("INSTBLD.C");puts("GENBUILD: expected installer patch points were not found");return 0;}
-  if(ferror(in)||fclose(out)!=0){fclose(in);remove("INSTBLD.C");puts("GENBUILD: failed writing INSTBLD.C");return 0;}
-  fclose(in);return 1;
+  /* Installer transforms are already merged into the canonical source. */
+  return copy_generated_source("INSTALL.C","INSTBLD.C");
 }
-
-
 
 static void emit_note_wrap(FILE *out)
 {
@@ -287,10 +257,14 @@ static int write_boxes36(void)
 
 int main(void)
 {
-  /* Release 3.72 changes only generated Core, Installer and Journal sources.
+  /* Refresh canonical Core, Installer, Journal, Note, Stack, Pop and Metro.
      Leave the already-qualified 3.7 intermediates for all other components
      untouched: several older transformation routines are historical and are
      not idempotent once their fixes have already been merged. */
-  if(!write_launch36()||!write_install36()||!write_journal36())return 1;
-  puts("Generated Launch! 3.72 Core, Installer and Journal build sources.");return 0;
+  if(!write_launch36()||!write_install36()||!write_journal36()||
+     !copy_generated_source("NOTE.C","NOTEBLD.C")||
+     !copy_generated_source("STACK.C","STACKBLD.C")||
+     !copy_generated_source("POP.C","POPBLD.C")||
+     !copy_generated_source("METRO.C","METROBLD.C"))return 1;
+  puts("Generated Launch! 3.772 Core, Installer, Journal, Note, Stack, Pop and Metro build sources.");return 0;
 }

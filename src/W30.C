@@ -1,4 +1,4 @@
-/* Launch! 3.771 - native Windows 3.x menu companion.
+/* Launch! 3.772 - native Windows 3.x menu companion.
    Target: Microsoft C/C++ 7.0 + Windows 3.0/3.1 SDK, medium model. */
 #ifndef WINVER
 #define WINVER 0x0300
@@ -8,6 +8,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include "WINCLOCK.H"
+static int close_request=0;
 #include <commdlg.h>
 #include <dde.h>
 
@@ -289,6 +291,8 @@ static void set_menu_path_from_command_line(LPSTR cmd)
     n=0;while(*p&&*p!=' '&&*p!='\t'&&n<(int)sizeof(tok)-1)tok[n++]=*p++;
     tok[n]=0;trim(tok);if(!tok[0])continue;
     /* Win16 remains deliberately 8.3-only: no quote parsing is introduced. */
+    if(!stricmp(tok,"/CLOCK")||!stricmp(tok,"-CLOCK")){clock_mode=1;clock_locale();clock_update();continue;}
+    if(!stricmp(tok,"/CLOSE")||!stricmp(tok,"-CLOSE")){close_request=1;continue;}
     if(!stricmp(tok,"/MANAGE")||!stricmp(tok,"-MANAGE")||!stricmp(tok,"MANAGE")){start_menu_manager=1;continue;}
     if(!strnicmp(tok,"/USE=",5)||!strnicmp(tok,"-USE=",5)){apply_menu_argument(tok+5);continue;}
     apply_menu_argument(tok);
@@ -789,7 +793,7 @@ static int save_launch_menu(void)
   menu_sidecar_path(tmp,".$$$");menu_sidecar_path(bak,".BAK");
   root=find_section("Launcher");if(root<0)return 0;
   remove(tmp);f=fopen(tmp,"wt");if(!f)return 0;
-  ok=fputs("; Launch! 3.771 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
+  ok=fputs("; Launch! 3.772 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
   if(ok)ok=write_menu_section(f,root);
   if(fclose(f)!=0)ok=0;
   if(!ok){remove(tmp);return 0;}
@@ -1520,7 +1524,7 @@ static const char *current_button_text(void)
   if(manage_mode==MANAGE_EDIT)return "Edit...";
   if(manage_mode==MANAGE_REMOVE)return "Remove...";
   if(manage_mode==MANAGE_MENU)return "Manage";
-  return suite_title;
+  return clock_mode?clock_text:suite_title;
 }
 
 static void button_size(int *bw,int *bh)
@@ -1830,6 +1834,7 @@ static LRESULT FAR PASCAL WndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
       /* The popup host is the launcher button on every supported version. */
       return 0;
     case WM_SHOW_LAUNCH_MENU:
+      if(lp){clock_mode=1;clock_locale();clock_update();resize_button_for_mode();}
       /* A helper invocation only schedules the resident popup.  It exits
          immediately; the resident opens the menu later from its own task,
          after Windows has completed the Program Manager/task activation
@@ -1868,8 +1873,11 @@ static LRESULT FAR PASCAL WndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
         return 0;
       }
       break;
+    case WM_WININICHANGE:
+      clock_locale();if(clock_update())resize_button_for_mode();return 0;
     case WM_TIMER:
       if(wp!=RAISE_TIMER)return 0;
+      if(clock_update() && manage_mode==MANAGE_NONE){if(menu_tracking)InvalidateRect(h,NULL,FALSE);else resize_button_for_mode();}
       if(menu_tracking)return 0;
       if(menu_open_pending && !runWnd){
         if(GetKeyState(VK_CONTROL)<0 || GetKeyState(VK_MENU)<0 || GetKeyState(VK_OEM_5)<0)menu_open_delay=3;
@@ -1977,7 +1985,8 @@ int PASCAL WinMain(HINSTANCE inst,HINSTANCE prev,LPSTR cmd,int show)
   /* Single resident instance.  A helper copy posts a request then exits;
      the resident deliberately waits several timer ticks before opening the
      popup so task termination/Program Manager activation is already over. */
-  prior=FindWindow("LaunchW30Button",NULL);debug_val("08 prior resident hwnd",(unsigned long)prior);
+  prior=FindWindow("LaunchW30Button",NULL);
+  if(close_request){if(prior)PostMessage(prior,WM_CLOSE,0,0L);return 0;}debug_val("08 prior resident hwnd",(unsigned long)prior);
   if(prior && !start_menu_manager){debug_msg("09 handing off to prior resident");
     request=start_menu_manager?WM_SHOW_MENU_MANAGER:WM_SHOW_LAUNCH_MENU;
     a=0;
@@ -1987,7 +1996,7 @@ int PASCAL WinMain(HINSTANCE inst,HINSTANCE prev,LPSTR cmd,int show)
        reliable Win16 hand-off: the helper remains alive until the manager
        closes.  The normal launcher popup retains its deferred PostMessage
        path because native popup menus must not overlap helper termination. */
-    if(!PostMessage(prior,request,(WPARAM)a,0L) && a){
+    if(!PostMessage(prior,request,(WPARAM)a,(LPARAM)clock_mode) && a){
       GlobalDeleteAtom(a);
     }
     return 0;

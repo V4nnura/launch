@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.771
+ * MAINTAINER NOTES - Launch! 3.772
  * File: INSTALL.C
  * Role: Canonical installer source
  * Build/ownership: Authoritative installer source; GENBUILD produces INSTBLD.C.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.771 installer - Microsoft C/C++ 7.0, DOS small model. */
+/* Launch! 3.772 installer - Microsoft C/C++ 7.0, DOS small model. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -471,7 +471,7 @@ static int cpu_is_286(void){unsigned before,after;
 #endif
 }
 static const char *display_adapter(int *suitable){union REGS r;memset(&r,0,sizeof(r));r.x.ax=0x1A00;int86(0x10,&r,&r);if(r.h.al==0x1A){*suitable=1;return"VGA or compatible";}memset(&r,0,sizeof(r));r.h.ah=0x12;r.h.bl=0x10;int86(0x10,&r,&r);if(r.h.bl!=0x10){*suitable=1;return"EGA or compatible";}*suitable=0;return"CGA/MDA compatible";}
-static int write_initial_font_config(const char *install,int font_id){char path[PATH_SIZE];FILE*f;int persist=font_id?1:0;sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"wt");if(!f)return 0;fprintf(f,"suiteTitle=Launch!\nTITLEBAR_FG=15\nTITLEBAR_BG=7\nFONT_ID=%d\nFONT_PERSIST=%d\nfontPersist=%d\nPROMPT_STYLE=0\nPROMPT_SET=0\nshortcutEnabled=1\nshortcutCtrl=1\nshortcutAlt=1\nshortcutShift=0\nshortcutKey=\\\n",font_id,persist,persist);return fclose(f)==0;}
+static int write_initial_font_config(const char *install,int font_id){char path[PATH_SIZE];FILE*f;int persist=font_id?1:0;sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"wt");if(!f)return 0;fprintf(f,"suiteTitle=Launch!\nSCREEN_COLUMNS=80\nflashing=true\nTITLEBAR_FG=15\nTITLEBAR_BG=7\nFONT_ID=%d\nFONT_PERSIST=%d\nfontPersist=%d\nPROMPT_STYLE=0\nPROMPT_SET=0\nshortcutEnabled=1\nshortcutCtrl=1\nshortcutAlt=1\nshortcutShift=0\nshortcutKey=\\\n",font_id,persist,persist);return fclose(f)==0;}
 
 /* Seed the standalone font service with the factory Launch! font.  !FONT.COM
    deliberately consumes FONT.CUR rather than parsing FONT.DAT itself, so a
@@ -690,7 +690,7 @@ static int startup_launch_line(const char *line,const char *install,const char *
    wins, so the installer follows the same rule. */
 static int startup_cfg_bool(const char *install,const char *key,int defvalue)
 {
-  char path[PATH_SIZE],line[256],*p,*eq,*valuep;FILE *f;int value=defvalue;
+  static char path[PATH_SIZE],line[256];char *p,*eq,*valuep;FILE *f;int value=defvalue;
   sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"rt");if(!f)return value;
   while(fgets(line,sizeof(line),f)){
     p=line;while(*p==' '||*p=='\t')p++;if(*p==';'||*p=='#'||!*p)continue;
@@ -700,9 +700,21 @@ static int startup_cfg_bool(const char *install,const char *key,int defvalue)
   fclose(f);return value;
 }
 
+static int startup_cfg_columns(const char *install)
+{
+  static char path[PATH_SIZE],line[256];char *p,*eq,*valuep;FILE *f;int value=80;
+  sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"rt");if(!f)return value;
+  while(fgets(line,sizeof(line),f)){
+    p=line;while(*p==' '||*p=='\t')p++;if(*p==';'||*p=='#'||!*p)continue;
+    eq=strchr(p,'=');if(!eq)continue;valuep=eq+1;*eq=0;while(eq>p&&(eq[-1]==' '||eq[-1]=='\t'))*--eq=0;
+    if(!stricmp(p,"SCREEN_COLUMNS")){p=valuep;while(*p==' '||*p=='\t')p++;if(atoi(p)==40||atoi(p)==80)value=atoi(p);}
+  }
+  fclose(f);return value;
+}
+
 static int startup_cfg_light(const char *install)
 {
-  char path[PATH_SIZE],line[256],*p,*eq,*valuep;FILE *f;int light=0;
+  static char path[PATH_SIZE],line[256];char *p,*eq,*valuep;FILE *f;int light=0;
   sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"rt");if(!f)return 0;
   while(fgets(line,sizeof(line),f)){
     p=line;while(*p==' '||*p=='\t')p++;eq=strchr(p,'=');if(!eq)continue;valuep=eq+1;*eq=0;
@@ -716,7 +728,7 @@ static int startup_cfg_light(const char *install)
    conventional-memory hole, which Windows 3.0 reports as fragmentation. */
 static int write_start_batch(const char *install,int add_key,const char *key_spec,int add_font,int light_target,int show_menu)
 {
-  char path[PATH_SIZE],line[300],prompt_line[300];FILE *f,*oldf;const char *keyprog=light_target?"!TKEY.COM":"!KEY.COM";
+  static char path[PATH_SIZE],line[300],prompt_line[300];FILE *f,*oldf;const char *keyprog=light_target?"!TKEY.COM":"!KEY.COM";
   /* Preserve a prompt already managed by Launch! across an upgrade.  Clean
      installs have no PROMPT line until Configuration > Prompt > Set is used. */
   prompt_line[0]=0;sprintf(path,"%s\\!START.BAT",install);oldf=fopen(path,"rt");
@@ -724,6 +736,8 @@ static int write_start_batch(const char *install,int add_key,const char *key_spe
   f=fopen(path,"wt");if(!f)return 0;
   if(fputs("@ECHO OFF\n",f)==EOF){fclose(f);return 0;}
   if(fprintf(f,"PATH %%PATH%%;%s\n",install)<0){fclose(f);return 0;}
+  if(fprintf(f,"MODE CON COLS=%d\n",startup_cfg_columns(install))<0){fclose(f);return 0;}
+  if(fprintf(f,"%s\\!.EXE /DISPLAY\n",install)<0){fclose(f);return 0;}
   if(add_font)if(fprintf(f,"%s\\!FONT.COM\n",install)<0){fclose(f);return 0;}
   if(add_key){
     if(fprintf(f,"%s\\%s",install,keyprog)<0){fclose(f);return 0;}
@@ -1208,7 +1222,7 @@ static int install_launch_group(const char *install,const char *winpath,int win_
   /* Checksum is the negative 16-bit sum of all little-endian WORDs. */
   grp_set_word(out,4,0);sum=0;words=(newsz+1)/2;
   for(i=0;i<words;i++){unsigned lo=out[i*2],hi=(i*2+1<newsz)?out[i*2+1]:0;sum=(sum+lo+(hi<<8))&0xFFFF;}
-  grp_set_word(out,4,(0x10000UL-sum)&0xFFFF);
+  grp_set_word(out,4,(unsigned)((0x10000UL-sum)&0xFFFF));
   sprintf(dst,"%s\\LAUNCH.GRP",winpath);f=fopen(dst,"wb");if(!f){free(in);free(out);return 0;}
   if(fwrite(out,1,newsz,f)!=newsz){fclose(f);free(in);free(out);return 0;}if(fclose(f)){free(in);free(out);return 0;}
   free(in);free(out);remove(src);return 1;
@@ -1277,11 +1291,11 @@ int main(int argc,char **argv)
   int cpu_ok,display_ok,vga_display,menu_result;
   const char *display_name;
   int add_path=0,add_shortcut=0,show_menu=0,font_start=0,light_target=0,post_apply_ready=0;
-  int win_inst=0,win_version=30;char win_path[PATH_SIZE];
+  int win_inst=0,win_version=30;static char win_path[PATH_SIZE];
   (void)argc;
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.771 Installation");
+  colour_text("Launch!",12);puts(" 3.772 Installation");
   installer_title_rule();
   puts("");
   cpu_ok=cpu_at_least_286();display_name=display_adapter(&display_ok);vga_display=!strncmp(display_name,"VGA",3);if((!cpu_ok||!display_ok)&&!hardware_warning())return 1;
@@ -1370,7 +1384,7 @@ int main(int argc,char **argv)
 
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.771 Installation");
+  colour_text("Launch!",12);puts(" 3.772 Installation");
   installer_title_rule();
   puts("\n Please wait while files are extracted and copied...");fflush(stdout);
   source_directory(argv[0],source_dir);sprintf(archive,"%sINSTALL.DAT",source_dir);

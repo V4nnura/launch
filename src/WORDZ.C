@@ -349,15 +349,6 @@ static void draw_words(int x,int y)
   for(i=0;i<WORDS;i++){int px=x+1+(i>=6?15:0),py=y+2+(i%6);if(i<count)draw_word_slot(px,py,i+1,puzzle_word[i],solved[i]);else acc_text(px,py,"",ACC_CONTROL,15);}
 }
 
-static void draw_plain_button(int x,int y,const char *text,int selected)
-{
-  int i,w=(int)strlen(text),a=ACC_CONTROL,sa=ACC_ATTR(acc_appearance.background,0);
-  int fa=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.main_title);
-  acc_fill(x,y,w,1,' ',a);acc_text(x,y,text,a,w);
-  for(i=1;i<=w;i++)acc_put(x+i,y+1,220,sa);
-  acc_put(x+w,y,245,sa);acc_put(x+w,y+1,244,sa);
-  if(selected){acc_put(x,y,169,fa);acc_put(x+w-1,y,170,fa);}
-}
 
 static void wrap_hint(int x,int y,const char *s)
 {
@@ -375,7 +366,7 @@ static void wrap_hint(int x,int y,const char *s)
 static void draw_hint(int x,int y)
 {
   char h[12];int count=puzzle_word_count();if(hint_word>=count)hint_word=0;
-  sprintf(h,"Hint #%d",hint_word+1);acc_text(x,y,h,ACC_HEADING,8);draw_plain_button(x+11,y," Next ",focus==BTN_HINT);
+  sprintf(h,"Hint #%d",hint_word+1);acc_text(x,y,h,ACC_HEADING,8);acc_button(x+11,y," Next ",focus==BTN_HINT);
   wrap_hint(x,y+2,puzzle_hint[hint_word]);
 }
 
@@ -479,7 +470,7 @@ int main(int argc,char **argv)
     if(acc_mouse_present){
       acc_mouse(&mx,&my,&buttons);if(buttons&ACC_MOUSE_OUTSIDE){key=27;break;}
       hint_hover=(my==y+12&&mx>=x+56&&mx<x+62);
-      if(hint_hover!=last_hint_hover){draw_plain_button(x+56,y+12," Next ",focus==BTN_HINT||hint_hover);last_hint_hover=hint_hover;}
+      if(hint_hover!=last_hint_hover){acc_button(x+56,y+12," Next ",focus==BTN_HINT||hint_hover);last_hint_hover=hint_hover;}
       if((buttons&1)&&!(last_buttons&1)){
         mouse_selecting=0;mouse_moved=0;
         if((buttons&1)&&my==y&&(mx==x+DLG_W-5||mx==x+DLG_W-4)){key=27;}

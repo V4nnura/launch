@@ -28,6 +28,7 @@ Launch! for DOS ---------------------
 #include <memory.h>
 #include <malloc.h>
 #include "ACCLIB.H"
+#include "TABCLICK.H"
 #include "MDFONTS.H"
 
 #define PAGES 10
@@ -93,6 +94,9 @@ static int far *heading_row=0,*heading_level=0,heading_count;
 static int edit_width(void){int w=wrap_width[current];return w?w:COLS;}
 static void clear_selection(void);
 static int headings_popup(void);
+static int print_popup(int button_x,int button_y);
+static void basic_current(void);
+static void ps_current(void);
 static void md_scrollbar(int x,int y,int rows,int show_menu);
 static int ensure_page(int p){if(!wrap_width[p])wrap_width[p]=COLS;if(page[p])return 1;page[p]=(MDLINE far *)_fmalloc((unsigned)(LINES*(unsigned)DOC_COLS));if(!page[p])return 0;_fmemset(page[p],' ',(unsigned)(LINES*(unsigned)DOC_COLS));return 1;}
 static int init_pages(void){memset(page,0,sizeof(page));memset(wrap_width,0,sizeof(wrap_width));return ensure_page(0);}
@@ -584,7 +588,7 @@ static int doc_width(unsigned char ch,int strike,int scale){(void)ch;(void)strik
 static void doc_char(int x,int y,unsigned char ch,int strike,int scale,int colour,int style){(void)strike;gchar(x,y,ch,scale,colour,style);}
 static int graph_word_width(const char*s,int i,int n,int strike,int scale){int w=0;while(i<n&&s[i]!=' '){w+=doc_width((unsigned char)s[i],strike,scale);i++;}return w;}
 static int video_is_vga(void){union REGS r;memset(&r,0,sizeof(r));r.x.ax=0x1A00;int86(0x10,&r,&r);return r.h.al==0x1A;}
-static void graph_rule(int y,int kind){int x,c=graph_fg();if(kind==3){for(x=GP_TEXT_L;x<GP_TEXT_R;x+=12){int e=x+6,i;if(e>GP_TEXT_R)e=GP_TEXT_R;for(i=x;i<e;i++)gpixel(i,y,c);}}else{for(x=GP_TEXT_L;x<GP_TEXT_R;x++)gpixel(x,y,c);if(kind==2)for(x=GP_TEXT_L;x<GP_TEXT_R;x++)gpixel(x,y+2,c);}}
+static void graph_rule(int y,int kind){int x,c=graph_fg();if(kind==3||kind==4){for(x=GP_TEXT_L;x<GP_TEXT_R;x+=(kind==3?12:8)){int e=x+(kind==3?6:1),i;if(e>GP_TEXT_R)e=GP_TEXT_R;for(i=x;i<e;i++)gpixel(i,y,c);}}else{for(x=GP_TEXT_L;x<GP_TEXT_R;x++)gpixel(x,y,c);if(kind==2)for(x=GP_TEXT_L;x<GP_TEXT_R;x++)gpixel(x,y+2,c);}}
 static void graph_frame(int x0,int y0,int x1,int y1,int colour)
 {int x,y;for(x=x0;x<=x1;x++){gpixel(x,y0,colour);gpixel(x,y1,colour);}for(y=y0;y<=y1;y++){gpixel(x0,y,colour);gpixel(x1,y,colour);}}
 static int graph_media_placeholder(const MDMEDIA*m,int ypos)
@@ -666,11 +670,15 @@ static int graph_line(int p,int row,int ypos,int in_fence)
  if(quote)for(k=0;k<lines*height+(lines-1)*4+5;k++)gpixel(GP_TEXT_L,ystart+k,graph_fg());
  if(h==1){graph_rule(ypos+height+1,2);return lines*height+(lines-1)*4+8;}
  if(h==2){graph_rule(ypos+height+1,1);return lines*height+(lines-1)*4+6;}
+ if(h==3){graph_rule(ypos+height+1,3);return lines*height+(lines-1)*4+6;}
+ if(h==4){graph_rule(ypos+height+1,4);return lines*height+(lines-1)*4+6;}
  return lines*height+(lines-1)*4+(quote?5:4);
 }
 static int graph_last_row(int p){int r,n;char b[DOC_COLS+1];for(r=LINES-1;r>=0;r--){md_line(p,r,b,&n);if(n>0)return r;}return 0;}
+static void graph_page_indicator(int first,int endrow)
+{char label[24];int total=(endrow+20)/20,page=first/20+1,n,x,bg,c; if(total<=1)return;if(page>total)page=total;sprintf(label,"%d/%d",page,total);n=(int)strlen(label);x=GP_R-8-n*8+1;if(x<GP_TEXT_L)x=GP_TEXT_L;bg=graph_bg();c=bg==15?7:(bg<8?bg+8:bg);graph_role=GF_TINY;gtext(x,GP_B-16,label,1,c);}
 static void graph_render(int p,int first)
-{int row,ypos=GP_T+12,last=first+23,fence=code_fence_before(p,first),fk,endrow=graph_last_row(p);if(last>LINES)last=LINES;graph_link_count=0;graph_page();for(row=first;row<last&&ypos<GP_B-14;row++){fk=line_fence_kind(p,row);if(fk){if(!fence)fence=fk;else if(fence==fk)fence=0;ypos+=3;continue;}ypos+=graph_line(p,row,ypos,fence!=0);if(graph_rows_consumed>1)row+=graph_rows_consumed-1;if(row>=endrow){if(ypos<GP_B)graph_box(0,ypos,639,479,8);break;}}}
+{int row,ypos=GP_T+12,last=first+23,fence=code_fence_before(p,first),fk,endrow=graph_last_row(p);if(last>LINES)last=LINES;graph_link_count=0;graph_page();for(row=first;row<last&&ypos<GP_B-14;row++){fk=line_fence_kind(p,row);if(fk){if(!fence)fence=fk;else if(fence==fk)fence=0;ypos+=3;continue;}ypos+=graph_line(p,row,ypos,fence!=0);if(graph_rows_consumed>1)row+=graph_rows_consumed-1;if(row>=endrow){if(ypos<GP_B){graph_box(0,ypos,GP_L-1,479,8);graph_box(GP_L,ypos,GP_R,479,graph_bg());graph_box(GP_R+9,ypos,639,479,8);}break;}}graph_page_indicator(first,endrow);}
 static void graph_redraw(int p,int first)
 {union REGS r;if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=2;int86(0x33,&r,&r);}graph_render(p,first);if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=1;int86(0x33,&r,&r);}}
 #ifdef MDVIEW_BUILD
@@ -681,6 +689,8 @@ static void mdview_resolve_link(const char *base,const char *target,char *out,ch
 static int mdview_follow_link(int *p,int *first,const char *target)
 {char next[ACC_PATH],anchor[64];int r;if(!target||!*target||md_link_is_web(target))return 0;if(target[0]=='#'){r=graph_find_anchor(*p,target);if(r>=0){*first=r;return 1;}return 0;}if(!md_link_is_markdown(target))return 0;mdview_resolve_link(paths[*p],target,next,anchor);if(!next[0]||!md_text_file(next)||!load_file(0,next))return 0;*p=0;current=0;count=1;*first=0;if(anchor[0]){r=graph_find_anchor(0,anchor);if(r>=0)*first=r;}return 1;}
 #endif
+static void print_current(void);
+static int print_silent=0;
 static void graph_show(void)
 {
  union REGS r;unsigned key;int first=0,p=current,scan,mx,my,mb,lastmb=0,i,tr,endrow;
@@ -694,6 +704,18 @@ static void graph_show(void)
  for(;;){
   key=0;if(_bios_keybrd(_KEYBRD_READY))key=_bios_keybrd(_KEYBRD_READ);
   if(key){
+   if((key&255)==16){
+    /* Show/Viewer has no print UI: Ctrl+P always means formatted ESC/P.
+       Return to text mode before the printer path, because the accessory
+       dialogs and LPT1 path must never touch the VGA surface. */
+    if(acc_mouse_present)acc_mouse_display(0);graph_fonts_free();
+    if(graph_links){_ffree(graph_links);graph_links=0;}
+    acc_restore_screen();
+    print_silent=1;print_current();print_silent=0;
+    memset(&r,0,sizeof(r));r.h.ah=0;r.h.al=0x12;int86(0x10,&r,&r);
+    graph_links=(GLINK far *)_fmalloc((unsigned)(GLINK_MAX*sizeof(GLINK)));
+    if(!graph_links||!graph_fonts_load()){if(graph_links){_ffree(graph_links);graph_links=0;}break;}
+    graph_render(p,first);if(acc_mouse_present)acc_mouse_display(1);continue;}
    if((key&255)==27)break;scan=(key>>8)&255;
    if(scan==0x3C&&!graph_colour_locked){graph_colour_scheme=(graph_colour_scheme+1)%6;graph_redraw(p,first);continue;}
    if(scan==0x47){first=0;}
@@ -731,33 +753,69 @@ static void graph_show(void)
 
 
 
+#pragma code_seg("MDPRINT_TEXT")
+
 /* Epson ESC/P text printing.  Printing deliberately uses printer-resident
    typefaces rather than raster graphics: the Markdown syntax is removed and
    represented by the printer's Roman/Sans/Courier faces and attributes. */
 #define PR_ROMAN 0
 #define PR_SANS 1
 #define PR_COURIER 2
-typedef struct {int font,bold,italic,underline,doublew,script;} PRSTATE;
+#define PR_PRESTIGE 3
+#define PR_SCRIPT 4
+#define PR_DRAFT 5
+#define PR_DRAFT_COND 6
+typedef struct {int font,bold,italic,underline,doublew,script,draft,condensed;} PRSTATE;
 static void pr_esc(FILE*f,int cmd){fputc(27,f);fputc(cmd,f);}
 static void pr_esc_n(FILE*f,int cmd,int n){fputc(27,f);fputc(cmd,f);fputc(n,f);}
-static void pr_init_state(PRSTATE*s){s->font=s->bold=s->italic=s->underline=s->doublew=s->script=-1;}
-static void pr_style(FILE*f,PRSTATE*s,int font,int bold,int italic,int underline,int doublew,int script)
+static void pr_init_state(PRSTATE*s){s->font=s->bold=s->italic=s->underline=s->doublew=s->script=s->draft=s->condensed=-1;}
+static void pr_emit_style(FILE*f,PRSTATE*s,int font,int bold,int italic,int underline,int doublew,int script)
 {
  if(s->script!=script){if(script<0)pr_esc(f,'T');else pr_esc_n(f,'S',script?1:0);s->script=script;}
- if(s->font!=font){pr_esc_n(f,'k',font);s->font=font;}
+ if(s->font!=font){int wantdraft=(font==PR_DRAFT||font==PR_DRAFT_COND),wantcond=(font==PR_DRAFT_COND);if(s->draft!=wantdraft){pr_esc_n(f,'x',wantdraft?0:1);s->draft=wantdraft;}if(s->condensed!=wantcond){if(wantcond)pr_esc(f,15);else pr_esc(f,18);s->condensed=wantcond;}if(font<=PR_SCRIPT)pr_esc_n(f,'k',font);s->font=font;}
  if(s->bold!=bold){pr_esc(f,bold?'E':'F');s->bold=bold;}
  if(s->italic!=italic){pr_esc(f,italic?'4':'5');s->italic=italic;}
  if(s->underline!=underline){pr_esc_n(f,'-',underline?1:0);s->underline=underline;}
  if(s->doublew!=doublew){pr_esc_n(f,'W',doublew?1:0);s->doublew=doublew;}
 }
-static void pr_normal(FILE*f,PRSTATE*s){pr_style(f,s,PR_ROMAN,0,0,0,0,-1);}
-static void pr_crlf(FILE*f){fputc('\r',f);fputc('\n',f);}
+/* Buffer styled cells, then wrap at a word boundary within 72 Pica columns.
+   Styles travel with each cell, so a wrap cannot apply the next word's style
+   to the previous line. Three-column margin and 60 text rows per sheet. */
+#define PR_WIDTH 72
+static unsigned char pr_cells[PR_WIDTH+1];
+static PRSTATE pr_attrs[PR_WIDTH+1],pr_actual;
+static int pr_count=0,pr_rows=0,pr_quote_mode=0,pr_media_mode=0;
+static void pr_style(FILE*f,PRSTATE*s,int font,int bold,int italic,int underline,int doublew,int script)
+{(void)f;(void)doublew;s->font=font;s->bold=bold;s->italic=italic;s->underline=underline;s->doublew=0;s->script=script;}
+static void pr_flush(FILE*f,int count,int drop)
+{
+ int i;PRSTATE *a;
+ if(pr_rows>=60){fputc('\f',f);pr_rows=0;}
+ pr_emit_style(f,&pr_actual,pr_media_mode?PR_DRAFT_COND:PR_PRESTIGE,0,0,0,0,-1);fputs("   ",f);
+ if(pr_quote_mode)pr_emit_style(f,&pr_actual,PR_SCRIPT,0,1,0,0,-1);
+ for(i=0;i<count;i++){a=&pr_attrs[i];pr_emit_style(f,&pr_actual,a->font,a->bold,a->italic,a->underline,0,a->script);fputc(pr_cells[i],f);}
+ pr_emit_style(f,&pr_actual,PR_PRESTIGE,0,0,0,0,-1);fputs("\r\n",f);pr_rows++;
+ pr_count-=count+drop;if(pr_count>0){memmove(pr_cells,pr_cells+count+drop,pr_count);memmove(pr_attrs,pr_attrs+count+drop,pr_count*sizeof(PRSTATE));}
+}
+static void pr_char(FILE*f,PRSTATE*s,int c)
+{
+ int cut;
+ /* Keep CP437 box-drawing bytes intact for table and rule output. */
+ if(c<32)c=' ';
+ if(pr_count==PR_WIDTH){cut=PR_WIDTH;while(cut>0&&pr_cells[cut-1]!=' ')cut--;if(cut>0)pr_flush(f,cut-1,1);else pr_flush(f,PR_WIDTH,0);}
+ pr_cells[pr_count]=(unsigned char)c;pr_attrs[pr_count++]=*s;
+}
+static void pr_normal(FILE*f,PRSTATE*s){pr_style(f,s,PR_PRESTIGE,0,0,0,0,-1);}
+static void pr_crlf(FILE*f){pr_flush(f,pr_count,0);}
 static void pr_rule(FILE*f,PRSTATE*s,int ch,int count)
-{int i;pr_style(f,s,PR_COURIER,0,0,0,0,-1);for(i=0;i<count;i++)fputc(ch,f);pr_crlf(f);}
+{int i;pr_style(f,s,PR_SANS,0,0,0,0,-1);for(i=0;i<count;i++)pr_char(f,s,ch);pr_crlf(f);}
 static void pr_inline(FILE*f,PRSTATE*s,const char*text,int n,int basefont,int basebold,int baseitalic,int baseunderline,int basedouble)
 {
  int i=0,k,bold=basebold,italic=baseitalic,underline=baseunderline,code=0,super=0,sub=0,strike=0;char c;
  while(i<n){
+  if(code){if(text[i]=='`'){code=0;i++;continue;}pr_style(f,s,PR_DRAFT,0,0,0,0,-1);pr_char(f,s,(unsigned char)text[i++]);continue;}
+  if(text[i]=='\\'&&i+1<n){i++;pr_style(f,s,basefont,bold,italic,underline,0,-1);pr_char(f,s,(unsigned char)text[i++]);continue;}
+
   if(i+3<=n&&!strnicmp(text+i,"<u>",3)){underline=1;i+=3;continue;}
   if(i+4<=n&&!strnicmp(text+i,"</u>",4)){underline=baseunderline;i+=4;continue;}
   if(i+5<=n&&!strnicmp(text+i,"<del>",5)){strike=1;i+=5;continue;}
@@ -765,7 +823,7 @@ static void pr_inline(FILE*f,PRSTATE*s,const char*text,int n,int basefont,int ba
   if(i+2<=n&&text[i]=='~'&&text[i+1]=='~'){strike=!strike;i+=2;continue;}
   if(i+3<=n&&((text[i]=='*'&&text[i+1]=='*'&&text[i+2]=='*')||(text[i]=='_'&&text[i+1]=='_'&&text[i+2]=='_'))){bold=!bold;italic=!italic;i+=3;continue;}
   if(i+2<=n&&text[i]=='*'&&text[i+1]=='*'){bold=!bold;i+=2;continue;}
-  if(i+2<=n&&text[i]=='_'&&text[i+1]=='_'){italic=!italic;i+=2;continue;}
+  if(i+2<=n&&text[i]=='_'&&text[i+1]=='_'){bold=!bold;i+=2;continue;}
   if(text[i]=='*'||text[i]=='_'){italic=!italic;i++;continue;}
   if(i+2<=n&&text[i]=='{'&&text[i+1]=='{'){underline=1;i+=2;continue;}
   if(i+2<=n&&text[i]=='}'&&text[i+1]=='}'){underline=baseunderline;i+=2;continue;}
@@ -776,26 +834,70 @@ static void pr_inline(FILE*f,PRSTATE*s,const char*text,int n,int basefont,int ba
   if(text[i]=='`'){code=!code;i++;continue;}
   if(text[i]=='['){
    if(i+2<n&&text[i+1]=='^'){
-    k=i+2;while(k<n&&text[k]!=']')k++;if(k<n){pr_style(f,s,PR_ROMAN,0,0,0,0,0);while(i<=k)fputc((unsigned char)text[i++],f);continue;}
+    k=i+2;while(k<n&&text[k]!=']')k++;if(k<n){pr_style(f,s,PR_PRESTIGE,0,0,0,0,0);while(i<=k)pr_char(f,s,(unsigned char)text[i++]);continue;}
    }
    k=i+1;while(k<n&&text[k]!=']')k++;if(k<n&&k+1<n&&text[k+1]=='('){
-    i++;while(i<k){pr_style(f,s,basefont,bold,italic,1,basedouble,-1);fputc((unsigned char)text[i++],f);}i=k+2;while(i<n&&text[i]!=')')i++;if(i<n)i++;continue;
+    i++;while(i<k){pr_style(f,s,basefont,bold,italic,1,basedouble,-1);pr_char(f,s,(unsigned char)text[i++]);}i=k+2;while(i<n&&text[i]!=')')i++;if(i<n)i++;continue;
    }
   }
   if(text[i]=='<'&&i+7<n&&!strnicmp(text+i+1,"http",4)){
-   k=i+1;while(k<n&&text[k]!='>')k++;if(k<n){i++;while(i<k){pr_style(f,s,basefont,bold,italic,1,basedouble,-1);fputc((unsigned char)text[i++],f);}i++;continue;}
+   k=i+1;while(k<n&&text[k]!='>')k++;if(k<n){i++;while(i<k){pr_style(f,s,basefont,bold,italic,1,basedouble,-1);pr_char(f,s,(unsigned char)text[i++]);}i++;continue;}
   }
   c=text[i++];
-  pr_style(f,s,code?PR_COURIER:basefont,bold,italic,underline,basedouble,super?0:(sub?1:-1));
-  fputc((unsigned char)c,f);
+  pr_style(f,s,code?PR_DRAFT:basefont,bold,italic,underline,basedouble,super?0:(sub?1:-1));
+  pr_char(f,s,(unsigned char)c);
   (void)strike; /* ESC/P LQ-100 has no universally safe strike-through toggle. */
  }
  pr_style(f,s,basefont,basebold,baseitalic,baseunderline,basedouble,-1);
 }
 static void pr_code_line(FILE*f,PRSTATE*s,const char*text,int n,int strip)
-{int i=strip;if(i>n)i=n;pr_style(f,s,PR_COURIER,0,0,0,0,-1);for(;i<n;i++)fputc((unsigned char)text[i],f);pr_crlf(f);}
+{int i=strip;if(i>n)i=n;pr_style(f,s,PR_DRAFT,0,0,0,0,-1);for(;i<n;i++)pr_char(f,s,(unsigned char)text[i]);pr_crlf(f);}
 static void pr_media_box(FILE*f,PRSTATE*s,const MDMEDIA*m)
-{char d[COLS-3];int i,n,w=COLS-2;md_media_desc(m,d,sizeof(d));n=(int)strlen(d);if(n>w-2)n=w-2;pr_style(f,s,PR_COURIER,0,0,0,0,-1);fputc(218,f);for(i=0;i<w;i++)fputc(196,f);fputc(191,f);pr_crlf(f);fputc(179,f);fputc(' ',f);for(i=0;i<n;i++)fputc((unsigned char)d[i],f);for(;i<w-2;i++)fputc(' ',f);fputc(' ',f);fputc(179,f);pr_crlf(f);fputc(192,f);for(i=0;i<w;i++)fputc(196,f);fputc(217,f);pr_crlf(f);}
+{char d[COLS-3];int i,n,w=PR_WIDTH-2;md_media_desc(m,d,sizeof(d));n=(int)strlen(d);if(n>w-2)n=w-2;
+ pr_media_mode=1;pr_style(f,s,PR_DRAFT_COND,0,0,0,0,-1);pr_char(f,s,218);for(i=0;i<w;i++)pr_char(f,s,196);pr_char(f,s,191);pr_crlf(f);
+ pr_style(f,s,PR_DRAFT_COND,0,0,0,0,-1);pr_char(f,s,179);pr_char(f,s,' ');for(i=0;i<n;i++)pr_char(f,s,(unsigned char)d[i]);for(;i<w-2;i++)pr_char(f,s,' ');pr_char(f,s,' ');pr_char(f,s,179);pr_crlf(f);
+ pr_style(f,s,PR_DRAFT_COND,0,0,0,0,-1);pr_char(f,s,192);for(i=0;i<w;i++)pr_char(f,s,196);pr_char(f,s,217);pr_crlf(f);
+ /* Do not leave the physical printer in condensed draft after a media
+    block.  Send the reset commands unconditionally: relying only on the
+    cached state is unsafe because the printer may have changed state while
+    the box rows were flushed. */
+ pr_media_mode=0;pr_esc_n(f,'x',1);pr_esc(f,18);pr_esc_n(f,'k',PR_PRESTIGE);
+ pr_actual.draft=0;pr_actual.condensed=0;pr_actual.font=PR_PRESTIGE;
+ pr_style(f,s,PR_PRESTIGE,0,0,0,0,-1);}
+static int pr_quote_row(int p,int row)
+{char line[DOC_COLS+1];int n,i;md_line(p,row,line,&n);i=md_lead(line,n);return i<n&&line[i]=='>';}
+static int pr_quote_paragraph(FILE*f,PRSTATE*s,int p,int row,int last)
+{char text[MD_LOGICAL+1],line[DOC_COLS+1];int ln,j,i,usedn=0,first=1,pos,end,cut,started=0,after,ordered; text[0]=0;
+ pr_quote_mode=1;
+ /* Markdown permits lazy continuation lines inside a blockquote.  Consume
+    those lines as part of the quote instead of sending them through the
+    ordinary Prestige paragraph path.  Stop at a blank line or a new block
+    construct. */
+ while(row<=last){
+  md_line(p,row,line,&ln);i=md_lead(line,ln);
+  if(i<ln&&line[i]=='>'){i++;while(i<ln&&line[i]==' ')i++;started=1;}
+  else {
+   if(!started||ln==0)break;
+   if(i<ln&&(line[i]=='#'||line[i]=='`'||md_list_marker(line,ln,i,&after,&ordered)))break;
+  }
+  if(ln-i>0){if(!first&&usedn<MD_LOGICAL-1)text[usedn++]=' ';for(j=i;j<ln&&usedn<MD_LOGICAL-1;j++)text[usedn++]=line[j];text[usedn]=0;first=0;}
+  row++;
+ }
+ pos=0;while(pos<usedn){while(pos<usedn&&text[pos]==' ')pos++;if(pos>=usedn)break;end=pos;cut=0;while(end<usedn&&end-pos<PR_WIDTH-2){if(text[end]==' ')cut=end;end++;}if(end<usedn&&cut>pos)end=cut;pr_style(f,s,PR_SCRIPT,0,1,0,0,-1);pr_char(f,s,179);pr_char(f,s,' ');pr_inline(f,s,text+pos,end-pos,PR_SCRIPT,0,1,0,0);pr_crlf(f);pos=end;while(pos<usedn&&text[pos]==' ')pos++;}
+  pr_quote_mode=0;pr_style(f,s,PR_PRESTIGE,0,0,0,0,-1);return row;}
+static int pr_paragraph_row(int p,int row)
+{char line[DOC_COLS+1];MDTABLE tt;MDMEDIA media;int n,i,after=0,ordered=0,dummy;
+ md_line(p,row,line,&n);i=md_lead(line,n);if(i>=n)return 0;
+ if(md_fence_text(line,n)||md_media_parse(line,n,&media)||md_table_context(p,row,&tt,&dummy)||md_indented_code(p,row)||md_definition_term(p,row)||md_definition_line(p,row,&dummy))return 0;
+ if(line[i]=='#'||line[i]=='>'||md_list_marker(line,n,i,&after,&ordered))return 0;
+ if(i+2<n&&((line[i]=='-'&&line[i+1]=='-'&&line[i+2]=='-')||(line[i]=='*'&&line[i+1]=='*'&&line[i+2]=='*')))return 0;
+ return 1;
+}
+static int pr_paragraph(FILE*f,PRSTATE*s,int p,int row,int last)
+{char text[MD_LOGICAL+1],line[DOC_COLS+1];int ln,j,usedn=0,first=1;
+ text[0]=0;while(row<=last&&pr_paragraph_row(p,row)){md_line(p,row,line,&ln);if(ln){if(!first&&usedn<MD_LOGICAL-1)text[usedn++]=' ';for(j=0;j<ln&&usedn<MD_LOGICAL-1;j++)text[usedn++]=line[j];text[usedn]=0;first=0;}row++;}
+ if(usedn){pr_inline(f,s,text,usedn,PR_PRESTIGE,0,0,0,0);pr_crlf(f);}return row;
+}
 static void pr_markdown_line(FILE*f,PRSTATE*s,int p,int row,int in_fence)
 {
  char line[DOC_COLS+1],tb[DOC_COLS+1];MDTABLE tt;MDMEDIA media;int n,i,h=0,lead,after=0,ordered=0,defpos=0,tctx,tborder=0,k;
@@ -803,35 +905,36 @@ static void pr_markdown_line(FILE*f,PRSTATE*s,int p,int row,int in_fence)
  if(in_fence){pr_code_line(f,s,line,n,0);return;}
  if(md_media_parse(line,n,&media)){pr_media_box(f,s,&media);return;}
  tctx=md_table_context(p,row,&tt,&tborder);
- if(tctx){n=md_table_make_row(p,row,&tt,tctx==2?tborder:0,tb);pr_style(f,s,PR_COURIER,0,0,0,0,-1);for(i=0;i<n;i++)fputc((unsigned char)tb[i],f);pr_crlf(f);return;}
+ if(tctx){n=md_table_make_row(p,row,&tt,tctx==2?tborder:0,tb);pr_style(f,s,PR_SANS,0,0,0,0,-1);for(i=0;i<n;i++)pr_char(f,s,(unsigned char)tb[i]);pr_crlf(f);return;}
  if(md_indented_code(p,row)){pr_code_line(f,s,line,n,4);return;}
  if(!n){pr_normal(f,s);pr_crlf(f);return;}
  lead=md_lead(line,n);
- if(md_definition_term(p,row)){for(i=0;i<lead;i++)fputc(' ',f);pr_inline(f,s,line+lead,n-lead,PR_ROMAN,1,0,0,0);pr_crlf(f);return;}
- if(md_definition_line(p,row,&defpos)){for(i=0;i<4;i++)fputc(' ',f);pr_inline(f,s,line+defpos,n-defpos,PR_ROMAN,0,0,0,0);pr_crlf(f);return;}
+ if(md_definition_term(p,row)){for(i=0;i<lead;i++)pr_char(f,s,' ');pr_inline(f,s,line+lead,n-lead,PR_PRESTIGE,1,0,0,0);pr_crlf(f);return;}
+ if(md_definition_line(p,row,&defpos)){for(i=0;i<4;i++)pr_char(f,s,' ');pr_inline(f,s,line+defpos,n-defpos,PR_PRESTIGE,0,0,0,0);pr_crlf(f);return;}
  i=lead;
  if(lead<=3&&i<n&&line[i]=='#'){
   while(i<n&&line[i]=='#'&&h<6){h++;i++;}while(i<n&&line[i]==' ')i++;
   if(h<=2)pr_style(f,s,PR_SANS,1,0,0,h==1, -1);else pr_style(f,s,PR_SANS,1,0,0,0,-1);
+  if(h==1){pr_rule(f,s,196,PR_WIDTH);pr_crlf(f);}
   pr_inline(f,s,line+i,n-i,PR_SANS,1,0,0,h==1);pr_crlf(f);
-  if(h==1)pr_rule(f,s,205,COLS);else if(h==2)pr_rule(f,s,196,COLS);else if(h==3){for(k=0;k<COLS;k++)fputc((k&1)?' ':'-',f);pr_crlf(f);}
+  if(h==1)pr_rule(f,s,205,PR_WIDTH);else if(h==2)pr_rule(f,s,196,PR_WIDTH);else if(h==3)pr_rule(f,s,45,PR_WIDTH);else if(h==4)pr_rule(f,s,46,PR_WIDTH);
   return;
  }
- if(lead<=3&&i+2<n&&((line[i]=='-'&&line[i+1]=='-'&&line[i+2]=='-')||(line[i]=='*'&&line[i+1]=='*'&&line[i+2]=='*'))){pr_rule(f,s,196,COLS);return;}
- for(k=0;k<lead;k++)fputc(' ',f);
+ if(lead<=3&&i+2<n&&((line[i]=='-'&&line[i+1]=='-'&&line[i+2]=='-')||(line[i]=='*'&&line[i+1]=='*'&&line[i+2]=='*'))){pr_rule(f,s,196,PR_WIDTH);return;}
+ for(k=0;k<lead;k++)pr_char(f,s,' ');
  if(md_list_marker(line,n,i,&after,&ordered)){
-  if(ordered){while(i<after-1)fputc((unsigned char)line[i++],f);fputc(' ',f);}else{fputc('*',f);fputc(' ',f);i=after;}
+  if(ordered){while(i<after-1)pr_char(f,s,(unsigned char)line[i++]);pr_char(f,s,' ');}else{pr_char(f,s,'*');pr_char(f,s,' ');i=after;}
  }
  else if(i<n&&line[i]=='>'){
-  pr_style(f,s,PR_ROMAN,0,1,0,0,-1);fputc(179,f);fputc(' ',f);i++;while(i<n&&line[i]==' ')i++;pr_inline(f,s,line+i,n-i,PR_ROMAN,0,1,0,0);pr_crlf(f);return;
+  pr_quote_mode=1;pr_style(f,s,PR_SCRIPT,0,1,0,0,-1);pr_char(f,s,179);pr_char(f,s,' ');i++;while(i<n&&line[i]==' ')i++;pr_inline(f,s,line+i,n-i,PR_SCRIPT,0,1,0,0);pr_crlf(f);pr_quote_mode=0;return;
  }
  else if(i+2<n&&line[i]=='['&&(line[i+1]==' '||line[i+1]=='x'||line[i+1]=='X')&&line[i+2]==']'){
-  fputc('[',f);fputc(line[i+1],f);fputc(']',f);fputc(' ',f);i+=3;while(i<n&&line[i]==' ')i++;
+  pr_char(f,s,'[');pr_char(f,s,line[i+1]);pr_char(f,s,']');pr_char(f,s,' ');i+=3;while(i<n&&line[i]==' ')i++;
  }
  if(i+4<n&&line[i]=='['&&line[i+1]=='^'){
-  k=i+2;while(k<n&&line[k]!=']')k++;if(k<n&&k+1<n&&line[k+1]==':'){pr_style(f,s,PR_ROMAN,0,0,0,0,0);for(;i<n;i++)fputc((unsigned char)line[i],f);pr_crlf(f);return;}
+  k=i+2;while(k<n&&line[k]!=']')k++;if(k<n&&k+1<n&&line[k+1]==':'){pr_style(f,s,PR_PRESTIGE,0,0,0,0,0);for(;i<n;i++)pr_char(f,s,(unsigned char)line[i]);pr_crlf(f);return;}
  }
- pr_inline(f,s,line+i,n-i,PR_ROMAN,0,0,0,0);pr_crlf(f);
+ pr_inline(f,s,line+i,n-i,PR_PRESTIGE,0,0,0,0);pr_crlf(f);
 }
 static void print_current(void)
 {
@@ -841,17 +944,102 @@ static void print_current(void)
  pr_esc(f,'@');             /* Reset printer. */
  pr_esc(f,'P');             /* 10-cpi Pica. */
  pr_esc(f,'2');             /* Normal 1/6-inch line spacing. */
- pr_esc_n(f,'t',1);         /* Epson graphics/PC character table (box drawing). */
+ /* ASCII rules avoid reliance on a printer-specific graphics character table. */
  pr_esc_n(f,'x',1);         /* Letter-quality mode on LQ printers. */
- pr_init_state(&st);pr_normal(f,&st);
+ pr_count=pr_rows=0;pr_init_state(&pr_actual);pr_init_state(&st);pr_normal(f,&st);
  for(row=0;row<=last;row++){
   fk=line_fence_kind(current,row);
   if(fk){if(!fence)fence=fk;else if(fence==fk)fence=0;continue;}
+  if(!fence&&pr_quote_row(current,row)){row=pr_quote_paragraph(f,&st,current,row,last)-1;continue;}
+  if(!fence&&pr_paragraph_row(current,row)){row=pr_paragraph(f,&st,current,row,last)-1;continue;}
   pr_markdown_line(f,&st,current,row,fence!=0);
  }
- pr_normal(f,&st);fputc('\f',f);fclose(f);
- acc_notice("Print","Formatted Markdown sent to LPT1 using Epson ESC/P text formatting.");
+ pr_normal(f,&st);pr_emit_style(f,&pr_actual,PR_PRESTIGE,0,0,0,0,-1);fputc('\f',f);row=ferror(f);if(fclose(f)!=0)row=1;if(row){acc_notice("Print","Printer write failed. Check LPT1.");return;}
+ if(!print_silent)acc_notice("Print","Formatted document sent to printer on LPT1.");
 }
+
+/* Basic printing deliberately sends the document source unchanged.  It does
+   not emit ESC/P commands or interpret Markdown, so it remains usable with
+   printers and print servers that only accept ordinary text on LPT1. */
+static void basic_current(void)
+{
+ FILE*f;char line[DOC_COLS+1];int row,last=LINES-1,n;
+ while(last>=0&&!used(current,last))last--;
+ f=fopen("LPT1","wb");if(!f){acc_notice("Print","Unable to open LPT1.");return;}
+ for(row=0;row<=last;row++){md_line(current,row,line,&n);if(n)fwrite(line,1,n,f);fputs("\r\n",f);}
+ fputc('\f',f);n=ferror(f);if(fclose(f)!=0)n=1;
+ if(n){acc_notice("Print","Printer write failed. Check LPT1.");return;}
+ if(!print_silent)acc_notice("Print","Plain text sent to printer on LPT1.");
+}
+
+/* PostScript export uses the same structural Markdown treatment as the
+   ESC/P path, with standard PostScript fonts standing in for the printer's
+   resident faces.  It is deliberately a plain Level 2 file so it can be
+   converted by Ghostscript or printed by a PostScript-capable host. */
+static void ps_escape(FILE*f,const char*s,int n)
+{int i,c;for(i=0;i<n;i++){c=(unsigned char)s[i];if(c==179)c='|';else if(c==196||c==205)c='-';else if(c==218||c==191||c==192||c==217||c==195||c==180||c==194||c==193||c==197)c='+';if(c=='('||c==')'||c=='\\')fputc('\\',f);if(c<32||c>126)c='?';fputc(c,f);}}
+static void ps_font_size(FILE*f,int font,int bold,int italic,int size)
+{const char*n="Times-Roman";if(font==PR_SANS)n=bold?"Helvetica-Bold":"Helvetica";else if(font==PR_COURIER||font==PR_DRAFT||font==PR_DRAFT_COND)n=bold?"Courier-Bold":"Courier";else if(font==PR_SCRIPT)n="ZapfChancery-MediumItalic";else if(font==PR_PRESTIGE)n=bold?"Times-Bold":"Times-Roman";fprintf(f,"/%s findfont %d scalefont setfont\n",n,size);}
+static void ps_font(FILE*f,int font,int bold,int italic){ps_font_size(f,font,bold,italic,10);}
+static int ps_page_no=1;
+/* Keep PostScript scratch storage out of the small DOS stack.  !MD is built
+   with a deliberately modest stack, and the previous nested paragraph path
+   could corrupt the process while exporting a longer document. */
+static char ps_name_work[ACC_PATH],ps_message_work[ACC_PATH+32];
+static char ps_line_work[DOC_COLS+1],ps_clean_work[DOC_COLS+1],ps_table_work[DOC_COLS+1];
+static char ps_title_work[DOC_COLS+1],ps_desc_work[DOC_COLS+1];
+static char ps_para_work[MD_LOGICAL+1],ps_para_clean_work[MD_LOGICAL+1],ps_src_work[DOC_COLS+1];
+static void ps_text_line(FILE*f,int *line,const char*s,int n,int font,int bold,int italic)
+{if(*line>=60){fprintf(f,"showpage\n%%%%Page: %d %d\n",++ps_page_no,ps_page_no);*line=0;}ps_font(f,font,bold,italic);fprintf(f,"54 %d moveto (",756-(*line)*12);ps_escape(f,s,n);fprintf(f,") show\n");(*line)++;}
+static void ps_heading_line(FILE*f,int *line,const char*s,int n,int size,int bold,int italic)
+{if(*line>=60){fprintf(f,"showpage\n%%%%Page: %d %d\n",++ps_page_no,ps_page_no);*line=0;}ps_font_size(f,PR_SANS,bold,italic,size);fprintf(f,"54 %d moveto (",756-(*line)*12);ps_escape(f,s,n);fprintf(f,") show\n");(*line)++;}
+static void ps_rule_line(FILE*f,int *line,int kind)
+{int y;if(*line>=60){fprintf(f,"showpage\n%%%%Page: %d %d\n",++ps_page_no,ps_page_no);*line=0;}y=756-(*line)*12;fprintf(f,"0 setgray %s setlinewidth ",kind==2?"2":"1");if(kind==3)fprintf(f,"[3 3] 0 setdash ");else if(kind==4)fprintf(f,"[1 3] 0 setdash ");else fprintf(f,"[] 0 setdash ");fprintf(f,"newpath 54 %d moveto 540 %d lineto stroke [] 0 setdash\n",y-3,y-3);(*line)++;}
+static void ps_output_name(char*out)
+{char *n=ps_name_work,*b,*d;strncpy(n,external[current]?paths[current]:"DOCUMENT.MD",ACC_PATH-5);n[ACC_PATH-5]=0;b=strrchr(n,'\\');d=strrchr(n,'/');if(d&&(!b||d>b))b=d;if(b)b++;else b=n;d=strrchr(b,'.');if(d)*d=0;strcat(b,".PS");acc_path(out,"EXPORT",b);}
+static void ps_trim_markdown(char*out,int max,const char*in,int n)
+{int i=0,o=0,code=0;while(i<n&&o<max-1){if(in[i]=='`'){code=!code;i++;continue;}if(!code&&((in[i]=='*'&&i+1<n)||(in[i]=='_'&&i+1<n))){i++;continue;}if(!code&&in[i]=='['){int k=i+1;while(k<n&&in[k]!=']')k++;if(k<n&&k+1<n&&in[k+1]=='('){while(i<k&&o<max-1)out[o++]=in[i++];i=k+2;while(i<n&&in[i]!=')')i++;if(i<n)i++;continue;}}out[o++]=in[i++];}out[o]=0;}
+static void ps_wrap_text(FILE*f,int *line,const char*s,int n,int font,int bold,int italic)
+{char b[PR_WIDTH+1];int i=0,j,k,last;while(i<n){while(i<n&&s[i]==' ')i++;if(i>=n)break;j=i;last=0;while(j<n&&j-i<PR_WIDTH){if(s[j]==' ')last=j;j++;}if(j<n&&last>i)k=last;else k=j;ps_text_line(f,line,s+i,k-i,font,bold,italic);i=k;while(i<n&&s[i]==' ')i++;}}
+static void ps_quote_wrap(FILE*f,int *line,const char*s,int n)
+{char out[PR_WIDTH+3];int i=0,j,k,last,m;while(i<n){while(i<n&&s[i]==' ')i++;if(i>=n)break;j=i;last=0;while(j<n&&j-i<PR_WIDTH-2){if(s[j]==' ')last=j;j++;}if(j<n&&last>i)k=last;else k=j;m=0;out[m++]='|';out[m++]=' ';while(i<k&&m<PR_WIDTH+2)out[m++]=s[i++];ps_text_line(f,line,out,m,PR_SCRIPT,0,1);while(i<n&&s[i]==' ')i++;}}
+static int ps_quote_paragraph(FILE*f,int *line,int p,int row,int last)
+{char *text=ps_para_work,*src=ps_src_work;int ln,i,j,usedn=0,first=1,started=0,after,ordered;text[0]=0;
+ while(row<=last){
+  md_line(p,row,src,&ln);i=md_lead(src,ln);
+  if(i<ln&&src[i]=='>'){i++;while(i<ln&&src[i]==' ')i++;started=1;}
+  else {
+   if(!started||ln==0)break;
+   if(i<ln&&(src[i]=='#'||src[i]=='`'||md_list_marker(src,ln,i,&after,&ordered)))break;
+  }
+  if(ln-i){if(!first&&usedn<MD_LOGICAL-1)text[usedn++]=' ';for(j=i;j<ln&&usedn<MD_LOGICAL-1;j++)text[usedn++]=src[j];text[usedn]=0;first=0;}
+  row++;
+ }
+ if(usedn)ps_quote_wrap(f,line,text,usedn);return row;}
+static int ps_paragraph(FILE*f,int *line,int p,int row,int last)
+{char *text=ps_para_work,*clean=ps_para_clean_work,*src=ps_src_work;int ln,j,usedn=0,first=1;text[0]=0;while(row<=last&&pr_paragraph_row(p,row)){md_line(p,row,src,&ln);if(ln){if(!first&&usedn<MD_LOGICAL-1)text[usedn++]=' ';for(j=0;j<ln&&usedn<MD_LOGICAL-1;j++)text[usedn++]=src[j];text[usedn]=0;first=0;}row++;}if(usedn){ps_trim_markdown(clean,MD_LOGICAL+1,text,usedn);ps_wrap_text(f,line,clean,(int)strlen(clean),PR_PRESTIGE,0,0);}return row;}
+static void ps_current(void)
+{FILE*f;char *out=ps_name_work,*message=ps_message_work,*line=ps_line_work,*clean=ps_clean_work,*tb=ps_table_work,*title=ps_title_work,*desc=ps_desc_work;MDTABLE tt;MDMEDIA media;int row,last,n,i,lead,h,tctx,border,code=0,fk,ln=0;
+ ps_output_name(out);f=fopen(out,"wb");if(!f){acc_notice("Postscript PS","Unable to create the PS file in EXPORT.");return;}ps_page_no=1;
+ fprintf(f,"%%!PS-Adobe-3.0\n%%%%Creator: Launch! !MD\n%%%%Title: (Markdown export)\n%%%%Pages: (atend)\n%%%%EndComments\n%%%%BeginProlog\n%%%%EndProlog\n%%%%Page: 1 1\n");
+ last=LINES-1;while(last>=0&&!used(current,last))last--;for(row=0;row<=last;row++){fk=line_fence_kind(current,row);if(fk){if(!code)code=fk;else if(code==fk)code=0;continue;}md_line(current,row,line,&n);if(code){ps_text_line(f,&ln,line,n,PR_DRAFT,0,0);continue;}if(!n){ps_text_line(f,&ln,"",0,PR_PRESTIGE,0,0);continue;}lead=md_lead(line,n);i=lead;
+  if(md_media_parse(line,n,&media)){md_media_desc(&media,desc,sizeof(desc));ps_text_line(f,&ln,desc,(int)strlen(desc),PR_DRAFT_COND,0,0);continue;}
+  tctx=md_table_context(current,row,&tt,&border);if(tctx){n=md_table_make_row(current,row,&tt,tctx==2?border:0,tb);ps_text_line(f,&ln,tb,n,PR_SANS,0,0);continue;}
+  if(md_indented_code(current,row)){ps_text_line(f,&ln,line+4,n>4?n-4:0,PR_DRAFT,0,0);continue;}
+  if(i<n&&line[i]=='#'){h=0;while(i<n&&line[i]=='#'&&h<6){h++;i++;}while(i<n&&line[i]==' ')i++;ps_trim_markdown(title,DOC_COLS+1,line+i,n-i);if(h==1){ps_rule_line(f,&ln,1);ps_text_line(f,&ln,"",0,PR_PRESTIGE,0,0);ps_heading_line(f,&ln,title,(int)strlen(title),16,1,0);ps_rule_line(f,&ln,2);}else if(h==2){ps_heading_line(f,&ln,title,(int)strlen(title),14,1,0);ps_rule_line(f,&ln,1);}else if(h==3){ps_heading_line(f,&ln,title,(int)strlen(title),12,1,0);ps_rule_line(f,&ln,3);}else if(h==4){ps_heading_line(f,&ln,title,(int)strlen(title),11,1,1);ps_rule_line(f,&ln,4);}else if(h==5)ps_heading_line(f,&ln,title,(int)strlen(title),10,1,0);else ps_heading_line(f,&ln,title,(int)strlen(title),10,1,1);continue;}
+  if(!code&&pr_quote_row(current,row)){row=ps_quote_paragraph(f,&ln,current,row,last)-1;continue;}
+  if(!code&&pr_paragraph_row(current,row)){row=ps_paragraph(f,&ln,current,row,last)-1;continue;}
+  if(i<n&&line[i]=='>'){while(i<n&&line[i]=='>')i++;while(i<n&&line[i]==' ')i++;ps_trim_markdown(clean,DOC_COLS+1,line+i,n-i);ps_quote_wrap(f,&ln,clean,(int)strlen(clean));continue;}
+  ps_trim_markdown(clean,DOC_COLS+1,line+i,n-i);ps_wrap_text(f,&ln,clean,(int)strlen(clean),PR_PRESTIGE,0,0);
+ }
+ fprintf(f,"showpage\n%%%%Trailer\n%%%%Pages: %d\n%%%%EOF\n",ps_page_no);fclose(f);sprintf(message,"PostScript document saved to\n%s",out);acc_notice("Postscript PS",message);
+}
+
+/* Same compact popup geometry and keyboard/mouse behavior as !TODOS Add. */
+static int print_popup(int button_x,int button_y)
+{return acc_print_popup(button_x,button_y);}
+
+#pragma code_seg()
 static void document_stats(unsigned long *chars,unsigned long *words)
 {int y,i,n,inword=0;char c;*chars=*words=0;for(y=0;y<LINES;y++){n=used(current,y);*chars+=(unsigned long)n;if(n&&y+1<LINES)(*chars)++;for(i=0;i<n;i++){c=page[current][y][i];if(isalnum((unsigned char)c)){if(!inword){(*words)++;inword=1;}}else inword=0;}inword=0;}}
 static int heading_label(int row,char *out,int max)
@@ -874,7 +1062,25 @@ static int focus_progress(void)
 static void focus_draw(void)
 {char b[COLS+1],s[42];int r,c,line,left=(acc_cols-COLS)/2,panel=focus_attr(),status=ACC_CONTROL,fill,prog,filled=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.controls_bg);long pos,lo=has_selection()?sel_low():-1L,hi=has_selection()?sel_high():-1L;unsigned long chars,words;for(r=0;r<24;r++){line=top+r;if(line<LINES){_fmemcpy(b,page[current][line],COLS);b[COLS]=0;acc_text(left,r,b,panel,COLS);if(lo>=0)for(c=0;c<COLS;c++){pos=(long)line*COLS+c;if(pos>=lo&&pos<hi)acc_put(left+c,r,b[c],ACC_SELECT);}}}if(cy>=top&&cy<top+24){acc_caret_set(left+cx,cy-top);}else acc_caret_hide();document_stats(&chars,&words);sprintf(s,"Chars: %lu   Words: %lu",chars,words);prog=focus_progress();fill=(prog*12+999)/1000;if(prog==0)fill=0;acc_fill(0,24,acc_cols,1,' ',status);for(c=0;c<12;c++)acc_put(c,24,c<fill?219:176,c<fill?filled:status);acc_text(acc_cols-(int)strlen(s),24,s,status,(int)strlen(s));}
 static void focus_mode(void)
-{int key=0,mx,my;unsigned mb;acc_modal_begin();acc_input_bounds(0,0,acc_cols,acc_rows);focus_bright_backgrounds(1);acc_clear(focus_attr());focus_draw();while(key!=27){acc_wait(&key,&mx,&my,&mb);if(key==256+0x3C){focus_colour_scheme=(focus_colour_scheme+1)%6;acc_clear(focus_attr());focus_draw();key=0;continue;}if(key!=27)editor_key(key,24);if(cy<top)top=cy;if(cy>=top+24)top=cy-23;if(key!=27)focus_draw();}acc_caret_hide();focus_bright_backgrounds(0);acc_modal_end();acc_restore_text_screen();acc_mouse_display(1);key=0;}
+{
+ int key=0,mx=0,my=0,ch,oldx,oldy;unsigned mb=0;
+ acc_close_target_suspend(&oldx,&oldy);acc_modal_begin();acc_input_bounds(0,0,acc_cols,acc_rows);
+ focus_bright_backgrounds(1);acc_clear(focus_attr());focus_draw();
+ while(key!=27){
+  acc_wait(&key,&mx,&my,&mb);
+  if(key==256+0x32||key==256+0x92||key==256+0x3F){
+   acc_caret_hide();focus_bright_backgrounds(0);
+   if(key==256+0x32)headings_popup();
+   else if(key==256+0x92){acc_modal_begin();ch=character_palette();acc_modal_end();if(ch>=0){if(has_selection())delete_selection();insert_one(ch);clear_selection();}}
+   else graph_show();
+   acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);focus_bright_backgrounds(1);acc_clear(focus_attr());key=0;
+  }else if(key==256+0x3C){focus_colour_scheme=(focus_colour_scheme+1)%6;acc_clear(focus_attr());key=0;}
+  else if(key==31){view_mode=(view_mode+1)%3;break;}
+  else if(key!=27)editor_key(key,24);
+  if(cy<top)top=cy;if(cy>=top+24)top=cy-23;if(key!=27)focus_draw();
+ }
+ acc_caret_hide();focus_bright_backgrounds(0);acc_modal_end();acc_close_target_restore(oldx,oldy);acc_restore_text_screen();acc_mouse_display(1);
+}
 static void maximize_page_bar(void)
 {int i,xx=0,n,a,w,max;char s[6],shown[30],*base;acc_fill(0,24,80,1,' ',ACC_BG);for(i=0;i<count;i++){sprintf(s," %d ",i+1);w=(int)strlen(s);a=i==current?ACC_CONTROL:ACC_ATTR(acc_appearance.background,acc_appearance.titlebar_fg);acc_text(xx,24,s,a,w);xx+=w+1;}if(count<PAGES)acc_put(xx,24,'+',ACC_ATTR(acc_appearance.background,acc_appearance.titlebar_fg));if(external[current]&&paths[current][0]){base=strrchr(paths[current],'\\');if(!base)base=strrchr(paths[current],'/');base=base?base+1:paths[current];max=dirty[current]?79:80;n=(int)strlen(base);if(n>max){base+=n-max;n=max;}memcpy(shown,base,n);if(dirty[current])shown[n++]='*';shown[n]=0;acc_text(80-n,24,shown,dirty[current]?ACC_TITLE:ACC_HEADING,n);}else acc_text(73,24,"Unsaved",ACC_TITLE,7);}
 static void maximize_draw(void)
@@ -904,11 +1110,12 @@ static void maximize_mode(void)
   if(key==19){save_current();maximize_draw();key=0;continue;}
   if(key==15){static char openlist[ACC_PATH];if(view_mode!=2)reflow_page(current,COLS);if(md_open_dialog(openlist))md_open_files(openlist);if(view_mode!=2)reflow_page(current,FULL_COLS);cx=cy=top=0;maximize_draw();key=0;continue;}
   if(key==14){if(md_prompt_current()){blank_page(current);memset(softwrap[current],0,LINES);paths[current][0]=0;external[current]=0;dirty[current]=0;cx=cy=top=0;clear_selection();}maximize_draw();key=0;continue;}
+  if(key==256+0x92){int ch;acc_modal_begin();ch=character_palette();acc_modal_end();if(ch>=0){if(has_selection())delete_selection();insert_one(ch);clear_selection();}acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);maximize_draw();key=0;continue;}
   if(key==31){if(view_mode!=2)reflow_page(current,COLS);view_mode=(view_mode+1)%3;top=0;if(view_mode!=2)reflow_page(current,FULL_COLS);clear_selection();maximize_draw();key=0;continue;}
   if(key==6){if(view_mode!=2)reflow_page(current,COLS);focus_mode();if(view_mode!=2)reflow_page(current,FULL_COLS);maximize_draw();key=0;continue;}
   if(key==256+0x3F){if(view_mode!=2)reflow_page(current,COLS);graph_show();if(view_mode!=2)reflow_page(current,FULL_COLS);maximize_draw();key=0;continue;}if(key==256+0x32){headings_popup();acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);maximize_draw();key=0;continue;}
   if((mb&1)&&view_mode!=2&&mx>=0&&mx<FULL_COLS&&((view_mode==0&&my>=0&&my<12)||(view_mode==1&&my>=0&&my<24))){cx=mx;cy=top+my;clear_selection();if(view_mode==0)draw_source(0,0,12,1,FULL_COLS);else draw_source(0,0,24,1,FULL_COLS);key=0;continue;}
-  if((mb&1)&&my==24){int pg,xx=0;for(pg=0;pg<count;pg++){char ps[6];int pw;sprintf(ps," %d ",pg+1);pw=(int)strlen(ps);if(mx>=xx&&mx<xx+pw)break;xx+=pw+1;}if(pg<count){oldpage=current;if(view_mode!=2)reflow_page(oldpage,COLS);current=pg;cx=cy=top=0;clear_selection();if(view_mode!=2&&!reflow_page(current,FULL_COLS)){current=oldpage;reflow_page(current,FULL_COLS);acc_notice("Markdown","Not enough memory to expand that page.");}maximize_draw();}else if(count<PAGES&&mx==xx){if(!ensure_page(count)){acc_notice("Markdown","Not enough memory for another page.");maximize_draw();key=0;continue;}oldpage=current;if(view_mode!=2)reflow_page(oldpage,COLS);current=count++;blank_page(current);memset(softwrap[current],0,LINES);wrap_width[current]=COLS;paths[current][0]=0;external[current]=0;cx=cy=top=0;clear_selection();if(view_mode!=2&&!reflow_page(current,FULL_COLS)){current=oldpage;count--;reflow_page(current,FULL_COLS);acc_notice("Markdown","Not enough memory to expand the new page.");}maximize_draw();}key=0;continue;}
+  if((mb&1)&&my==24){int pg,xx=0;for(pg=0;pg<count;pg++){char ps[6];int pw;sprintf(ps," %d ",pg+1);pw=(int)strlen(ps);if(mx>=xx&&mx<xx+pw)break;xx+=pw+1;}if(pg<count){if(tab_double_click(100+pg))break;oldpage=current;if(view_mode!=2)reflow_page(oldpage,COLS);current=pg;cx=cy=top=0;clear_selection();if(view_mode!=2&&!reflow_page(current,FULL_COLS)){current=oldpage;reflow_page(current,FULL_COLS);acc_notice("Markdown","Not enough memory to expand that page.");}maximize_draw();}else if(count<PAGES&&mx==xx){if(!ensure_page(count)){acc_notice("Markdown","Not enough memory for another page.");maximize_draw();key=0;continue;}oldpage=current;if(view_mode!=2)reflow_page(oldpage,COLS);current=count++;blank_page(current);memset(softwrap[current],0,LINES);wrap_width[current]=COLS;paths[current][0]=0;external[current]=0;cx=cy=top=0;clear_selection();if(view_mode!=2&&!reflow_page(current,FULL_COLS)){current=oldpage;count--;reflow_page(current,FULL_COLS);acc_notice("Markdown","Not enough memory to expand the new page.");}maximize_draw();}key=0;continue;}
   if((mb&1)&&mx==79&&my>=0&&my<rows){if(my==0){headings_popup();acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);maximize_draw();key=0;continue;}else if(my==1&&top>0)top--;else if(my==rows-1&&top<LINES-rows)top++;else if(my>1&&my<rows-1)top=(my-2)*(LINES-rows)/(rows-3);if(top<0)top=0;if(top>LINES-rows)top=LINES-rows;if(cy<top)cy=top;if(cy>=top+rows)cy=top+rows-1;maximize_draw();key=0;continue;}
   editkey=key;oldtop=top;if(view_mode==2){
    if(key==256+72&&top>0)top--;else if(key==256+80&&top<LINES-rows)top++;
@@ -974,11 +1181,11 @@ int main(int argc,char **argv)
     if(key==27){if(!any_dirty()){done=1;break;}choice=confirm_close();if(choice==1){discarded=1;done=1;break;}if(choice==2&&save_all_dirty(!argn)){done=1;break;}draw_ui(x,y,focus);key=0;continue;}
     if((key==256+0x85||key==256+0x57)||((mb&1)&&my==y&&mx>=x+DLG_W-8&&mx<x+DLG_W-6)){maximize_mode();draw_ui(x,y,focus);key=0;continue;}
     if(view_mode!=2&&(mb&1)&&my>=y+2&&my<y+2+rows&&mx>=x+2&&mx<x+2+COLS){focus=0;clear_selection();cx=mx-(x+2);cy=top+my-(y+2);draw_source(x+2,y+2,rows,1,COLS);key=0;continue;}
-    if((mb&1)&&my==y+17){int pg,xx=x+3;for(pg=0;pg<count;pg++){char ps[6];int pw;sprintf(ps," %d ",pg+1);pw=(int)strlen(ps);if(mx>=xx&&mx<xx+pw)break;xx+=pw+1;}if(pg<count){current=pg;cx=cy=top=0;clear_selection();focus=0;draw_ui(x,y,focus);key=0;continue;}if(count<PAGES&&mx==xx){if(!ensure_page(count)){acc_notice("Markdown","Not enough memory for another page.");draw_ui(x,y,focus);key=0;continue;}current=count++;blank_page(current);memset(softwrap[current],0,LINES);paths[current][0]=0;external[current]=0;cx=cy=top=0;clear_selection();focus=0;draw_ui(x,y,focus);key=0;continue;}}
+    if((mb&1)&&my==y+17){int pg,xx=x+3;for(pg=0;pg<count;pg++){char ps[6];int pw;sprintf(ps," %d ",pg+1);pw=(int)strlen(ps);if(mx>=xx&&mx<xx+pw)break;xx+=pw+1;}if(pg<count){if(tab_double_click(pg)){maximize_mode();draw_ui(x,y,focus);key=0;continue;}current=pg;cx=cy=top=0;clear_selection();focus=0;draw_ui(x,y,focus);key=0;continue;}if(count<PAGES&&mx==xx){if(!ensure_page(count)){acc_notice("Markdown","Not enough memory for another page.");draw_ui(x,y,focus);key=0;continue;}current=count++;blank_page(current);memset(softwrap[current],0,LINES);paths[current][0]=0;external[current]=0;cx=cy=top=0;clear_selection();focus=0;draw_ui(x,y,focus);key=0;continue;}}
     if((mb&1)&&mx==x+70&&my>=y+2&&my<y+2+rows){if(view_mode!=2&&my==y+2){headings_popup();draw_ui(x,y,focus);key=0;continue;}else if(view_mode!=2&&my==y+3&&top>0)top--;else if(view_mode==2&&my==y+2&&top>0)top--;else if(my==y+1+rows&&top<LINES-rows)top++;else if(my>y+2+(view_mode!=2)&&my<y+1+rows){int off=view_mode!=2?4:3,den=rows-(view_mode!=2?3:2);top=(my-y-off)*(LINES-rows)/den;}if(top<0)top=0;if(top>LINES-rows)top=LINES-rows;if(cy<top)cy=top;if(cy>=top+rows)cy=top+rows-1;draw_ui(x,y,focus);key=0;continue;}
     if((mb&1)&&my==y+19){int hit=mx-(x+3);if(hit>=0&&hit<6)focus=BTN_OPEN;else if(hit>=7&&hit<13)focus=BTN_SAVE;else if(hit>=14&&hit<20)focus=BTN_PRINT;else if(hit>=23&&hit<30)focus=BTN_SPLIT;else if(hit>=31&&hit<37)focus=BTN_FOCUS;else if(hit>=39&&hit<45)focus=BTN_SHOW;else if(hit>=48&&hit<53)focus=BTN_CHARS;else if(hit>=52&&hit<58)focus=BTN_TIDY;else if(hit>=62&&hit<68)focus=BTN_CLOSE;else{key=0;continue;}key=13;}
     if(key==9||key==271){focus=key==271?(focus?focus-1:BTN_CLOSE):(focus==BTN_CLOSE?0:focus+1);draw_panes(x,y,focus);toolbar(x+3,y+19,focus);key=0;continue;}
-    if(focus&&key==13){if(focus==BTN_OPEN){static char openlist[ACC_PATH];if(md_open_dialog(openlist))md_open_files(openlist);draw_ui(x,y,focus);}else if(focus==BTN_SHOW){graph_show();draw_ui(x,y,focus);}else if(focus==BTN_CHARS){int ch=character_palette();draw_ui(x,y,focus);if(ch>=0){if(has_selection())delete_selection();insert_one(ch);clear_selection();draw_ui(x,y,focus);}}else if(focus==BTN_TIDY){tidy_current();draw_ui(x,y,focus);}else if(focus==BTN_PRINT)print_current();else if(focus==BTN_SAVE){save_current();draw_ui(x,y,focus);}else if(focus==BTN_SPLIT){view_mode=(view_mode+1)%3;top=0;if(view_mode==2)clear_selection();draw_ui(x,y,focus);}else if(focus==BTN_FOCUS){focus_mode();draw_ui(x,y,focus);}else{if(!any_dirty())done=1;else{choice=confirm_close();if(choice==1){discarded=1;done=1;}else if(choice==2&&save_all_dirty(!argn))done=1;else draw_ui(x,y,focus);}}key=0;continue;}
+    if(focus&&key==13){if(focus==BTN_OPEN){static char openlist[ACC_PATH];if(md_open_dialog(openlist))md_open_files(openlist);draw_ui(x,y,focus);}else if(focus==BTN_SHOW){graph_show();draw_ui(x,y,focus);}else if(focus==BTN_CHARS){int ch=character_palette();draw_ui(x,y,focus);if(ch>=0){if(has_selection())delete_selection();insert_one(ch);clear_selection();draw_ui(x,y,focus);}}else if(focus==BTN_TIDY){tidy_current();draw_ui(x,y,focus);}else if(focus==BTN_PRINT){int pm=print_popup(x+14,y+19);if(pm==1)basic_current();else if(pm==2)print_current();else if(pm==3)ps_current();draw_ui(x,y,focus);}else if(focus==BTN_SAVE){save_current();draw_ui(x,y,focus);}else if(focus==BTN_SPLIT){view_mode=(view_mode+1)%3;top=0;if(view_mode==2)clear_selection();draw_ui(x,y,focus);}else if(focus==BTN_FOCUS){focus_mode();draw_ui(x,y,focus);}else{if(!any_dirty())done=1;else{choice=confirm_close();if(choice==1){discarded=1;done=1;}else if(choice==2&&save_all_dirty(!argn))done=1;else draw_ui(x,y,focus);}}key=0;continue;}
     if(focus){if(key!=27)key=0;continue;}
     editkey=key;oldtop=top;if(view_mode==2){
       if(key==256+72&&top>0)top--;else if(key==256+80&&top<LINES-rows)top++;

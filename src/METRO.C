@@ -1369,6 +1369,7 @@ static void failure_animation(int ox, int oy)
   static const int bg[6] = {15, 12, 14, 9, 13, 15};
   int k;
   center_on_station(failed_station);
+  if(!acc_flashing){board_flash_bg=-1;draw_map(ox,oy);return;}
   for (k = 0; k < 6; ++k) {
     board_flash_bg = bg[k];
     draw_map(ox, oy);

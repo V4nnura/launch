@@ -19,8 +19,11 @@ Launch! for DOS ---------------------
 #include <dos.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <string.h>
 #include <ctype.h>
+#include "FLASHCFG.H"
+int acc_flashing=1;
 #include <conio.h>
 #include <bios.h>
 #include <direct.h>
@@ -415,11 +418,13 @@ int acc_exists(const char *path){FILE *f=fopen(path,"rb");if(!f)return 0;fclose(
 
 static void acc_load_config(void)
 {
-  char name[ACC_PATH],line[128],*eq,*key;int value,title_fg_set=0,title_bg_set=0;FILE *f;unsigned char *field=0;
-  strcpy(acc_suite_title,"Launch!");sprintf(name,"%sLAUNCH.CFG",acc_directory);f=fopen(name,"r");if(!f)return;
+  char name[ACC_PATH+12],line[128],*eq,*key;int value,title_fg_set=0,title_bg_set=0;FILE *f;unsigned char *field=0;
+  acc_flashing=1;strcpy(acc_suite_title,"Launch!");sprintf(name,"%sLAUNCH.CFG",acc_directory);f=fopen(name,"r");if(!f)return;
   while(fgets(line,sizeof(line),f)){
     key=line;while(*key&&isspace(*key))key++;if(!*key||*key==';'||*key=='#')continue;
     eq=strchr(key,'=');if(!eq)continue;*eq++=0;
+    {char *e=key+strlen(key);while(e>key&&isspace((unsigned char)e[-1]))*--e=0;}
+    if(!stricmp(key,"flashing")){acc_flashing=flashing_value(eq);continue;}
     if(!stricmp(key,"suiteTitle")){char *e=eq+strlen(eq);while(e>eq&&isspace((unsigned char)e[-1]))*--e=0;while(*eq&&isspace((unsigned char)*eq))eq++;if(*eq){strncpy(acc_suite_title,eq,sizeof(acc_suite_title)-1);acc_suite_title[sizeof(acc_suite_title)-1]=0;}continue;}
     value=atoi(eq);field=0;
     if(!stricmp(key,"BACKGROUND"))field=&acc_appearance.background;
@@ -477,7 +482,7 @@ void acc_box(int x,int y,int w,int h,const char *title)
     title_x=x+4+launch_len;
     if(title_len){acc_put(x+3+launch_len,y,' ',heading_attr);acc_text(title_x,y,title,heading_attr,title_len);}
     acc_put(title_x+title_len,y,' ',heading_attr);
-    if(!stricmp(title,"Markdown")||!stricmp(title,"Note")||!stricmp(title,"Pixel Draw")||!stricmp(title,"To-Dos")){
+    if(!stricmp(title,"Markdown")||!stricmp(title,"Note")||!stricmp(title,"Card Stack")||!stricmp(title,"Journal")||!stricmp(title,"Pixel Draw")||!stricmp(title,"To-Dos")){
       acc_put(x+w-8,y,ACC_MAXIMIZE_L,heading_attr);
       acc_put(x+w-7,y,ACC_MAXIMIZE_R,heading_attr);
     }
@@ -559,7 +564,7 @@ int acc_mouse(int *x,int *y,int *buttons)
   r.x.ax=3;int86(0x33,&r,&r);*x=r.x.cx/8;*y=r.x.dx/8;*buttons=r.x.bx;return 1;
 }
 static int acc_enhanced_keyboard(void){static int known=-1;unsigned char far *p;union REGS r;if(known>=0)return known;p=(unsigned char far *)MAKE_FP(0x40,0x96);if((*p)&0x10)return known=1;memset(&r,0,sizeof(r));r.h.ah=0x09;int86(0x16,&r,&r);return known=(r.h.al&1)?1:0;}
-int acc_key(void){unsigned w=_bios_keybrd(acc_enhanced_keyboard()?0x10:_KEYBRD_READ);int c=w&255,scan=(w>>8)&255;/* Enhanced INT 16h returns AL=E0h for many navigation/editing keys. Treat that exactly like AL=00h when a scan code is present; otherwise Focus/Maximize sees E0h as a printable character. Preserve genuine Alt-numpad extended characters, which arrive with scan==0. */if(scan==0x0E&&(c==8||c==0||c==0x7F||c==0xE0))return 8;if(scan==0x32&&c==13)return 256+0x32; /* Ctrl+M */if(!scan&&c)return 512+c;if(!c||c==0xE0)return 256+scan;return c;}
+int acc_key(void){unsigned w=_bios_keybrd(acc_enhanced_keyboard()?0x10:_KEYBRD_READ);int c=w&255,scan=(w>>8)&255;/* Enhanced INT 16h returns AL=E0h for many navigation/editing keys. Treat that exactly like AL=00h when a scan code is present; otherwise Focus/Maximize sees E0h as a printable character. Preserve genuine Alt-numpad extended characters, which arrive with scan==0. */if(scan==0x0E&&(c==8||c==0||c==0x7F||c==0xE0))return 8;if((scan==0x35&&(c==0||c==31||(c==47&&(_bios_keybrd(2)&4))))||scan==0x95)return 31; /* Ctrl+/ incl. enhanced keypad */if(scan==0x32&&c==13)return 256+0x32; /* Ctrl+M */if(!scan&&c)return 512+c;if(!c||c==0xE0)return 256+scan;return c;}
 int acc_key_ready(void){return _bios_keybrd(acc_enhanced_keyboard()?0x11:_KEYBRD_READY)!=0;}
 void acc_caret_hide(void)
 {

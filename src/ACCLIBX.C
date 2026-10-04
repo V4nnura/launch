@@ -46,7 +46,17 @@ Launch! for DOS ---------------------
 #undef acc_notice
 #undef acc_help
 
+/* ACCLIB.H was included while the base-name macros were active above, so its
+   declarations refer to the renamed base functions.  Declare the public
+   wrappers again before the extension code uses them. */
+int acc_mouse(int *x,int *y,int *buttons);
+int acc_key_ready(void);
+
 #ifdef ACCLIB_MIN_GLYPHS
+static const unsigned char stack_max14_58[32]={0x00,0x00,0x00,0x00,0x00,0x00,0x60,0x70,0x78,0x7C,0x7E,0x7F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+static const unsigned char stack_max14_59[32]={0x00,0x00,0x7F,0x3F,0x1F,0x0F,0x07,0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+static const unsigned char stack_max16_58[32]={0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x60,0x70,0x78,0x7C,0x7E,0x7F,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+static const unsigned char stack_max16_59[32]={0x00,0x00,0x00,0xFE,0x7E,0x3E,0x1E,0x0E,0x06,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 static const unsigned char stack_add_a16[32]={0x00,0x00,0x01,0x01,0x01,0x01,0x3F,0x3F,0x3F,0x01,0x1D,0x01,0x01,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 static const unsigned char stack_add_a14[32]={0x00,0x01,0x01,0x01,0x01,0x3F,0x3F,0x3F,0x01,0x1D,0x01,0x01,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 static const unsigned char stack_add_b16[32]={0x00,0x00,0x80,0x80,0x80,0x80,0xFC,0xFC,0xFC,0x80,0xBE,0xA0,0xA0,0xA0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
@@ -79,15 +89,16 @@ static char acc_app[20];
 void acc_set_idle_hook(void (*fn)(void)){acc_idle_hook=fn;}
 static int acc_app_is(const char *name){return strstr(acc_app,name)!=0;}
 static void maximize_install(void){
-#ifndef ACCLIB_MIN_GLYPHS
  if(!maximize_saved){acc_glyph_read(ACC_MAXIMIZE_L,maximize_old[0]);acc_glyph_read(ACC_MAXIMIZE_R,maximize_old[1]);maximize_saved=1;}
+#ifdef ACCLIB_MIN_GLYPHS
+ acc_glyph_write(ACC_MAXIMIZE_L,acc_font_height()==14?stack_max14_58:stack_max16_58);
+ acc_glyph_write(ACC_MAXIMIZE_R,acc_font_height()==14?stack_max14_59:stack_max16_59);
+#else
  acc_glyph_library(59,ACC_MAXIMIZE_L);acc_glyph_library(60,ACC_MAXIMIZE_R);
 #endif
 }
 static void maximize_restore(void){
-#ifndef ACCLIB_MIN_GLYPHS
  if(maximize_saved){acc_glyph_write(ACC_MAXIMIZE_L,maximize_old[0]);acc_glyph_write(ACC_MAXIMIZE_R,maximize_old[1]);maximize_saved=0;}
-#endif
 }
 /* Release 3.63 keeps the configured mouse pointer unchanged in !DRAW. */
 void acc_canvas_cursor_region(int x,int y,int w,int h,int colour)
@@ -258,6 +269,96 @@ void acc_region_restore(int x,int y,int width,int height,const void *buffer)
   for(j=0;j<height;j++)for(i=0;i<width;i++)
     *(unsigned short far *)MAKE_FP(saved_video_segment,(((y+j)*acc_cols+x+i)*2))=src[j*width+i];
   acc_mouse_display(1);
+}
+
+int acc_select_popup(int x,int anchor_y,const char **items,int count,int current,int width)
+{
+  int h=count<10?count:10,top=current>=h?current-h+1:0,sel=current,py=anchor_y-h-2;
+  int k=0,mx=0,my=0,lastx=-1,lasty=-1,i,choice=-1,old_buttons=0,buttons;
+  unsigned short far *under;
+  if(!items||count<1)return -1;if(width<8)width=8;if(width>28)width=28;
+  if(x<0)x=0;if(x+width>acc_cols)width=acc_cols-x;
+  if(py<0)py=anchor_y+1;if(py+h+1>=acc_rows)py=acc_rows-h-2;if(py<0)py=0;
+  under=(unsigned short far *)_fmalloc((unsigned)(width*(h+2))*sizeof(unsigned short));
+  if(under)acc_region_save(x,py,width,h+2,under);
+  acc_mouse_display(1);
+  if(acc_mouse_present){acc_mouse(&lastx,&lasty,&old_buttons);}
+  for(;;){
+    acc_put(x,py,218,ACC_BORDER);for(i=1;i<width-1;i++)acc_put(x+i,py,196,ACC_BORDER);acc_put(x+width-1,py,191,ACC_BORDER);
+    for(i=0;i<h;i++){int idx=top+i;acc_put(x,py+1+i,179,ACC_BORDER);acc_text(x+1,py+1+i,idx<count?items[idx]:"",idx==sel?ACC_SELECT:ACC_TEXT,width-2);acc_put(x+width-1,py+1+i,179,ACC_BORDER);}
+    if(top>0)acc_put(x+width-1,py+1,30,ACC_BORDER);if(top+h<count)acc_put(x+width-1,py+h,31,ACC_BORDER);
+    acc_put(x,py+h+1,192,ACC_BORDER);for(i=1;i<width-1;i++)acc_put(x+i,py+h+1,196,ACC_BORDER);acc_put(x+width-1,py+h+1,217,ACC_BORDER);
+    if(acc_key_ready()){k=acc_key();if(k==27)break;if(k==13||k==' '){choice=sel;break;}if(k==0x4800||k==256+72){if(sel>0)sel--;}else if(k==0x5000||k==256+80){if(sel+1<count)sel++;}else if(k==0x4700||k==256+71)sel=0;else if(k==0x4F00||k==256+79)sel=count-1;else if(k==0x4900||k==256+73){sel-=h;if(sel<0)sel=0;}else if(k==0x5100||k==256+81){sel+=h;if(sel>=count)sel=count-1;}else continue;if(sel<top)top=sel;if(sel>=top+h)top=sel-h+1;continue;}
+    if(acc_mouse(&mx,&my,&buttons)){if(mx!=lastx||my!=lasty){lastx=mx;lasty=my;if(mx>x&&mx<x+width-1&&my>py&&my<py+h+1){sel=top+my-py-1;if(sel>=count)sel=count-1;}}
+      if((buttons&1)&&!(old_buttons&1)){if(mx==x+width-1&&my==py+1&&top>0){top--;if(sel<top)sel=top;}else if(mx==x+width-1&&my==py+h&&top+h<count){top++;if(sel>=top+h)sel=top+h-1;}else if(mx>x&&mx<x+width-1&&my>py&&my<py+h+1){choice=top+my-py-1;if(choice<count)break;}else if(!(mx>=x&&mx<x+width&&my>=py&&my<py+h+2))break;}
+      old_buttons=buttons;}
+  }
+  if(under){acc_region_restore(x,py,width,h+2,under);_ffree(under);}return choice;
+}
+
+int acc_print_popup(int x,int anchor_y)
+{
+  static const char *items[3]={"Basic","Epson ESC/P","Postscript PS"};
+  int chosen=acc_select_popup(x,anchor_y,items,3,0,18);
+  return chosen<0?0:chosen+1;
+}
+
+void acc_escp_begin(FILE *f)
+{
+  if(!f)return;
+  fputc(27,f);fputc('@',f);       /* reset */
+  fputc(27,f);fputc('P',f);       /* pica */
+  fputc(27,f);fputc('2',f);       /* 1/6-inch line spacing */
+  fputc(27,f);fputc('x',f);fputc(1,f); /* letter quality */
+}
+
+static void acc_ps_char(FILE *f,int c)
+{
+  if(c==179)c='|';
+  else if(c==196||c==205)c='-';
+  else if(c==218||c==191||c==192||c==217||c==195||c==180||c==194||c==193||c==197)c='+';
+  if(c=='('||c==')'||c=='\\')fputc('\\',f);
+  if(c<32||c>126)c='?';
+  fputc(c,f);
+}
+
+static int acc_ps_page_no=1;
+static void acc_ps_line(FILE *f,int *row,const char *s,int n)
+{
+  int pos=0,end,cut,i;
+  while(pos<n){
+    end=pos;cut=0;
+    while(end<n&&end-pos<78){if(s[end]==' ')cut=end;end++;}
+    if(end<n&&cut>pos)end=cut;
+    if(*row>=60){fprintf(f,"showpage\n%%%%Page: %d %d\n",++acc_ps_page_no,acc_ps_page_no);*row=0;}
+    fprintf(f,"/Courier findfont 10 scalefont setfont\n54 %d moveto (",756-(*row)*12);
+    for(i=pos;i<end;i++)acc_ps_char(f,(unsigned char)s[i]);
+    fprintf(f,") show\n");(*row)++;
+    pos=end;while(pos<n&&s[pos]==' ')pos++;
+  }
+  if(n==0){
+    if(*row>=60){fprintf(f,"showpage\n%%%%Page: %d %d\n",++acc_ps_page_no,acc_ps_page_no);*row=0;}
+    fprintf(f,"/Courier findfont 10 scalefont setfont\n54 %d moveto () show\n",756-(*row)*12);(*row)++;
+  }
+}
+
+int acc_ps_export(FILE *source,const char *name)
+{
+  FILE *out;char path[ACC_PATH],line[256];int c,n=0,row=0,pending=0;
+  if(!source||!name||!*name)return 0;
+  acc_path(path,"EXPORT",name);out=fopen(path,"wb");if(!out)return 0;acc_ps_page_no=1;
+  fprintf(out,"%%!PS-Adobe-3.0\n%%%%Creator: Launch!\n%%%%Title: (%s)\n%%%%Pages: (atend)\n%%%%EndComments\n%%%%Page: 1 1\n",name);
+  while((c=fgetc(source))!=EOF){
+    if(c=='\f'){if(n){line[n]=0;if(pending){fprintf(out,"showpage\n%%%%Page: %d %d\n",++acc_ps_page_no,acc_ps_page_no);row=0;pending=0;}acc_ps_line(out,&row,line,n);n=0;}if(row>0)pending=1;continue;}
+    if(c=='\r')continue;
+    if(c=='\n'){line[n]=0;if(pending){fprintf(out,"showpage\n%%%%Page: %d %d\n",++acc_ps_page_no,acc_ps_page_no);row=0;pending=0;}acc_ps_line(out,&row,line,n);n=0;continue;}
+    if(n<(int)sizeof(line)-1)line[n++]=(char)c;
+  }
+  if(n){line[n]=0;if(pending){fprintf(out,"showpage\n%%%%Page: %d %d\n",++acc_ps_page_no,acc_ps_page_no);row=0;pending=0;}acc_ps_line(out,&row,line,n);}
+  if(pending)fprintf(out,"showpage\n");
+  else if(row>0)fprintf(out,"showpage\n");
+  fprintf(out,"%%%%Trailer\n%%%%Pages: %d\n%%%%EOF\n",acc_ps_page_no);
+  fclose(out);return 1;
 }
 
 void acc_modal_begin(void)

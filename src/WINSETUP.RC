@@ -1,6 +1,0 @@
-#define WINVER 0x0300
-#include <windows.h>
-STRINGTABLE
-BEGIN
-    1 "Launch! Windows setup helper"
-END

@@ -60,9 +60,10 @@ static int ctrl_down(void)
   return ((*p)&4)!=0;
 }
 
+static FILE *todos_print_override=0;
 static int days_in_month(int y,int m)
 {
-  static const int d[12]={31,28,31,30,31,30,31,31,30,31,30,31};
+static const int d[12]={31,28,31,30,31,30,31,31,30,31,30,31};
   int n=d[m-1];if(m==2&&((y%4==0&&y%100!=0)||y%400==0))n++;return n;
 }
 
@@ -198,7 +199,7 @@ static void print_wrapped(FILE *f,const char *text,int indent)
 static int build_visible(int *map,const char *filter,int hide_done,int sort_mode);
 static int print_tasks(const char *filter,int hide_done,int sort_mode)
 {
-  FILE *f=fopen("LPT1","wb");int map[MAX_ITEMS],n,i,idx,have_group=0;char due[11],meta[96];
+  FILE *f=todos_print_override?todos_print_override:fopen("LPT1","wb");int map[MAX_ITEMS],n,i,idx,have_group=0;char due[11],meta[96];
   if(!f)return 0;
   n=build_visible(map,filter,hide_done,sort_mode);
   fputs("TO-DO LIST\r\n",f);print_rule(f);
@@ -217,6 +218,12 @@ static int print_tasks(const char *filter,int hide_done,int sort_mode)
   fputc('\f',f);fclose(f);return 1;
 }
 
+static int print_tasks_mode(const char *filter,int hide_done,int sort_mode,int mode)
+{
+ FILE *f,*in;char tmp[ACC_PATH];int ok;
+ if(mode==ACC_PRINT_PS){acc_path(tmp,"DATA","TODOSPRN.TMP");f=fopen(tmp,"wb");if(!f)return 0;todos_print_override=f;ok=print_tasks(filter,hide_done,sort_mode);todos_print_override=0;if(!ok){remove(tmp);return 0;}in=fopen(tmp,"rb");if(!in){remove(tmp);return 0;}ok=acc_ps_export(in,"TODOS.PS");fclose(in);remove(tmp);return ok;}
+ f=fopen("LPT1","wb");if(!f)return 0;if(mode==ACC_PRINT_ESCP)acc_escp_begin(f);todos_print_override=f;ok=print_tasks(filter,hide_done,sort_mode);todos_print_override=0;return ok;
+}
 static int field_key(char *buf,int maxlen,int key,int *pos)
 {
   int len=(int)strlen(buf),ch;
@@ -593,25 +600,7 @@ static int insert_task_after(int pos,const TODO_ITEM *t)
 {int i;if(item_count>=MAX_ITEMS)return -1;if(pos<0)pos=0;if(pos>item_count)pos=item_count;for(i=item_count;i>pos;i--)items[i]=items[i-1];items[pos]=*t;item_count++;return pos;}
 
 static int add_type_popup(int bx,int by)
-{
-  int w=10,h=4,x=bx,y=by-h,k=0,mx=0,my=0,sel=-1,i,j;unsigned mb=0;
-  /* Compact two-choice popup immediately above Add.  The main window is
-     redrawn by the caller afterwards, so no separate backing store is needed. */
-  acc_put(x,y,218,ACC_BORDER);for(i=1;i<w-1;i++)acc_put(x+i,y,196,ACC_BORDER);acc_put(x+w-1,y,191,ACC_BORDER);
-  for(j=1;j<h-1;j++){acc_put(x,y+j,179,ACC_BORDER);acc_put(x+w-1,y+j,179,ACC_BORDER);}
-  acc_put(x,y+h-1,192,ACC_BORDER);for(i=1;i<w-1;i++)acc_put(x+i,y+h-1,196,ACC_BORDER);acc_put(x+w-1,y+h-1,217,ACC_BORDER);
-  for(;;){
-    acc_text(x+1,y+1," Task   ",sel==0?ACC_SELECT:ACC_TEXT,w-2);
-    acc_text(x+1,y+2," Group  ",sel==1?ACC_SELECT:ACC_TEXT,w-2);
-    acc_wait(&k,&mx,&my,&mb);
-    if(mb&ACC_MOUSE_MOVED){if(mx>x&&mx<x+w-1&&my>=y+1&&my<=y+2)sel=my-(y+1);continue;}
-    if(mb&1){if(mx>x&&mx<x+w-1&&my>=y+1&&my<=y+2)return my-(y+1)+1;continue;}
-    if(k==27)return 0;
-    if(k==9||k==271){sel=sel<0?((k==271)?1:0):!sel;continue;}
-    if(k==256+72||k==256+80){sel=sel<0?0:!sel;continue;}
-    if(k==13&&sel>=0)return sel+1;
-  }
-}
+{static const char *items[2]={"Task","Group"};int chosen=acc_select_popup(bx,by,items,2,0,10);return chosen<0?0:chosen+1;}
 
 int main(int argc,char **argv)
 {
@@ -689,7 +678,7 @@ int main(int argc,char **argv)
       idx=map[sel];delete_selected(idx);if(sel>0)sel--;expanded=0;dirty=1;key=0;continue;
     }
     if(key==16){ /* Ctrl+P: Print current view */
-      if(!print_tasks(filter,hide_done,sort_mode))acc_notice("Print","Unable to print to LPT1");
+      {int pm=acc_print_popup(x+27,y+h-3);if(pm&&!print_tasks_mode(filter,hide_done,sort_mode,pm))acc_notice("Print","Unable to print current view");}
       if(!maximized)acc_box(x,y,w,h,"To-Dos");dirty=1;key=0;continue;
     }
     if(key==19){ /* Ctrl+S: cycle sorting */sort_mode=(sort_mode+1)%5;sel=top=0;expanded=0;dirty=1;acc_text(x+55,y+h-3,(sort_mode==1)?"Date\031":(sort_mode==2)?"Date\030":(sort_mode==3)?"Alph\031":(sort_mode==4)?"Alph\030":"None",ACC_LABEL,6);key=0;continue;}
@@ -712,7 +701,7 @@ int main(int argc,char **argv)
       if(focus==2){int kind=add_type_popup(x+3,y+h-3);if(!maximized)acc_box(x,y,w,h,"To-Dos");if(kind==1&&item_count<MAX_ITEMS){int g=(n>0)?task_group_index(map[sel]):-1,at=(g>=0)?group_end(g)+1:0;memset(&t,0,sizeof(t));t.used=1;t.type=1;t.priority=0;if(edit_task(&t,g>=0?items[g].title:"(none)")){newidx=insert_task_after(at,&t);filter[0]=0;sort_mode=0;sel=visible_pos_for_index(newidx,filter,hide_done,sort_mode);top=sel>todos_view_rows-1?sel-todos_view_rows+1:0;}if(!maximized)acc_box(x,y,w,h,"To-Dos");}else if(kind==2&&item_count<MAX_ITEMS){memset(&t,0,sizeof(t));t.used=1;t.type=0;strcpy(t.title,"New group");if(edit_heading(&t)){items[item_count++]=t;filter[0]=0;sort_mode=0;sel=item_count-1;}if(!maximized)acc_box(x,y,w,h,"To-Dos");}}
       else if(focus==3&&n>0){idx=map[sel];if(items[idx].type)edit_task(&items[idx],task_group_name(idx));else edit_heading(&items[idx]);if(!maximized)acc_box(x,y,w,h,"To-Dos");}
       else if(focus==4&&n>0){idx=map[sel];delete_selected(idx);if(sel>0)sel--;expanded=0;}
-      else if(focus==5){if(!print_tasks(filter,hide_done,sort_mode))acc_notice("Print","Unable to print to LPT1");if(!maximized)acc_box(x,y,w,h,"To-Dos");}
+      else if(focus==5){int pm=acc_print_popup(x+27,y+h-3);if(pm&&!print_tasks_mode(filter,hide_done,sort_mode,pm))acc_notice("Print","Unable to print current view");if(!maximized)acc_box(x,y,w,h,"To-Dos");}
       else if(focus==6){hide_done=!hide_done;sel=top=0;expanded=0;}
       else if(focus==7){sort_mode=(sort_mode+1)%5;sel=top=0;expanded=0;acc_text(x+55,y+h-3,(sort_mode==1)?"Date\031":(sort_mode==2)?"Date\030":(sort_mode==3)?"Alph\031":(sort_mode==4)?"Alph\030":"None",ACC_LABEL,6);}
       else if(focus==8)key=27;

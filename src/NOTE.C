@@ -22,6 +22,7 @@ Launch! for DOS ---------------------
 #include <malloc.h>
 #include <memory.h>
 #include "ACCLIB.H"
+#include "TABCLICK.H"
 #define NW 76
 #define EW 59
 #define MAX_EW 75
@@ -48,6 +49,7 @@ static unsigned char external_dirty[MAX_EXTERNAL];
 static int persistent_dirty=0,note_discard=0;
 static int note_edit_width=EW;
 static int note_line_numbers=1;
+static FILE *note_print_override=0;
 
 /* Keyboard selection is linear through the editable 56-column text area.
    Clipboard storage is FAR so it does not consume the small-model DGROUP. */
@@ -153,6 +155,7 @@ static void external_setup(int argc,char **argv)
  ctab=external_tab;cpage=0;
 }
 static void page_save(void);
+static int note_reflow(int new_width,int *pcx,int *pcy);
 static void note_selection_clear(void);
 static int input_name(char *out,int edit);
 static int note_open_dialog(char *out){int w=60,h=9,x=(acc_cols-w)/2,y=(acc_rows-h)/2,k=0,mx=0,my=0,pos=0,f=0;unsigned mb=0;out[0]=0;acc_modal_begin();for(;;){acc_subbox(x,y,w,h,"Open Files",1);acc_text(x+3,y+2,"Filename(s):",ACC_LABEL,12);acc_fill(x+15,y+2,40,1,' ',f==0?ACC_SELECT:ACC_CONTROL);acc_text(x+15,y+2,out,f==0?ACC_SELECT:ACC_CONTROL,40);if(f==0)acc_caret_set(x+15+(pos<40?pos:39),y+2);else acc_caret_hide();acc_button(x+3,y+6," Open ",f==1);acc_button(x+11,y+6," Cancel ",f==2);acc_wait(&k,&mx,&my,&mb);if(k==27){acc_modal_end();return 0;}if((mb&1)&&my==y+2){f=0;k=0;}else if((mb&1)&&my==y+6&&mx>=x+3&&mx<x+9){f=1;k=13;}else if((mb&1)&&my==y+6&&mx>=x+11&&mx<x+19){f=2;k=13;}if(k==9||k==271){f=k==271?(f+2)%3:(f+1)%3;k=0;continue;}if(k==13&&f==2){acc_modal_end();return 0;}if(k==13&&(f==0||f==1)){if(pos){acc_modal_end();return 1;}k=0;continue;}if(f==0){int n=(int)strlen(out);if(k==256+71)pos=0;else if(k==256+79)pos=n;else if(k==8&&pos){memmove(out+pos-1,out+pos,n-pos+1);pos--;}else if(k>=32&&k<127&&n<ACC_PATH-1){memmove(out+pos+1,out+pos,n-pos+1);out[pos++]=(char)k;}}k=0;}}
@@ -163,18 +166,18 @@ static int note_open_files(const char *list){char work[ACC_PATH],*q,*start,full[
 static int note_add_tab(void){char nm[TABNAME+1];int made;if(ntab>=MAXTABS)return 0;made=input_name(nm,0);if(!made)return 0;page_save();note_selection_clear();if(external_runtime_tab){strcpy(tabs[external_tab+1],tabs[external_tab]);pages[external_tab+1]=pages[external_tab];strcpy(tabs[external_tab],nm);pages[external_tab]=1;ctab=external_tab;external_tab++;ntab++;persistent_ntab++;}else{strcpy(tabs[ntab],nm);pages[ntab]=1;ctab=ntab++;persistent_ntab++;}cpage=0;memset(note,' ',sizeof(note));memset(softwrap,0,sizeof(softwrap));meta_save();page_save();return 1;}
 static void page_load(void)
 {
- char p[ACC_PATH],n[20];FILE*f;int ep=external_page_index();
+ char p[ACC_PATH],n[20];FILE*f;int ep=external_page_index(),wide=note_edit_width,rx=0,ry=0;
  memset(note,' ',sizeof(note));memset(softwrap,0,sizeof(softwrap));
  if(ep>=0){external_work_load(ep);return;}
- if(!pages[ctab])return;data_name(n,ctab,cpage);acc_path(p,"DATA",n);f=fopen(p,"rb");if(f){int r;for(r=0;r<NL;r++)fread(note+r*NW,1,OLD_NW,f);fclose(f);}
- wrap_name(n,ctab,cpage);acc_path(p,"DATA",n);f=fopen(p,"rb");if(f){fread(softwrap,1,sizeof(softwrap),f);fclose(f);}
+ if(!pages[ctab])return;note_edit_width=EW;data_name(n,ctab,cpage);acc_path(p,"DATA",n);f=fopen(p,"rb");if(f){int r;for(r=0;r<NL;r++)fread(note+r*NW,1,OLD_NW,f);fclose(f);}
+ wrap_name(n,ctab,cpage);acc_path(p,"DATA",n);f=fopen(p,"rb");if(f){fread(softwrap,1,sizeof(softwrap),f);fclose(f);}if(wide!=EW)note_reflow(wide,&rx,&ry);
 }
 static void page_save(void)
 {
- char p[ACC_PATH],n[20];FILE*f;int ep=external_page_index();
+ char p[ACC_PATH],n[20];FILE*f;int ep=external_page_index(),wide=note_edit_width,rx=0,ry=0;
  if(ep>=0){external_work_save(ep);return;}
- if(!pages[ctab])return;data_name(n,ctab,cpage);acc_path(p,"DATA",n);f=fopen(p,"wb");if(f){int r;for(r=0;r<NL;r++)fwrite(note+r*NW,1,OLD_NW,f);fclose(f);}
- wrap_name(n,ctab,cpage);acc_path(p,"DATA",n);f=fopen(p,"wb");if(f){fwrite(softwrap,1,sizeof(softwrap),f);fclose(f);}
+ if(!pages[ctab])return;if(wide!=EW&&!note_reflow(EW,&rx,&ry))return;data_name(n,ctab,cpage);acc_path(p,"DATA",n);f=fopen(p,"wb");if(f){int r;for(r=0;r<NL;r++)fwrite(note+r*NW,1,OLD_NW,f);fclose(f);}
+ wrap_name(n,ctab,cpage);acc_path(p,"DATA",n);f=fopen(p,"wb");if(f){fwrite(softwrap,1,sizeof(softwrap),f);fclose(f);}if(wide!=EW)note_reflow(wide,&rx,&ry);
 }
 static int logical_number(int line){int i,n=0;for(i=0;i<=line;i++)if(i==0||!softwrap[i])n++;return n;}
 static int note_sel_low(void){return note_sel_anchor<note_sel_caret?note_sel_anchor:note_sel_caret;}
@@ -276,14 +279,24 @@ static int export_current_page(char *out)
 }
 static int export_all(char *out)
 {
- char p[ACC_PATH],name[20];FILE*f,*in;int n,t,pg,r,last,pc;
+ char p[ACC_PATH],name[20],line[OLD_NW];FILE *f,*in;int n,t,pg,r,last,pc,q,ok=1,written=0;
  for(n=1;n<10000;n++){sprintf(name,"NOTE%d.TXT",n);acc_path(p,"EXPORT",name);if(!acc_exists(p))break;}
- if(n==10000)return 0;strcpy(out,p);f=fopen(p,"w");if(!f)return 0;page_save();
+ if(n==10000)return 0;strcpy(out,p);page_save();f=fopen(out,"wb");if(!f)return 0;
  for(t=0;t<persistent_ntab;t++){
-  fprintf(f,"=== %s ===\n",tabs[t]);pc=persistent_pages_for(t);
-  for(pg=0;pg<pc;pg++){fprintf(f,"--- Page %d ---\n",pg+1);data_name(name,t,pg);acc_path(p,"DATA",name);in=fopen(p,"rb");if(in){int rr;memset(note,' ',sizeof(note));for(rr=0;rr<NL;rr++)fread(note+rr*NW,1,OLD_NW,in);fclose(in);last=NL-1;while(last>=0){r=EW;while(r&&note[last*NW+r-1]==' ')r--;if(r)break;last--;}for(r=0;r<=last;r++){int q=EW;while(q&&note[r*NW+q-1]==' ')q--;fwrite(note+r*NW,1,q,f);fputc('\n',f);}}fputs("------------------------------------------------------------\n",f);}
+  if(!stricmp(tabs[t],"External"))continue;
+  if(written++){for(q=0;q<60;q++)fputc(205,f);fputs("\r\n",f);}
+  fprintf(f,"%s\r\n",tabs[t]);pc=persistent_pages_for(t);
+  for(pg=0;pg<pc;pg++){
+   if(pg){for(q=0;q<60;q++)fputc(196,f);fputs("\r\n",f);}
+   fprintf(f,"Page %d\r\n",pg+1);data_name(name,t,pg);acc_path(p,"DATA",name);in=fopen(p,"rb");
+   if(!in)continue;
+   last=-1;for(r=0;r<NL;r++){memset(line,' ',OLD_NW);if(!fread(line,1,OLD_NW,in))break;for(q=OLD_NW;q>0&&line[q-1]==' ';q--);if(q)last=r;}
+   if(ferror(in))ok=0;rewind(in);
+   for(r=0;r<=last;r++){memset(line,' ',OLD_NW);fread(line,1,OLD_NW,in);for(q=OLD_NW;q>0&&line[q-1]==' ';q--);fwrite(line,1,q,f);fputs("\r\n",f);}
+   if(ferror(in))ok=0;fclose(in);
+  }
  }
- fclose(f);page_load();return 1;
+ if(ferror(f))ok=0;if(fclose(f)!=0)ok=0;if(!ok)remove(out);return ok;
 }
 static int palette_codes[256];
 static int palette_count=0;
@@ -471,21 +484,11 @@ static int note_save_current_as(void)
     return 1;
   }
 
-  strcpy(name,"NOTE.TXT");
-  if(!note_save_dialog(name))return 0;
-  if(strchr(name,'\\')||strchr(name,'/')||strchr(name,':'))strcpy(full,name);
-  else acc_path(full,"EXPORT",name);
-  if(!note_write_current_path(full)){
-    acc_notice("Save Error","Unable to save Note file.");
-    return 0;
-  }
-  persistent_dirty=0;
-  sprintf(msg,"Saved to\n%s",full);
-  acc_notice("Save",msg);
-  return 1;
+  if(!export_all(full)){acc_notice("Export Error","Unable to export the Notebook.");return 0;}
+  persistent_dirty=0;sprintf(msg,"Notebook exported to\n%s",full);acc_notice("Export",msg);return 1;
 }
 static int note_save_all_dirty(void)
-{char out[ACC_PATH];int i;if(persistent_dirty){if(!export_current_page(out))return 0;persistent_dirty=0;}for(i=0;i<external_count;i++)if(external_dirty[i]){external_work_load(i);if(!external_write_original(i)){page_load();return 0;}}page_load();return 1;}
+{char out[ACC_PATH];int i;if(persistent_dirty){if(!export_all(out))return 0;persistent_dirty=0;}for(i=0;i<external_count;i++)if(external_dirty[i]){external_work_load(i);if(!external_write_original(i)){page_load();return 0;}}page_load();return 1;}
 
 static int note_reflow(int new_width,int *pcx,int *pcy)
 {
@@ -517,10 +520,10 @@ static void note_maximize(int *pcx,int *pcy,int *ptop,int *ptabfirst,int *ppagef
  while(key!=27&&key!=256+0x85&&key!=256+0x57){
   acc_wait(&key,&mx,&my,&mb);
   /* Normal suite shortcuts remain live while maximized. */
-  if(key==19){note_save_current_as();note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
+  if(key==19){if(external_page_index()<0){if(!note_reflow(EW,&cx,&cy)){key=0;continue;}note_save_current_as();note_reflow(MAX_EW,&cx,&cy);}else note_save_current_as();note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
   if(key==15){char openlist[ACC_PATH];page_save();if(note_open_dialog(openlist)&&note_open_files(openlist)){*ppsel=cpage=0;*ppagefirst=0;page_load();cx=cy=top=0;note_reflow(MAX_EW,&cx,&cy);}note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
   if(key==14){if(ctab!=external_tab&&(int)pages[ctab]<MAXPAGES){page_save();pages[ctab]++;cpage=*ppsel=pages[ctab]-1;memset(note,' ',sizeof(note));memset(softwrap,0,sizeof(softwrap));persistent_dirty=1;meta_save();page_save();cx=cy=top=0;}note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
-  if((mb&1)&&my==0){int i,xx=6,last=tab_last_visible(*ptabfirst);for(i=*ptabfirst;i<=last&&i<ntab;i++){int w=(int)strlen(tabs[i])+4;if(mx>=xx&&mx<xx+w)break;xx+=w+1;}if(i<=last&&i<ntab&&i!=ctab){page_save();ctab=i;cpage=*ppsel=0;*ppagefirst=0;page_load();cx=cy=top=0;}note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
+  if((mb&1)&&my==0){int i,xx=6,last=tab_last_visible(*ptabfirst);for(i=*ptabfirst;i<=last&&i<ntab;i++){int w=(int)strlen(tabs[i])+4;if(mx>=xx&&mx<xx+w)break;xx+=w+1;}if(i<=last&&i<ntab&&tab_double_click(100+i))break;if(i<=last&&i<ntab&&i!=ctab){page_save();ctab=i;cpage=*ppsel=0;*ppagefirst=0;page_load();cx=cy=top=0;}note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
   if((mb&1)&&mx==4+note_edit_width&&my>=1&&my<24){int last=last_note_line(),max=last-22;if(max<0)max=0;if(my==1&&top>0)top--;else if(my==23&&top<max)top++;else if(my>1&&my<23&&max>0)top=(my-2)*max/21;if(top<0)top=0;if(top>max)top=max;if(cy<top)cy=top;if(cy>=top+23)cy=top+22;note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
   if((mb&1)&&my>=1&&my<24&&mx>=4&&mx<4+note_edit_width){cx=mx-4;cy=top+my-1;note_selection_clear();note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
   if((mb&1)&&my==24){int pg=-1,i,xx=4;for(i=0;i<(int)pages[ctab];i++){int pw=page_token_width(i);if(mx>=xx&&mx<xx+pw){pg=i;break;}xx+=pw+1;}if(pg>=0&&pg!=cpage){page_save();cpage=*ppsel=pg;page_load();cx=cy=top=0;note_selection_clear();}note_max_draw(*ptabfirst,*ppagefirst,*ppsel,cx,cy,top);key=0;continue;}
@@ -562,6 +565,17 @@ static void note_session_new(void)
  else{ntab=persistent_ntab=1;strcpy(tabs[0],"Notes");pages[0]=1;memset(note,' ',sizeof(note));memset(softwrap,0,sizeof(softwrap));meta_save();page_save();}
 }
 
+static int note_print_current(void)
+{
+ FILE *f;int r,q;f=note_print_override?note_print_override:fopen("LPT1","wb");if(!f)return 0;
+ for(r=0;r<NL;r++){q=NW;while(q&&note[r*NW+q-1]==' ')q--;if(q)fwrite(note+r*NW,1,q,f);fputs("\r\n",f);}fputc('\f',f);fclose(f);return 1;
+}
+static int note_print_mode(int mode)
+{
+ FILE *f,*in;char tmp[ACC_PATH];int ok;
+ if(mode==ACC_PRINT_PS){acc_path(tmp,"DATA","NOTEPRN.TMP");f=fopen(tmp,"wb");if(!f)return 0;note_print_override=f;ok=note_print_current();note_print_override=0;if(!ok){remove(tmp);return 0;}in=fopen(tmp,"rb");if(!in){remove(tmp);return 0;}ok=acc_ps_export(in,"NOTE.PS");fclose(in);remove(tmp);return ok;}
+ f=fopen("LPT1","wb");if(!f)return 0;if(mode==ACC_PRINT_ESCP)acc_escp_begin(f);note_print_override=f;ok=note_print_current();note_print_override=0;return ok;
+}
 int main(int argc,char**argv)
 {
  int x,y,tx,ty,cx=0,cy=0,top=0,key=0,mx=0,my=0,focus=-1,tabfirst=0,pagefirst=0,psel=0,ch,base,oldcy,oldtop,insert=1,done=0,choice,i;unsigned mb=0;
@@ -572,11 +586,12 @@ int main(int argc,char**argv)
   /* Tight toolbar. Separators consume no surrounding spacer cells. */acc_button(x+3,y+18," Open ",focus==3);acc_button(x+11,y+18,external_page_index()>=0?" Save ":" Export ",focus==5);if(note_can_delete())acc_button(x+19,y+18," Delete ",focus==4);else acc_button_disabled(x+19,y+18," Delete ");acc_button(x+27,y+18," Print ",focus==6);acc_put(x+35,y+18,179,ACC_BORDER);acc_button(x+37,y+18,"  Clr  ",focus==7);acc_button(x+46,y+18,"  ",focus==8);acc_button(x+60,y+18," Exit ",focus==9);
   
   acc_wait(&key,&mx,&my,&mb);
+  if(key==16){int pm=acc_print_popup(x+27,y+18);if(pm&&!note_print_mode(pm))acc_notice("Print","Unable to print current page.");key=0;continue;}
   if((key==256+0x85||key==256+0x57)||((mb&1)&&my==y&&mx>=x+62&&mx<x+64)){note_maximize(&cx,&cy,&top,&tabfirst,&pagefirst,&psel,&insert);acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);key=0;continue;}
   if(mb&ACC_MOUSE_MOVED){note_tab_hover=-1;if(my==y+2){int hi,hx=x+6,hl=tab_last_visible(tabfirst);for(hi=tabfirst;hi<=hl&&hi<ntab;hi++){int hw=(int)strlen(tabs[hi])+4;if(mx>=hx&&mx<hx+hw){note_tab_hover=hi;break;}hx+=hw+1;}}draw_tabs(x,y+2,tabfirst,focus==0);key=0;continue;}
   if((mb&2)&&my==y+2){int ri,rx=x+6,rl=tab_last_visible(tabfirst);for(ri=tabfirst;ri<=rl&&ri<ntab;ri++){int rw=(int)strlen(tabs[ri])+4;if(mx>=rx&&mx<rx+rw){if(ri==external_tab&&external_count>0){key=0;break;}strcpy(nm,tabs[ri]);if(input_name(nm,1)){strcpy(tabs[ri],nm);meta_save();}acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);key=0;break;}rx+=rw+1;}if(ri<=rl)continue;}
   if(mb&1){
-   if(my==y+2){last=tab_last_visible(tabfirst);if(mx==x+3&&tabfirst>0){tabfirst--;draw_tabs(x,y+2,tabfirst,focus==0);key=0;continue;}if(mx==x+65&&last+1<ntab){tabfirst++;draw_tabs(x,y+2,tabfirst,focus==0);key=0;continue;}{int i,xx=x+6;for(i=tabfirst;i<=last&&i<ntab;i++){int w=(int)strlen(tabs[i])+4;if(mx>=xx&&mx<xx+w){page_save();note_selection_clear();ctab=i;cpage=psel=0;pagefirst=0;page_load();cx=cy=top=0;focus=0;note_editor_focus=0;row_draw(tx,ty,cy,top);draw_tabs(x,y+2,tabfirst,1);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);key=0;break;}xx+=w+1;}if(i<=last)continue;if(last==ntab-1&&ntab<MAXTABS&&mx==xx){if(note_add_tab()){cpage=psel=pagefirst=0;cx=cy=top=0;while(ctab>tab_last_visible(tabfirst))tabfirst++;}acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);key=0;continue;}}}
+   if(my==y+2){last=tab_last_visible(tabfirst);if(mx==x+3&&tabfirst>0){tabfirst--;draw_tabs(x,y+2,tabfirst,focus==0);key=0;continue;}if(mx==x+65&&last+1<ntab){tabfirst++;draw_tabs(x,y+2,tabfirst,focus==0);key=0;continue;}{int i,xx=x+6;for(i=tabfirst;i<=last&&i<ntab;i++){int w=(int)strlen(tabs[i])+4;if(mx>=xx&&mx<xx+w){if(tab_double_click(i)){note_maximize(&cx,&cy,&top,&tabfirst,&pagefirst,&psel,&insert);acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);key=0;break;}page_save();note_selection_clear();ctab=i;cpage=psel=0;pagefirst=0;page_load();cx=cy=top=0;focus=0;note_editor_focus=0;row_draw(tx,ty,cy,top);draw_tabs(x,y+2,tabfirst,1);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);key=0;break;}xx+=w+1;}if(i<=last)continue;if(last==ntab-1&&ntab<MAXTABS&&mx==xx){if(note_add_tab()){cpage=psel=pagefirst=0;cx=cy=top=0;while(ctab>tab_last_visible(tabfirst))tabfirst++;}acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);key=0;continue;}}}
    if(mx==tx+(note_line_numbers?4:0)+note_edit_width&&my>=ty&&my<ty+NV){if(my==ty&&top>0)top--;else if(my==ty+NV-1&&top+NV<=last_note_line())top++;cy=top;cx=0;focus=1;note_editor_focus=1;view_draw(tx,ty,cx,cy,top);key=0;continue;}
    if(my>=ty&&my<ty+NV&&mx>=tx+(note_line_numbers?4:0)&&mx<tx+(note_line_numbers?4:0)+note_edit_width){int ocx=cx,ocy=cy;focus=1;note_editor_focus=1;note_selection_clear();cx=mx-(tx+(note_line_numbers?4:0));cy=top+my-ty;row_draw(tx,ty,ocy,top);if(cy!=ocy)row_draw(tx,ty,cy,top);cursor_draw(tx,ty,cx,cy,top);key=0;continue;}
    if(my==ty+NV&&mx>=tx+2&&mx<tx+2+EW+1){int pg=-1,i,px=tx+2,xx=px;focus=2;note_editor_focus=0;row_draw(tx,ty,cy,top);for(i=0;i<(int)pages[ctab];i++){int pw=page_token_width(i);if(mx>=xx&&mx<xx+pw){pg=i;break;}xx+=pw+1;}if(pg>=0){page_save();note_selection_clear();cpage=psel=pg;page_load();cx=cy=top=0;view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,1,psel);key=0;continue;}if(ctab!=external_tab&&(int)pages[ctab]<MAXPAGES&&mx==xx){page_save();pages[ctab]++;cpage=psel=pages[ctab]-1;memset(note,' ',sizeof(note));memset(softwrap,0,sizeof(softwrap));meta_save();page_save();cx=cy=top=0;view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,1,psel);key=0;continue;}}
@@ -595,7 +610,7 @@ int main(int argc,char**argv)
    if(focus==3){char openlist[ACC_PATH];if(note_open_dialog(openlist)&&note_open_files(openlist)){psel=cpage=0;pagefirst=0;page_load();cx=cy=top=0;}acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);}
    else if(focus==4){int ep=external_page_index();if(ep>=0){if(confirm_remove("Delete the opened file?")){remove(external_path[ep]);remove(external_tmp[ep]);for(i=ep;i<external_count-1;i++){strcpy(external_path[i],external_path[i+1]);strcpy(external_tmp[i],external_tmp[i+1]);external_dirty[i]=external_dirty[i+1];}external_count--;pages[external_tab]=(unsigned char)external_count;if(cpage>=external_count)cpage=external_count?external_count-1:0;psel=cpage;if(external_count)page_load();else memset(note,' ',sizeof(note));cx=cy=top=0;}}else if(persistent_pages_for(ctab)>1){if(confirm_remove("Remove the current page?")){int oldpages=persistent_pages_for(ctab);page_save();note_remove_page_files(ctab,cpage,oldpages);pages[ctab]--;if(cpage>=(int)pages[ctab])cpage=pages[ctab]-1;psel=cpage;if(pagefirst>cpage)pagefirst=cpage;meta_save();page_load();cx=cy=top=0;}}else if(persistent_ntab>1){if(confirm_remove("Remove the current tab?")){page_save();note_remove_tab_files(ctab);for(i=ctab;i<ntab-1;i++){strcpy(tabs[i],tabs[i+1]);pages[i]=pages[i+1];}ntab--;persistent_ntab--;if(external_tab>ctab)external_tab--;if(ctab>=ntab)ctab=ntab-1;cpage=psel=pagefirst=0;meta_save();page_load();cx=cy=top=0;if(tabfirst>=ntab)tabfirst=ntab-1;if(tabfirst<0)tabfirst=0;}}acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);}
    else if(focus==5){note_save_current_as();acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);}
-   else if(focus==6){FILE*f=fopen("LPT1","wb");int r,q;if(f){for(r=0;r<NL;r++){q=NW;while(q&&note[r*NW+q-1]==' ')q--;fwrite(note+r*NW,1,q,f);fputs("\r\n",f);}fputc('\f',f);fclose(f);}}
+   else if(focus==6){int pm=acc_print_popup(x+27,y+18);if(pm&&!note_print_mode(pm))acc_notice("Print","Unable to print current page.");}
    else if(focus==7){memset(note,' ',sizeof(note));memset(softwrap,0,sizeof(softwrap));if(external_page_index()>=0)external_dirty[external_page_index()]=1;else persistent_dirty=1;view_draw(tx,ty,0,0,0);draw_pages(tx+2,ty+NV,pagefirst,0,psel);}
    else if(focus==8){ch=character_palette();acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);if(ch>=0){if(note_has_selection())note_delete_selection(&cx,&cy);note[cy*NW+cx]=(char)ch;if(cx<note_edit_width-1)cx++;note_selection_clear();if(external_page_index()>=0)external_dirty[external_page_index()]=1;else persistent_dirty=1;}view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);}
    else if(focus==9){if(!note_any_dirty())done=1;else{choice=note_confirm_close();if(choice==1){note_discard=1;done=1;}else if(choice==2&&note_save_all_dirty())done=1;else{acc_box(x,y,70,21,"Note");draw_tabs(x,y+2,tabfirst,0);view_draw(tx,ty,cx,cy,top);draw_pages(tx+2,ty+NV,pagefirst,0,psel);}}}key=0;continue;
