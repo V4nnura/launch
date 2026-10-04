@@ -20,7 +20,7 @@
 <img width="640" alt="The Launch! Menu" src="https://github.com/user-attachments/assets/cc9c0a57-04bb-4fb6-ac64-fe281adf1431" /><br/>
 <img width="640" alt="Launch! for DOS" src="https://github.com/user-attachments/assets/fc7fb196-e8f9-4752-8a05-bad280362b8d" /><br/>
 <img width="640" alt="Launch! 16" src="https://github.com/user-attachments/assets/12a216db-33b6-4a3e-92c2-b6d1dc89e7ee" />
-
+<br/><img width="640" alt="Monochrome Launch!" src="https://github.com/user-attachments/assets/9a698840-9f08-4cb7-8cb0-abf281e37a8b" />
 ----
 
 <img height="75" alt="So. Many. Features." src="https://github.com/user-attachments/assets/0192af1f-a429-4d77-b570-05c9d66106e9" />
