@@ -79,7 +79,7 @@ CTRL + ALT + \
 
 Everything in Launch! can be configured in one place by running
 ```
-!CONFIG
+! /CONFIG
 ```
 Configuration includes the menu, colors, screen savers, prompt customization, font customization and shortcut key settings.
 
