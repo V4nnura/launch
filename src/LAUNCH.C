@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.772
+ * MAINTAINER NOTES - Launch! 3.78
  * File: COREBLD.C
  * Role: Generated/build copy of Launch! core
  * Build/ownership: Derived from LAUNCH.C; normal BUILD compiles this file. Keep behavioral edits in LAUNCH.C and synchronize/regenerate.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.772 - modal command menu for DOS
+/* Launch! 3.78 - modal command menu for DOS
  * Microsoft C/C++ 7.0, medium model (.EXE), 286/EGA or later.
  */
 #include <dos.h>
@@ -28,8 +28,10 @@ Launch! for DOS ---------------------
 #include <io.h>
 #include <malloc.h>
 #include <process.h>
+#ifndef CONFIG_PROGRAM
 #include "CLOCKDAT.H"
 #include "LOGODAT.H"
+#endif
 #define LAUNCH_GLYPH_FAR
 #include "GLYPHDAT.H"
 
@@ -138,6 +140,7 @@ typedef struct {
   unsigned char windows_program;
 } NODE;
 
+#ifndef CONFIG_PROGRAM
 /* Preassembled 8086 burst-injection helper.  The final 384 bytes are its queue. */
 #define MACRO_BLOB_SIZE 563
 #define MACRO_INT16_OFF 0x0000
@@ -158,6 +161,8 @@ static unsigned char macro_blob[MACRO_BLOB_SIZE]={
 177,0,191,179,0,252,243,164,7,95,94,89,88,232,104,255,
 48,192,207,76,72,49,49
 };
+
+#endif /* !CONFIG_PROGRAM: resident macro blob */
 
 static NODE nodes[MAX_NODES];
 static int node_count;
@@ -193,6 +198,7 @@ static char collections_file[MAX_CMD];
 static char program_dir[MAX_CMD];
 static int font_is_vga(void);
 static int font_is_ega(void);
+static int font_custom_supported(void);
 static int command_is_windows_program(const char *command);
 static int font_preview(unsigned char id);
 static int font_preview_ega(unsigned char id);
@@ -215,8 +221,10 @@ static int shortcut_unload(void);
 static int shortcut_activate(void);
 static void shortcut_idle_sync(void);
 static int shortcut_write_target(void);
+#ifdef CONFIG_PROGRAM
 static int sync_startup_services(void);
 static int queue_service_apply(void);
+#endif
 static int queue_shell_batch(const char *commands);
 static unsigned long dos_get_vector(unsigned char vector);
 static void dos_set_vector(unsigned char vector,unsigned seg,unsigned off);
@@ -655,6 +663,7 @@ static int load_appearance(void)
   fclose(f);if(!title_fg_set)loaded.titlebar_fg=loaded.border;if(!title_bg_set)loaded.titlebar_bg=loaded.controls_bg;appearance=loaded;return 1;
 }
 
+#ifndef CONFIG_PROGRAM
 static int find_folder(const char *title,int parent)
 {
   int i;
@@ -1074,6 +1083,8 @@ static int menu_children(int parent,int *list)
   return n;
 }
 
+#endif /* !CONFIG_PROGRAM: menu database/parser */
+
 static int keyread(void)
 {
   unsigned short far *head=(unsigned short far *)MAKE_FP(0x40,0x1A);
@@ -1097,6 +1108,7 @@ static int key_waiting(void)
   return *head!=*tail;
 }
 
+#ifndef CONFIG_PROGRAM
 static unsigned char draw_clock(int y,unsigned char last_second)
 {
   static unsigned long last_tick=0xFFFFFFFFUL;
@@ -1400,6 +1412,16 @@ static unsigned char draw_graphics_time(unsigned char previous_second,
   return r.h.dh;
 }
 
+#else
+static unsigned long saver_delay_ticks(void)
+{
+  static const unsigned char minutes[4]={1,5,15,30};
+  return (unsigned long)minutes[appearance.saver_delay&3]*MINUTE_TICKS;
+}
+#endif /* !CONFIG_PROGRAM: clock/screensaver raster engine */
+
+/* Font-plane register state is required by both the menu core and !CONFIG.
+   Keep the type and FONT_TEXT segment outside the CONFIG_PROGRAM exclusion. */
 typedef struct {
   unsigned char seq2,seq4,gc4,gc5,gc6;
 } FONT_REGS;
@@ -1725,6 +1747,7 @@ int saver_input(unsigned start_x,unsigned start_y)
 
 #pragma code_seg()
 
+#ifndef CONFIG_PROGRAM
 static void clock_saver_loop(unsigned start_x,unsigned start_y)
 {
   unsigned char second=255;signed char previous_digits[4]={-2,-2,-2,-2};
@@ -2216,8 +2239,6 @@ static void logo_saver_loop(unsigned start_x,unsigned start_y)
 
 #include "SAVERS.H"
 
-static int font_custom_supported(void);
-
 static void run_screensaver(void)
 {
   union REGS r;int mx=0,my=0,old_mode,old_rows=screen_rows;
@@ -2257,6 +2278,22 @@ static void run_screensaver(void)
   memset(&r,0,sizeof(r));r.h.ah=1;r.h.ch=0x20;r.h.cl=0;int86(0x10,&r,&r);
   if(mouse_present)mouse_pointer_install();
 }
+
+#else
+/* !CONFIG deliberately does not link SAVERS.C. Preview is delegated to the
+   installed core, so Configuration does not carry a second saver engine. */
+static void run_screensaver(void)
+{
+  char command[MAX_CMD*2];
+  if(!appearance.screensaver || windows_session)return;
+  sprintf(command,"%s!.EXE /PREVIEWSAVER=%u,%u",program_dir,
+          (unsigned)appearance.screensaver,(unsigned)appearance.saver_color);
+  system(command);
+  /* The child restores the saved configured font/mouse glyphs. Reapply the
+     unsaved Configuration preview state before returning to this dialog. */
+  font_preview(appearance.font_id);mouse_pointer_install();
+}
+#endif /* !CONFIG_PROGRAM saver engine */
 
 static int mouse_start(void)
 {
@@ -2308,6 +2345,7 @@ static void wait_input(int *key,int *column,int *row,unsigned *buttons)
   }
 }
 
+#ifndef CONFIG_PROGRAM
 static int child_count(int parent)
 {
   int i,n=0;
@@ -2365,7 +2403,7 @@ static int write_current_config(const char *name)
 {
   FILE *f=fopen(name,"wt");int ok;
   if(!f)return 0;
-  ok=fputs("; Launch! 3.772 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
+  ok=fputs("; Launch! 3.78 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
   strcpy(write_path,"Launcher");
   if(ok)ok=write_section(f,-1,8);
   if(fclose(f)!=0)ok=0;
@@ -2385,6 +2423,8 @@ static int copy_file(const char *source,const char *destination)
   if(!ok)remove(destination);
   return ok;
 }
+
+#endif /* !CONFIG_PROGRAM: menu serialization */
 
 static int save_appearance(void)
 {
@@ -2427,6 +2467,7 @@ static int save_light_appearance(void)
 }
 #endif
 
+#ifndef CONFIG_PROGRAM
 static int update_backup(void);
 static int save_config(void);
 
@@ -2534,6 +2575,8 @@ static void sort_menu(int parent)
       {t=list[i];list[i]=list[j];list[j]=t;}
   for(i=0;i<n;i++) nodes[list[i]].order=(unsigned char)i;
 }
+
+#endif /* !CONFIG_PROGRAM: menu recovery and node editing */
 
 static void toolbar_divider(int x,int y,int width){int i;cell(x,y,179,C_BORDER);for(i=1;i<width-1;i++)cell(x+i,y,no_glyph_mode?205:216,C_BORDER);cell(x+width-1,y,179,C_BORDER);}
 
@@ -2704,6 +2747,7 @@ static void notice_box(const char *title,const char *message)
   for(;;){wait_input(&k,&mx,&my,&mb);if(mb&MOUSE_MOVED)continue;if(mb&1){if(my==by&&mx>=button_x&&mx<button_x+6){press_button(button_x,by,"  OK  ",6);return;}continue;}if(k)return;}
 }
 
+#ifndef CONFIG_PROGRAM
 static unsigned char physical_byte(unsigned long address)
 {
   return *(unsigned char far *)MAKE_FP((unsigned)(address>>4),
@@ -2865,16 +2909,25 @@ static void text_safe_screen(void)
   wait_for_escape();restore_screen();cursor_restore();_ffree(saved);saved=0;
 }
 
-static int bitmap_header(FILE *f,unsigned long *bits)
+static int bitmap_header(FILE *f,unsigned long *bits,unsigned *depth,
+                         unsigned *row_bytes,unsigned long *palette_at,
+                         unsigned *palette_colors)
 {
-  unsigned long width,height,compression;
+  unsigned long width,height,compression,dib;
+  unsigned planes,bpp;
   if(read_word(f)!=0x4D42)return 0;
   (void)read_dword(f);(void)read_word(f);(void)read_word(f);*bits=read_dword(f);
-  if(read_dword(f)<40)return 0;
+  dib=read_dword(f);if(dib<40)return 0;
   width=read_dword(f);height=read_dword(f);
-  if(read_word(f)!=1 || read_word(f)!=8)return 0;
+  planes=read_word(f);bpp=read_word(f);
   compression=read_dword(f);
-  return width==320 && height==400 && compression==0 && *bits>=1078;
+  if(width!=320 || height!=400 || planes!=1 || compression!=0)return 0;
+  if(bpp!=4 && bpp!=8)return 0;
+  *depth=bpp;
+  *row_bytes=(unsigned)((((unsigned long)width*bpp+31UL)/32UL)*4UL);
+  *palette_at=14UL+dib;
+  *palette_colors=(unsigned)(1U<<bpp);
+  return *bits>=*palette_at+(unsigned long)(*palette_colors)*4UL;
 }
 
 static void set_320x400_mode(void)
@@ -2893,12 +2946,15 @@ static void set_320x400_mode(void)
 
 static int graphics_safe_screen(void)
 {
-  FILE *f;union REGS r;unsigned long bits;unsigned old_mode,old_cursor;
-  int old_cols,old_rows,i,y,plane,failed=0;static unsigned char row[320];
+  FILE *f;union REGS r;unsigned long bits,palette_at,pixel_bytes;
+  unsigned old_mode,old_cursor,depth,row_bytes,palette_colors;
+  int old_cols,old_rows,i,y,plane,failed=0;
+  static unsigned char row[320],packed[320];
   unsigned char far *vga=(unsigned char far *)MAKE_FP(0xA000,0);
   f=fopen(logos_file,"rb");if(!f)return 0;
-  if(!bitmap_header(f,&bits)){fclose(f);return 0;}
-  if(fseek(f,0L,SEEK_END)!=0 || ftell(f)<(long)bits+128000L){fclose(f);return 0;}
+  if(!bitmap_header(f,&bits,&depth,&row_bytes,&palette_at,&palette_colors)){fclose(f);return 0;}
+  pixel_bytes=(unsigned long)row_bytes*400UL;
+  if(fseek(f,0L,SEEK_END)!=0 || ftell(f)<(long)(bits+pixel_bytes)){fclose(f);return 0;}
   memset(&r,0,sizeof(r));r.x.ax=0x1A00;int86(0x10,&r,&r);
   if(r.h.al!=0x1A){fclose(f);return 0;} /* 320x400 requires VGA */
   video_init();old_cols=screen_cols;old_rows=screen_rows;
@@ -2906,17 +2962,25 @@ static int graphics_safe_screen(void)
   memset(&r,0,sizeof(r));r.h.ah=0x0F;int86(0x10,&r,&r);old_mode=r.h.al;
   memset(&r,0,sizeof(r));r.h.ah=3;r.h.bh=0;int86(0x10,&r,&r);old_cursor=r.x.dx;
   cursor_hide();set_320x400_mode();
-  fseek(f,54L,SEEK_SET);port_out_byte(0x3C8,0);
-  for(i=0;i<256;i++){
+  if(fseek(f,(long)palette_at,SEEK_SET)!=0)failed=1;
+  port_out_byte(0x3C8,0);
+  for(i=0;i<(int)palette_colors && !failed;i++){
     int blue=fgetc(f),green=fgetc(f),red=fgetc(f);(void)fgetc(f);
     if(blue==EOF || green==EOF || red==EOF){failed=1;break;}
     port_out_byte(0x3C9,(unsigned char)(red>>2));
     port_out_byte(0x3C9,(unsigned char)(green>>2));
     port_out_byte(0x3C9,(unsigned char)(blue>>2));
   }
+  for(;i<256 && !failed;i++){
+    port_out_byte(0x3C9,0);port_out_byte(0x3C9,0);port_out_byte(0x3C9,0);
+  }
   for(y=0;y<400 && !failed;y++){
-    if(fseek(f,(long)bits+(long)(399-y)*320L,SEEK_SET)!=0 ||
-       fread(row,1,320,f)!=320){failed=1;break;}
+    if(fseek(f,(long)bits+(long)(399-y)*(long)row_bytes,SEEK_SET)!=0 ||
+       fread(packed,1,row_bytes,f)!=row_bytes){failed=1;break;}
+    if(depth==8)memcpy(row,packed,320);
+    else{
+      for(i=0;i<320;i++)row[i]=(unsigned char)((i&1)?(packed[i>>1]&0x0F):(packed[i>>1]>>4));
+    }
     for(plane=0;plane<4;plane++){
       port_out_word(0x3C4,(unsigned)(((1<<plane)<<8)|2));
       for(i=0;i<80;i++)vga[y*80+i]=row[i*4+plane];
@@ -3124,6 +3188,18 @@ static void field_line(int x,int y,const char *label,const char *value,
   if(focused){i=pos-scroll;edit_caret_set(x+13+i,y);}
 }
 
+#else
+/* Configuration only needs the reboot action used after enabling a resident
+   shortcut.  Keep the full APM/ACPI/shutdown implementation in !.EXE. */
+static void cold_reboot(void)
+{
+  union REGS r;
+  memset(&r,0,sizeof(r));r.h.ah=0x0D;int86(0x21,&r,&r);
+  *(unsigned far *)MAKE_FP(0x40,0x72)=0;
+  _disable();_outp(0x64,0xFE);for(;;);
+}
+#endif /* !CONFIG_PROGRAM: shutdown and launcher editor helpers */
+
 static void check_line_width(int x,int y,const char *label,int checked,int focused,int width)
 {
   int at=ATTR(appearance.background,appearance.controls_bg);
@@ -3142,6 +3218,38 @@ static void check_line(int x,int y,const char *label,int checked,int focused)
   check_line_width(x,y,label,checked,focused,no_glyph_mode?33:34);
 }
 
+
+/* Shared by the core and standalone !CONFIG appearance page.  Keep this
+   outside the launcher-editor guard: CONFIG.C no longer carries item_form(),
+   but it still needs the built-in/custom colour scheme tables. */
+static const char *colour_names[16]={
+  "Black","Blue","Green","Cyan","Red","Magenta","Brown","White",
+  "Gray","Bri Blue","Bri Green","Bri Cyan","Bri Red","Bri Magenta",
+  "Bri Yellow","Bri White"
+};
+
+typedef struct {
+  const char *name;
+  unsigned char colour[13];
+} COLOUR_SCHEME;
+
+#define COLOUR_SCHEME_COUNT 9
+#define MAX_CUSTOM_SCHEMES 16
+static COLOUR_SCHEME custom_schemes[MAX_CUSTOM_SCHEMES];
+static char custom_scheme_names[MAX_CUSTOM_SCHEMES][24];
+static int custom_scheme_count=0;
+static const COLOUR_SCHEME colour_schemes[COLOUR_SCHEME_COUNT]={
+  {"Standard", {1,11,15,7,12,14,15,10,15,3,0,7,7}},
+  {"Hot Dog",  {4,0,14,7,14,14,7,15,14,0,4,7,12}},
+  {"Mono",     {7,8,8,7,0,0,8,0,15,0,7,0,0}},
+  {"Pretty",   {5,12,12,4,14,12,7,12,5,3,5,7,15}},
+  {"Pro Style",{7,15,7,1,15,9,8,0,11,3,9,1,8}},
+  {"Ranch",    {7,6,12,6,14,15,6,4,15,4,7,6,8}},
+  {"Stealth",  {0,9,9,0,14,14,7,15,12,0,9,0,15}},
+  {"Swiss",    {7,8,0,7,4,15,4,0,15,0,7,4,8}},
+  {"Tranquil", {3,11,10,2,10,0,8,0,10,0,15,2,15}}
+};
+#ifndef CONFIG_PROGRAM
 static int item_form(int folder,char *name,char *exe,char *params,
                      int *press_enter,int *change_dir,int *prompt_params,int *add_path,int editing)
 {
@@ -3249,33 +3357,9 @@ static int item_form(int folder,char *name,char *exe,char *params,
   }
 }
 
-static const char *colour_names[16]={
-  "Black","Blue","Green","Cyan","Red","Magenta","Brown","White",
-  "Gray","Bri Blue","Bri Green","Bri Cyan","Bri Red","Bri Magenta",
-  "Bri Yellow","Bri White"
-};
 
-typedef struct {
-  const char *name;
-  unsigned char colour[13];
-} COLOUR_SCHEME;
 
-#define COLOUR_SCHEME_COUNT 9
-#define MAX_CUSTOM_SCHEMES 16
-static COLOUR_SCHEME custom_schemes[MAX_CUSTOM_SCHEMES];
-static char custom_scheme_names[MAX_CUSTOM_SCHEMES][24];
-static int custom_scheme_count=0;
-static const COLOUR_SCHEME colour_schemes[COLOUR_SCHEME_COUNT]={
-  {"Standard", {1,11,15,7,12,14,15,10,15,3,0,7,7}},
-  {"Hot Dog",  {4,0,14,7,14,14,7,15,14,0,4,7,12}},
-  {"Mono",     {7,8,8,7,0,0,8,0,15,0,7,0,0}},
-  {"Pretty",   {5,12,12,4,14,12,7,12,5,3,5,7,15}},
-  {"Pro Style",{7,15,7,1,15,9,8,0,11,3,9,1,8}},
-  {"Ranch",    {7,6,12,6,14,15,6,4,15,4,7,6,8}},
-  {"Stealth",  {0,9,9,0,14,14,7,15,12,0,9,0,15}},
-  {"Swiss",    {7,8,0,7,4,15,4,0,15,0,7,4,8}},
-  {"Tranquil", {3,11,10,2,10,0,8,0,10,0,15,2,15}}
-};
+#endif /* !CONFIG_PROGRAM: Add/Edit launcher form */
 
 static int colour_key_index(const char *k)
 {
@@ -3383,6 +3467,9 @@ static const char *font_name_at(int id)
 }
 
 
+#ifdef CONFIG_PROGRAM
+/* Configuration is a separate !CONFIG executable in 3.78.  Keeping the
+   complete modal UI behind CONFIG_PROGRAM removes it from !.EXE/!86.EXE. */
 static void cycle_control(int x,int y,const char *value,int focused)
 {
   textout(x,y,"               ",focused?C_SELECTED:C_INPUT_FIELD,15);textout(x+1,y,value,focused?C_SELECTED:C_INPUT_FIELD,12);cell(x+13,y,31,focused?C_SELECTED:C_INPUT_FIELD);
@@ -3420,7 +3507,7 @@ static void draw_config_tabs(int x,int y,int active,int focus,int hover)
 
 /* Keep the font-preview renderer out of the already tight LAUNCH_TEXT
    segment.  Medium model permits separate code segments. */
-#pragma code_seg("CONFIG_TEXT")
+#pragma code_seg("CFGPREV_TEXT")
 static void draw_character_preview(int x,int y)
 {
   int code,row=0,column=0,i,j;
@@ -3442,7 +3529,7 @@ static void draw_character_preview(int x,int y)
 }
 #pragma code_seg()
 
-#pragma code_seg("CONFIG_TEXT")
+#pragma code_seg("CFGMAIN_TEXT")
 static int config_count(int tab)
 {
 #ifdef LIGHT86
@@ -3871,14 +3958,14 @@ static int config_hit(int x,int y,int tab,int mx,int my)
 
 #pragma code_seg()
 
-#pragma code_seg("CONFIG_TEXT")
+#pragma code_seg("CFGDLG_TEXT")
 static void config_about_box(void)
 {
   int w=42,h=11,x=(screen_cols-42)/2,y=(screen_rows-11)/2,k=0,mx=0,my=0,bx,focus=-1;unsigned mb=0;
   bx=x+3;subdialog_box(x,y,w,h,"About Launch!");
   textout(x+3,y+2,"(C)Copyright 2026 Ben Renegar",C_INPUT_LABEL,34);
   textout(x+3,y+3,"www.benrenegar.com",C_INPUT_LABEL,34);
-  textout(x+3,y+6,"Version 3.772 - 2026-10-04",C_INPUT_LABEL,34);
+  textout(x+3,y+6,"Version 3.78 - 2026-10-05",C_INPUT_LABEL,34);
   for(;;){
     draw_button(bx,y+h-3,"  OK  ",6,focus==0);
     wait_input(&k,&mx,&my,&mb);
@@ -4036,6 +4123,13 @@ static void config_select_control(int tab,int item,int x,int y)
   field=config_field(tab,item,&limit);if(field)*field=(unsigned char)chosen;if(tab==0&&item==8)mouse_pointer_install();
 }
 
+static int config_reset_menu_file(void)
+{
+  char command[MAX_CMD*2];
+  sprintf(command,"%s!.EXE /INITMENU",program_dir);
+  return system(command)==0;
+}
+
 static int config_reset_box(void)
 {
   int w=62,h=8,x=(screen_cols-62)/2,y=(screen_rows-8)/2,by=y+5;
@@ -4156,7 +4250,7 @@ static int configure_appearance_wide(void)
           if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;original_columns=screen_columns;sync_startup_services();mouse_pointer_install();}
           else {appearance=before_reset;screen_columns=before_columns;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
         }
-        if((reset_choice==2||reset_choice==3)&&!default_menu_file(1)){notice_box("Reset Error","Could not rebuild LAUNCH.MNU.");reset_ok=0;}
+        if((reset_choice==2||reset_choice==3)&&!config_reset_menu_file()){notice_box("Reset Error","Could not rebuild LAUNCH.MNU.");reset_ok=0;}
         if(reset_ok&&reset_choice==1)notice_box("Reset","Configuration has been reset to default.");
         else if(reset_ok&&reset_choice==2)notice_box("Reset","Menu has been reset to default.");
         else if(reset_ok&&reset_choice==3)notice_box("Reset","Everything has been reset to default.");
@@ -4275,7 +4369,7 @@ static int configure_appearance_wide(void)
         if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;original_columns=screen_columns;sync_startup_services();mouse_pointer_install();}
         else {appearance=before_reset;screen_columns=before_columns;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
       }
-      if((reset_choice==2||reset_choice==3)&&!default_menu_file(1)){notice_box("Reset Error","Could not rebuild LAUNCH.MNU.");reset_ok=0;}
+      if((reset_choice==2||reset_choice==3)&&!config_reset_menu_file()){notice_box("Reset Error","Could not rebuild LAUNCH.MNU.");reset_ok=0;}
       if(reset_ok&&reset_choice==1)notice_box("Reset","Configuration has been reset to default.");
       else if(reset_ok&&reset_choice==2)notice_box("Reset","Menu has been reset to default.");
       else if(reset_ok&&reset_choice==3)notice_box("Reset","Everything has been reset to default.");
@@ -4285,7 +4379,9 @@ static int configure_appearance_wide(void)
 }
 
 #pragma code_seg()
+#endif /* CONFIG_PROGRAM */
 
+#ifndef CONFIG_PROGRAM
 static int place_overflow(int parent,int depth,int new_node)
 {
   int list[MAX_CHILD],n,more,candidate,result;
@@ -5969,6 +6065,9 @@ static void sysbar_drive_free(char*out){char*cs=getenv("COMSPEC");unsigned drive
 #include "SYSBAR.H"
 #pragma code_seg()
 
+#endif /* !CONFIG_PROGRAM: launcher/file-open/menu/sysbar implementation */
+
+#ifdef CONFIG_PROGRAM
 static int configure_appearance(void)
 {
   int result,was=*(unsigned short far *)MAKE_FP(0x40,0x4A);
@@ -5997,7 +6096,9 @@ static int configure_appearance(void)
     _ffree(under);}
   return result;
 }
+#endif /* CONFIG_PROGRAM */
 
+#ifndef CONFIG_PROGRAM
 static int menu_position_at(int depth,int *list,int n,int panel_y,int mouse_y)
 {
   int i;for(i=0;i<n;i++)if(mouse_y==panel_y+menu_item_offset(depth,list[i],i))return i;
@@ -6545,6 +6646,8 @@ static void far_write_long(unsigned seg,unsigned off,unsigned long value)
   unsigned long far *p=(unsigned long far *)MAKE_FP(seg,off);*p=value;
 }
 
+#endif /* !CONFIG_PROGRAM: menu UI and launcher command construction */
+
 static unsigned long dos_get_vector(unsigned char vector)
 {
   union REGS r;struct SREGS s;
@@ -6926,6 +7029,7 @@ static void font_restore(void)
   if(font_is_ega())font_preview_ega(appearance.font_id);else font_preview_vga(appearance.font_id);
 }
 
+#ifndef CONFIG_PROGRAM
 static int helper_signature(unsigned seg)
 {
   unsigned char far *p=(unsigned char far *)MAKE_FP(seg,0);
@@ -7007,6 +7111,8 @@ static int queue_macro(const char *text)
 }
 
 #pragma code_seg("SHORTCUT_TEXT")
+#endif /* !CONFIG_PROGRAM: resident command macro helper */
+
 static unsigned char far *setkey_bios_byte(unsigned offset)
 {
   return (unsigned char far *)(((unsigned long)0x40<<16)|offset);
@@ -7488,6 +7594,7 @@ static void shortcut_idle_sync(void)
 
 /* AUTOEXEC.BAT/FDAUTO.BAT contains one final Launch! line: <dir>\\!START.
    Configuration rewrites the generated !START.BAT only. */
+#ifdef CONFIG_PROGRAM
 static int sync_startup_services(void)
 {
   static char path[MAX_CMD],dir[MAX_CMD],spec[64],value[256];FILE *f;int n;
@@ -7496,8 +7603,7 @@ static int sync_startup_services(void)
   strcpy(path,program_dir);strcat(path,"!START.BAT");f=fopen(path,"wt");if(!f)return 0;
   if(fputs("@ECHO OFF\n",f)==EOF){fclose(f);return 0;}
   if(fprintf(f,"PATH %%PATH%%;%s\n",dir)<0){fclose(f);return 0;}
-  if(fprintf(f,"MODE CON COLS=%d\n",screen_columns)<0){fclose(f);return 0;}
-  if(fprintf(f,"%s\\!.EXE /DISPLAY\n",dir)<0){fclose(f);return 0;}
+  if(fprintf(f,"%s\\!CONFIG.EXE /DISPLAY\n",dir)<0){fclose(f);return 0;}
   if(fonts_installed&&appearance.font_persist)if(fprintf(f,"%s\\!FONT.COM\n",dir)<0){fclose(f);return 0;}
   if(shortcut_component_installed&&shortcut_enabled){
     spec[0]=0;if(shortcut_ctrl)strcat(spec,"CTRL+");if(shortcut_alt)strcat(spec,"ALT+");if(shortcut_shift)strcat(spec,"SHIFT+");strcat(spec,shortcut_key_cfg);
@@ -7507,7 +7613,11 @@ static int sync_startup_services(void)
   if(open_menu_at_boot)if(fprintf(f,"%s\\!.EXE\n",dir)<0){fclose(f);return 0;}
   return fclose(f)==0;
 }
+#endif /* CONFIG_PROGRAM */
 
+/* Used by both the menu and !CONFIG.  The core still needs this helper to
+   hand !APPLY.BAT back to COMMAND.COM after launching menu items, SysBar
+   commands, or !CONFIG itself. */
 static int queue_bios_short_text(const char *text)
 {
   unsigned short far *head=(unsigned short far *)MAKE_FP(0x40,0x1A);
@@ -7524,6 +7634,7 @@ static int queue_bios_short_text(const char *text)
   *tail=(unsigned short)t;_enable();return 1;
 }
 
+#ifdef CONFIG_PROGRAM
 static int queue_service_apply(void)
 {
   static char commands[MAX_MACRO];commands[0]=0;
@@ -7532,6 +7643,7 @@ static int queue_service_apply(void)
   if(!commands[0])return 1;
   return queue_shell_batch(commands);
 }
+#endif /* CONFIG_PROGRAM */
 
 static int queue_shell_batch(const char *commands)
 {
@@ -7542,7 +7654,7 @@ static int queue_shell_batch(const char *commands)
   if(!last_cr)if(fputc('\n',f)==EOF){fclose(f);return 0;}
   /* Do not delete a batch file while COMMAND.COM is still executing it.
      Classic DOS reopens the file between lines and reports "Batch file
-     missing" if the batch removes itself.  The next Launch!/Config run
+     missing" if the batch removes itself.  The next !CONFIG run
      safely removes the stale transient before rewriting it. */
   if(fclose(f)!=0)return 0;
   return queue_bios_short_text("!APPLY\r");
@@ -7550,34 +7662,37 @@ static int queue_shell_batch(const char *commands)
 
 #pragma code_seg()
 
+#ifndef CONFIG_PROGRAM
 static void show_help(void)
 {
 #ifdef LIGHT86
-  puts("Launch! 86 Light 3.772 - lightweight command menu for DOS\n");
-  puts("Usage: !86 [menu.mnu] [/CONFIG | /OPENTO=folder | /?]\n");
+  puts("Launch! 86 Light 3.78 - lightweight command menu for DOS\n");
+  puts("Usage: !86 [menu.mnu] [/OPENTO=folder | /?]\n");
   puts("Menu management: Ctrl+A Add, Ctrl+D Delete, Ctrl+E Edit, Ctrl+Up/Down Move, Ctrl+S Sort");
+  puts("Configuration: run !CONFIG");
 #else
 
-  puts("Launch! 3.772 - a lightweight command menu for DOS\n");
-  puts("Usage: ! [menu.mnu] [/CONFIG | /EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
+  puts("Launch! 3.78 - a lightweight command menu for DOS\n");
+  puts("Usage: ! [menu.mnu] [/EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
   puts("Menu management shortcuts:");
   puts("  Ctrl+A        Add a folder, launcher or separator");
   puts("  Ctrl+D        Delete the selected item");
   puts("  Ctrl+E        Edit the selected item");
   puts("  Ctrl+Up/Down  Move the selected item");
   puts("  Ctrl+S        Sort the current menu\n");
+  puts("Configuration: run !CONFIG\n");
   puts("Command-line parameters:");
-  puts("  /CONFIG       Configure menu appearance and options");
   puts("  /EXPLORE      Open Explore & Run directly");
   puts("  /OPEN         Open the File Open dialog");
   puts("  /BYE          Open Shutdown... directly");
-  puts("  /DISPLAY      Apply saved screen columns and font, then return to DOS");
   puts("  /NOW          Start the selected screensaver immediately");
   puts("  menu.mnu      Use another menu file beside !.EXE (or a full path)");
   puts("  /OPENTO=name  Open directly to the first folder with this name");
   puts("  /?            Show this help");
 #endif
 }
+
+#endif /* !CONFIG_PROGRAM: core command-line help */
 
 static int running_under_windows(void)
 {
@@ -7588,6 +7703,7 @@ static int running_under_windows(void)
   return w&&*w;
 }
 
+#ifndef CONFIG_PROGRAM
 static int run_windows_batch(const char *commands)
 {
   char path[MAX_CMD],cmd[MAX_CMD*2],*comspec;
@@ -7617,9 +7733,53 @@ static int dispatch_command_text(const char *text)
   return queue_shell_batch(text);
 }
 
+#endif /* !CONFIG_PROGRAM: launcher dispatch */
+
+#ifdef CONFIG_PROGRAM
 int main(int argc,char **argv)
 {
-  int i,result,config_status,config_mode=0,explore_mode=0,open_mode=0,bye_mode=0,now_mode=0,initmenu_mode=0,display_mode=0;
+  int i,result,display_mode=0;
+  static char macro[MAX_MACRO];
+  config_path(argv[0]);
+  {char stale_apply[MAX_CMD];strcpy(stale_apply,program_dir);strcat(stale_apply,"!APPLY.BAT");remove(stale_apply);}
+  windows_session=running_under_windows();if(windows_session)no_glyph_mode=1;
+  for(i=1;i<argc;i++){
+    if(!stricmp(argv[i],"/?")||!stricmp(argv[i],"-?")){
+      puts("Launch! Configuration 3.78\n");
+      puts("Usage: !CONFIG [/DISPLAY | /?]\n");
+      puts("  /DISPLAY      Apply saved screen columns and font, then return to DOS");
+      return 0;
+    }
+    if(!stricmp(argv[i],"/DISPLAY")){display_mode=1;continue;}
+    printf("!CONFIG: unknown option %s (use !CONFIG /?)\n",argv[i]);return 1;
+  }
+  if(!load_appearance())puts("!CONFIG: LAUNCH.CFG is invalid; using default appearance.");
+  if(!windows_session){
+    font_legacy_unload();appearance.font_persist=(unsigned char)font_service_resident();
+    if(!appearance.font_persist && (int)appearance.font_id>= (font_is_ega()?EGA_BUILTIN_FONT_COUNT:VGA_BUILTIN_FONT_COUNT))scan_external_fonts();
+    if(display_mode){display_columns(screen_columns);font_restore();return 0;}
+  }else if(display_mode)return 0;
+  if(!windows_session)shortcut_idle_sync();
+  if(!windows_session && !appearance.font_persist && !font_commit(appearance.font_id)){font_commit(0);puts("!CONFIG: display font data could not be read; using the standard display font.");}
+  result=configure_appearance();
+  if(result==1 && (font_activation_pending||shortcut_activation_pending)){
+    if(!queue_service_apply()){puts("!CONFIG: cannot queue resident service activation");return 1;}
+    font_activation_pending=0;shortcut_activation_pending=0;
+  }
+  if(result==2 && prompt_macro_pending){
+    if(!save_appearance()){puts("!CONFIG: prompt configuration could not be saved.");return 1;}
+    if(!sync_startup_services()){puts("!CONFIG: DOS startup services could not be updated.");return 1;}
+    if(!prepare_prompt_batch(prompt_boot_style,macro)){puts("!CONFIG: selected prompt is too long.");return 1;}
+    if(!queue_shell_batch(macro)){puts("!CONFIG: cannot queue prompt application");return 1;}
+    prompt_macro_pending=0;
+  }
+  return 0;
+}
+#else /* normal !.EXE / !86.EXE */
+int main(int argc,char **argv)
+{
+  int i,result,config_status,explore_mode=0,open_mode=0,bye_mode=0,now_mode=0,initmenu_mode=0;
+  int preview_saver=-1,preview_color=-1;
   static char macro[MAX_MACRO],open_to[MAX_TITLE];
   config_path(argv[0]);
 #ifndef LIGHT86
@@ -7653,13 +7813,17 @@ int main(int argc,char **argv)
   if(!windows_session)shortcut_idle_sync();
   for(i=1;i<argc;i++){
     if(!stricmp(argv[i],"/?") || !stricmp(argv[i],"-?")){show_help();return 0;}
-    if(!stricmp(argv[i],"/CONFIG"))config_mode=1;
 #ifndef LIGHT86
-    else if(!stricmp(argv[i],"/DISPLAY"))display_mode=1;
-    else if(!stricmp(argv[i],"/EXPLORE"))explore_mode=1;
+    if(!stricmp(argv[i],"/EXPLORE"))explore_mode=1;
     else if(!stricmp(argv[i],"/OPEN"))open_mode=1;
     else if(!stricmp(argv[i],"/BYE"))bye_mode=1;
     else if(!stricmp(argv[i],"/NOW"))now_mode=1;
+    else if(!strnicmp(argv[i],"/PREVIEWSAVER=",14)){
+      char *comma=strchr(argv[i]+14,',');preview_saver=atoi(argv[i]+14);
+      if(comma)preview_color=atoi(comma+1);
+      if(preview_saver<1||preview_saver>14){puts("Launch!: invalid saver preview request.");return 1;}
+      now_mode=1;
+    }
     else if(!stricmp(argv[i],"/INITMENU"))initmenu_mode=1;
     else if(!stricmp(argv[i],"/NOGLYPH"))no_glyph_mode=1;
 #endif
@@ -7673,8 +7837,7 @@ int main(int argc,char **argv)
   }
 #ifndef LIGHT86
   if(!windows_session){
-    if(!config_mode)display_columns((explore_mode||open_mode||bye_mode)?80:screen_columns);
-    if(display_mode){font_restore();return 0;}
+    display_columns((explore_mode||open_mode||bye_mode)?80:screen_columns);
   }
 #endif
   if(initmenu_mode){
@@ -7693,23 +7856,6 @@ int main(int argc,char **argv)
      Avoid rereading FONT.DAT every time the menu is opened in that case. */
   if(!windows_session && !appearance.font_persist && !font_commit(appearance.font_id)){font_commit(0);puts("Launch!: display font data could not be read; using the standard display font.");}
 #endif
-  if(config_mode){
-    result=configure_appearance();
-#ifndef LIGHT86
-    if(result==1 && (font_activation_pending||shortcut_activation_pending)){
-      if(!queue_service_apply()){puts("Launch!: cannot queue resident service activation");return 1;}
-      font_activation_pending=0;shortcut_activation_pending=0;
-    }
-#endif
-    if(result==2 && prompt_macro_pending){
-      if(!save_appearance()){puts("Launch!: prompt configuration could not be saved.");return 1;}
-      if(!sync_startup_services()){puts("Launch!: DOS startup services could not be updated.");return 1;}
-      if(!prepare_prompt_batch(prompt_boot_style,macro)){puts("Launch!: selected prompt is too long.");return 1;}
-      if(!queue_shell_batch(macro)){puts("Launch!: cannot queue prompt application");return 1;}
-      prompt_macro_pending=0;
-    }
-    return 0;
-  }
   if(bye_mode){
     int action;
     video_init();if(!save_screen()){puts("Launch!: insufficient memory");return 1;}
@@ -7756,6 +7902,7 @@ int main(int argc,char **argv)
     return 0;
   }
   if(now_mode){
+    if(preview_saver>0){appearance.screensaver=(unsigned char)preview_saver;if(preview_color>=0&&preview_color<=15)appearance.saver_color=(unsigned char)preview_color;}
     video_init();if(!save_screen()){puts("Launch!: insufficient memory");return 1;}
     cursor_hide();mouse_present=mouse_start();run_screensaver();close_menu();return 0;
   }
@@ -7763,35 +7910,17 @@ int main(int argc,char **argv)
   if(!config_status){printf("Launch!: cannot recover %s\n",config_file);return 1;}
   if(config_status==2)puts("Launch!: LAUNCH.MNU was invalid; restored LAUNCH.BAK.");
   else if(config_status==3)puts("Launch!: no valid menu file was found; rebuilt the default menu.");
-  do {
-    result=menu(open_to);open_to[0]=0;
-    if(result==BUILTIN_CONFIG){
-      config_status=configure_appearance();
-#ifndef LIGHT86
-      if(config_status==1 && (font_activation_pending||shortcut_activation_pending)){result=0;break;}
-#endif
-      if(config_status==2 && prompt_macro_pending){
-        if(!save_appearance()){puts("Launch!: prompt configuration could not be saved.");return 1;}
-        if(!sync_startup_services()){puts("Launch!: DOS startup services could not be updated.");return 1;}
-        if(!prepare_prompt_batch(prompt_boot_style,macro)){puts("Launch!: selected prompt is too long.");return 1;}
-        result=0;break;
-      }
-    }
-  } while(result==BUILTIN_CONFIG);
-#ifndef LIGHT86
-  if(font_activation_pending||shortcut_activation_pending){
-    if(!queue_service_apply()){puts("Launch!: cannot queue resident service activation");return 1;}
-    font_activation_pending=0;shortcut_activation_pending=0;
-  } else
-#endif
+  result=menu(open_to);open_to[0]=0;
+  if(result==BUILTIN_CONFIG){
+    macro[0]=0;if(program_dir[0])strcpy(macro,program_dir);strcat(macro,"!CONFIG\r");
+    if(!dispatch_command_text(macro)){puts("Launch!: cannot start !CONFIG");return 1;}
+    return 0;
+  }
   if(sysbar_command[0]){
     if(!dispatch_command_text(sysbar_command)){puts("Launch!: cannot queue SysBar command");return 1;}
   } else if(time_macro_pending){
     strcpy(macro,"TIME\r");
     if(!dispatch_command_text(macro)){puts("Launch!: cannot install keyboard macro helper");return 1;}
-  } else if(prompt_macro_pending){
-    if(!queue_shell_batch(macro)){puts("Launch!: cannot queue prompt application");return 1;}
-    prompt_macro_pending=0;
   } else if(result>=0){
     if(run_node==BUILTIN_COLLECTIONS && collection_macro_direct){char d[4];macro[0]=0;d[0]=run_command[0];d[1]=':';d[2]='\r';d[3]=0;macro_append(macro,d);macro_append(macro,"CD ");macro_append(macro,run_command);macro_append(macro,"\r");}
     else build_macro(run_node==BUILTIN_COLLECTIONS?collection_run_launcher:run_node,run_command,macro);
@@ -7799,3 +7928,5 @@ int main(int argc,char **argv)
   }
   return 0;
 }
+
+#endif /* CONFIG_PROGRAM */

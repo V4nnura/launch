@@ -10,6 +10,7 @@
 #define IDD_MANAGER         1006
 #define IDI_LAUNCH16         900
 #define IDI_LAUNCHDOS        901
+#define IDI_CONFIG           902
 #define IDI_SLEEP           1100
 #define IDI_CONFIRM         1101
 #define IDI_ERROR           1102
@@ -55,6 +56,7 @@
 
 IDI_LAUNCH16     ICON   "LAUNCH16.ICO"
 IDI_LAUNCHDOS    ICON   "LAUNCH.ICO"
+IDI_CONFIG       ICON   "CONFIG.ICO"
 IDI_SLEEP        ICON   "SLEEP.ICO"
 IDI_CONFIRM      ICON   "CONFIRM.ICO"
 IDI_ERROR        ICON   "ERROR.ICO"

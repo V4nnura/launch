@@ -1,0 +1,64 @@
+Launch! build font reference
+============================
+
+Source font files in this directory use the same names shown in the Launch!
+Font menu wherever DOS 8.3 naming permits.  LAUNCHUI.FNT/F14 are internal UI
+glyph resources rather than selectable fonts.
+
+VGA FONT.DAT slot order (font ID):
+  1 Nix Term       NIXTERM.FNT
+  2 ISO            ISO.FNT
+  3 Clean          CLEAN.FNT
+  4 Big            BIG.FNT
+  5 Tall           TALL.FNT
+  6 Launch!        LAUNCH.FNT
+  7 Bold           BOLD.FNT
+  8 Extra          EXTRA.FNT
+  9 Max            MAX.FNT
+ 10 Chunky         CHUNKY.FNT
+ 11 Pixel          PIXEL.FNT
+ 12 Humanist       HUMANIST.FNT
+ 13 Elite          ELITE.FNT
+ 14 Max Elite      MAXELITE.FNT
+ 15 Elergon        ELERGON.FNT
+ 16 Neat           NEAT.FNT
+ 17 Gothic         GOTHIC.FNT
+ 18 Hand           HAND.FNT
+ 19 Scribble       SCRIBBLE.FNT
+ 20 Script         SCRIPT.FNT
+ 21 ProFont        PROFONT.FNT
+ 22 ProFont Bold   PROFBOLD.FNT
+ 23 Bauhaus '89    BAUHAUS.FNT
+ 24 Bold Italic    BOLDITAL.FNT
+ 25 Broadway       BROADWAY.FNT
+ 26 Courier        COURIER.FNT
+ 27 Italic         ITALIC.FNT
+ 28 Modern         MODERN.FNT
+ 29 Nutso          NUTSO.FNT
+ 30 Super          SUPER.FNT
+ 31 Times          TIMES.FNT
+ 32 Tiny           TINY.FNT
+ 33 Serif          SERIF.FNT
+ 34 Poster         POSTER.FNT
+ 35 News           NEWS.FNT
+
+EGA FONT14.DAT slot order (font ID):
+  1 Humanist       HUMANIST.F14
+  2 Neat           NEAT.F14
+  3 Script         SCRIPT.F14
+  4 Serif          SERIF.F14
+  5 Serif Bold     SERIFB.F14
+  6 Launch!        LAUNCH.F14
+  7 Super          SUPER.F14
+  8 Bold           BOLD.F14
+  9 Broadway       BROADWAY.F14
+ 10 Italics        ITALICS.F14
+ 11 Medieval       MEDIEVAL.F14
+ 12 Poster         POSTER.F14
+ 13 Thin Sans      THINSANS.F14
+
+Standard remains font ID 0. Launch! intentionally remains font ID 6 on both
+VGA and EGA so the factory FONT_ID=6 setting selects Launch! on either adapter.
+
+!FONT.COM is the standalone font persistence TSR. It owns its own resident
+PSP/MCB and receives live font updates from Launch! through its INT 2Fh service.

@@ -23,8 +23,8 @@ Launch! for DOS ---------------------
  *   the hidden jelly in the vacated square, and merges the two.
  * - A puzzle is complete when all visible/hidden jellies of each colour have
  *   become one connected piece.  Black supports are ignored for completion.
- * - Levels are data driven.  JELLY.LVL is the base pack and additional
- *   JELLY*.LVL files can be dropped beside it for future expansion packs.
+ * - Levels are data driven.  JELLOH.LVL is the base pack and additional
+ *   JELLOH*.LVL files can be dropped beside it for future expansion packs.
  *
  * Level characters:
  *   # wall/brick    . or space empty    k (or legacy w) black support
@@ -191,7 +191,7 @@ static int scan_levels(void)
   level_count=0;level_file_count=0;
   strcpy(mask,acc_directory);
   if(mask[0]&&mask[strlen(mask)-1]!='\\'&&mask[strlen(mask)-1]!='/')strcat(mask,"\\");
-  strcat(mask,"GAMERES\\JELLY*.LVL");
+  strcat(mask,"GAMERES\\JELLOH*.LVL");
   err=_dos_findfirst(mask,_A_NORMAL,&ff);
   while(!err&&level_file_count<MAX_LEVEL_FILES){
     strncpy(level_files[level_file_count],ff.name,12);
@@ -548,7 +548,7 @@ int main(int argc,char **argv)
   srand((unsigned)time(NULL));
   jelly_font(1);jelly_shapes(1);
   if(!scan_levels()){
-    acc_notice("Jelly Error","No valid JELLY*.LVL level files were found.");
+    acc_notice("Jelly Error","No valid JELLOH*.LVL level files were found.");
     jelly_shapes(0);jelly_font(0);acc_end_screen();acc_end();return 1;
   }
   load_saved_level();if(!load_level(current_level)){current_level=0;if(!load_level(0)){jelly_shapes(0);jelly_font(0);acc_end();return 1;}}

@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.772
+ * MAINTAINER NOTES - Launch! 3.78
  * File: PACKDAT.C
  * Role: Installer data packer
  * Build/ownership: Builds INSTALL.DAT from compiled executables and packaged resources.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Builds the compressed Launch! 3.772 INSTALL.DAT distribution archive.
+/* Builds the compressed Launch! 3.78 INSTALL.DAT distribution archive.
    Per-file LZSS compression: 4K history window, 3..18 byte matches.
    Microsoft C/C++ 7.0 / DOS small model. */
 #include <stdio.h>
@@ -31,13 +31,13 @@ Launch! for DOS ---------------------
 #define MAX_CHAIN 256
 
 static const char *files[]={
-  "!.EXE","!86.EXE","!KEY.COM","!KEYDB.COM","!KEY286.COM","!TKEY.COM","!TKEYDB.COM","!TKEY286.COM","!MNUGEN.EXE","AUTOGEN.DAT",
+  "!.EXE","!86.EXE","!CONFIG.EXE","!KEY.COM","!KEYDB.COM","!KEY286.COM","!TKEY.COM","!TKEYDB.COM","!TKEY286.COM","!MNUGEN.EXE","AUTOGEN.DAT",
   "PWROFF.BMP","FONT.DAT","FONT14.DAT","!FONT.COM","PROMPTS.CFG","COLORS.CFG","README.MD","MENU.MD","WININT.MD","ACCESS.MD","GAMES.MD","TSHOOT.MD","!MDVIEW.EXE","CAL.ICS","!CAL.EXE",
   "!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE","!NOTE.EXE","!STACK.EXE",
   "!DFETCH.EXE","!TODOS.EXE","!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL",
   "!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE",
-  "WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLY.LVL",
-  "!W30.EXE","!W31.EXE","!MNUMAN.EXE","MENUMGR.ICO","LAUNCH.GRP",0
+  "WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLOH.LVL",
+  "!W30.EXE","!W31.EXE","!MNUMAN.EXE","LAUNCH.GRP",0
 };
 
 
@@ -62,15 +62,15 @@ static unsigned long pack_offsets[MAX_FILES];
 static unsigned long pack_csizes[MAX_FILES];
 static unsigned long pack_usizes[MAX_FILES];
 
-static void collect_sample_dir(const char *subdir)
+static void collect_samples(void)
 {
   struct find_t ff; char pattern[64],path[64]; unsigned rc;
-  sprintf(pattern,"samples\\%s\\*.*",subdir);
+  strcpy(pattern,"samples\\*.*");
   rc=_dos_findfirst(pattern,_A_NORMAL,&ff);
   while(!rc){
     if(ff.name[0]!='.' && !(ff.attrib&_A_SUBDIR) && sample_count<MAX_FILES){
       strncpy(sample_names[sample_count],ff.name,12);sample_names[sample_count][12]=0;
-      sprintf(path,"samples\\%s\\%s",subdir,ff.name);
+      sprintf(path,"samples\\%s",ff.name);
       strncpy(sample_paths[sample_count],path,63);sample_paths[sample_count][63]=0;
       sample_count++;
     }
@@ -177,7 +177,7 @@ int main(void)
   FILE *in,*out;char name[13],source[64];unsigned long data_start,total_raw=0,total_cmp=0;
   int i,base_count=0,count,ok=1;
   while(files[base_count])base_count++;
-  collect_sample_dir("DRAW");collect_sample_dir("MD");collect_sample_dir("DB");
+  collect_samples();
   count=base_count+sample_count;
   if(count>MAX_FILES){puts("PACKDAT: too many archive members");return 1;}
   out=fopen("INSTALL.DAT","w+b");
@@ -209,5 +209,13 @@ int main(void)
   if(fclose(out)!=0)ok=0;
   if(!ok){remove("INSTALL.DAT");puts("PACKDAT: archive creation failed");return 1;}
   printf("Built compressed INSTALL.DAT with %d files (%lu -> %lu bytes, %lu%%).\n",count,total_raw,total_cmp,total_raw?(100UL*total_cmp)/total_raw:0UL);
+  {
+    FILE *ef=fopen("INSTALL.EXE","rb");unsigned long esize=0,floppy=1457664UL;
+    if(ef){fseek(ef,0,SEEK_END);esize=(unsigned long)ftell(ef);fclose(ef);}
+    printf("Floppy payload: INSTALL.EXE %lu + INSTALL.DAT %lu = %lu bytes; 1.44MB capacity %lu; %ld bytes free.\n",
+           esize,total_cmp+data_start,esize+total_cmp+data_start,floppy,(long)(floppy-(esize+total_cmp+data_start)));
+    if(esize && esize+total_cmp+data_start>floppy)
+      puts("PACKDAT WARNING: installer payload exceeds a 1.44MB floppy.");
+  }
   return 0;
 }

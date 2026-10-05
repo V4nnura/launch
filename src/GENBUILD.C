@@ -266,5 +266,5 @@ int main(void)
      !copy_generated_source("STACK.C","STACKBLD.C")||
      !copy_generated_source("POP.C","POPBLD.C")||
      !copy_generated_source("METRO.C","METROBLD.C"))return 1;
-  puts("Generated Launch! 3.772 Core, Installer, Journal, Note, Stack, Pop and Metro build sources.");return 0;
+  puts("Generated Launch! 3.78 Core, Installer, Journal, Note, Stack, Pop and Metro build sources.");return 0;
 }

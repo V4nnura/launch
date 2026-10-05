@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.772
+ * MAINTAINER NOTES - Launch! 3.78
  * File: INSTALL.C
  * Role: Canonical installer source
  * Build/ownership: Authoritative installer source; GENBUILD produces INSTBLD.C.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.772 installer - Microsoft C/C++ 7.0, DOS small model. */
+/* Launch! 3.78 installer - Microsoft C/C++ 7.0, DOS small model. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -633,7 +633,7 @@ static int append_autoexec(const char *filename,const char *path,int add_path,
   sprintf(menu_line,"%s\\!.EXE",path);
   lines[0]=path_line;lines[1]=load_line;lines[2]=menu_line;
   wanted[0]=add_path;wanted[1]=add_shortcut;wanted[2]=show_menu;
-  for(i=0;i<3;i++){
+  for(i=0;i<4;i++){
     wanted[i]=wanted[i] && !contains_line(filename,lines[i]);
     if(wanted[i])missing=1;
   }
@@ -700,18 +700,6 @@ static int startup_cfg_bool(const char *install,const char *key,int defvalue)
   fclose(f);return value;
 }
 
-static int startup_cfg_columns(const char *install)
-{
-  static char path[PATH_SIZE],line[256];char *p,*eq,*valuep;FILE *f;int value=80;
-  sprintf(path,"%s\\LAUNCH.CFG",install);f=fopen(path,"rt");if(!f)return value;
-  while(fgets(line,sizeof(line),f)){
-    p=line;while(*p==' '||*p=='\t')p++;if(*p==';'||*p=='#'||!*p)continue;
-    eq=strchr(p,'=');if(!eq)continue;valuep=eq+1;*eq=0;while(eq>p&&(eq[-1]==' '||eq[-1]=='\t'))*--eq=0;
-    if(!stricmp(p,"SCREEN_COLUMNS")){p=valuep;while(*p==' '||*p=='\t')p++;if(atoi(p)==40||atoi(p)==80)value=atoi(p);}
-  }
-  fclose(f);return value;
-}
-
 static int startup_cfg_light(const char *install)
 {
   static char path[PATH_SIZE],line[256];char *p,*eq,*valuep;FILE *f;int light=0;
@@ -736,8 +724,7 @@ static int write_start_batch(const char *install,int add_key,const char *key_spe
   f=fopen(path,"wt");if(!f)return 0;
   if(fputs("@ECHO OFF\n",f)==EOF){fclose(f);return 0;}
   if(fprintf(f,"PATH %%PATH%%;%s\n",install)<0){fclose(f);return 0;}
-  if(fprintf(f,"MODE CON COLS=%d\n",startup_cfg_columns(install))<0){fclose(f);return 0;}
-  if(fprintf(f,"%s\\!.EXE /DISPLAY\n",install)<0){fclose(f);return 0;}
+  if(fprintf(f,"%s\\!CONFIG.EXE /DISPLAY\n",install)<0){fclose(f);return 0;}
   if(add_font)if(fprintf(f,"%s\\!FONT.COM\n",install)<0){fclose(f);return 0;}
   if(add_key){
     if(fprintf(f,"%s\\%s",install,keyprog)<0){fclose(f);return 0;}
@@ -818,7 +805,7 @@ static int prepare_postinstall_start(const char *install,int add_key,const char 
     if(key_spec&&*key_spec)if(fprintf(f," /KEY=%s",key_spec)<0){fclose(f);return 0;}
     if(fputc('\n',f)==EOF){fclose(f);return 0;}
   }
-  if(fputs("\nECHO.\nECHO Run ! /CONFIG to configure everything in one place.\nECHO.\n\n",f)==EOF){fclose(f);return 0;}
+  if(fputs("\nECHO.\nECHO Run !CONFIG to configure everything in one place.\nECHO.\n\n",f)==EOF){fclose(f);return 0;}
   if(fclose(f)!=0)return 0;
   strcpy(command,"!WELCOME\r");return 1;
 }
@@ -867,7 +854,7 @@ static int component_member(const char *name,int component)
     "!NOTE.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
   static const char *games[]={
     "!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE",
-    "!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLY.LVL",0};
+    "!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLOH.LVL",0};
   const char **files;int i;
   files=component==1?accessories:games;
   for(i=0;files[i];i++)if(!stricmp(name,files[i]))return 1;
@@ -893,12 +880,10 @@ static void remove_sample_documents(const char *install)
   char p[PATH_SIZE];int i;const char *name;
   for(i=0;i<128&&dat_entry[i].name[0];i++){
     name=dat_entry[i].name;
-    if(strlen(name)>4&&!stricmp(name+strlen(name)-4,".BMP")&&stricmp(name,"PWROFF.BMP")){sprintf(p,"%s\\SAMPLES\\DRAW\\%s",install,name);remove(p);}
-    else if(strlen(name)>3&&!stricmp(name+strlen(name)-3,".MD")&&stricmp(name,"README.MD")){sprintf(p,"%s\\SAMPLES\\MD\\%s",install,name);remove(p);}
+    if(strlen(name)>4&&!stricmp(name+strlen(name)-4,".BMP")&&stricmp(name,"PWROFF.BMP")){sprintf(p,"%s\\SAMPLES\\%s",install,name);remove(p);}
+    else if(strlen(name)>3&&!stricmp(name+strlen(name)-3,".MD")&&stricmp(name,"README.MD")){sprintf(p,"%s\\SAMPLES\\%s",install,name);remove(p);}
     else if(strlen(name)>3&&!stricmp(name+strlen(name)-3,".DB")){sprintf(p,"%s\\SAMPLES\\%s",install,name);remove(p);}
   }
-  sprintf(p,"%s\\SAMPLES\\DRAW",install);rmdir(p);
-  sprintf(p,"%s\\SAMPLES\\MD",install);rmdir(p);
   sprintf(p,"%s\\SAMPLES",install);rmdir(p);
   sprintf(p,"%s\\!HELP.BAT",install);remove(p);
   {static const char *hd[]={"README.MD","MENU.MD","WININT.MD","ACCESS.MD","GAMES.MD","TSHOOT.MD",0};for(i=0;hd[i];i++){sprintf(p,"%s\\HELP\\%s",install,hd[i]);remove(p);}}
@@ -908,7 +893,7 @@ static void remove_sample_documents(const char *install)
 static void remove_unselected_components(const char *install,int accessories,int games,int fonts,int menu_generator,int shortcut_key,int sample_docs,int vga_display)
 {
   static const char *acc[]={"CAL.ICS","!CAL.EXE","!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE","!NOTE.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
-  static const char *gm[]={"!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLY.LVL",0};
+  static const char *gm[]={"!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLOH.LVL",0};
   int i;
   if(!accessories)for(i=0;acc[i];i++)remove_named(install,acc[i]);
   if(!games)for(i=0;gm[i];i++)remove_named(install,gm[i]);
@@ -932,7 +917,7 @@ static int selected_member(const char *name,int shortcut_build,int accessories,
                            int vga_display,int windows_integration,int win_version,const char **dest_name)
 {
   *dest_name=name;
-  if(!stricmp(name,"!.EXE")||!stricmp(name,"!86.EXE")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
+  if(!stricmp(name,"!.EXE")||!stricmp(name,"!86.EXE")||!stricmp(name,"!CONFIG.EXE")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
   /* Help rides with component 7.  The read-only Markdown viewer is shared by
      Help and Accessories, so a minimal install that excludes both gets neither
      the viewer nor its font catalogue dependency. */
@@ -942,7 +927,7 @@ static int selected_member(const char *name,int shortcut_build,int accessories,
      the Win16 companion, icons or Program Manager group template. */
   if(windows_integration&&(!stricmp(name,"!W30.EXE")||!stricmp(name,"!W31.EXE")||!stricmp(name,"LAUNCH.GRP")))return 1;
   /* Windows 3.0 deliberately has no standalone Menu Manager. */
-  if(windows_integration&&win_version>=31&&(!stricmp(name,"!MNUMAN.EXE")||!stricmp(name,"MENUMGR.ICO")))return 1;
+  if(windows_integration&&win_version>=31&&!stricmp(name,"!MNUMAN.EXE"))return 1;
   if((fonts||accessories||sample_docs)&&vga_display&&!stricmp(name,"FONT.DAT"))return 1;
   if((fonts||accessories||sample_docs)&&!vga_display&&!stricmp(name,"FONT14.DAT"))return 1;
   if(fonts&&!stricmp(name,"!FONT.COM"))return 1;
@@ -1013,8 +998,8 @@ static int extract_install_files(const char *archive,const char *install,int sho
     selected=selected_member(dat_entry[i].name,shortcut_build,accessories,games,fonts,menu_generator,sample_docs,vga_display,windows_integration,win_version,&dest_name);
     if(selected){
       if(is_help_document(dest_name)){sprintf(destination,"%s\\HELP",install);if(!make_directories(destination)){fclose(in);return 0;}sprintf(destination,"%s\\HELP\\%s",install,dest_name);}
-      else if(sample_docs&&strlen(dest_name)>4&&!stricmp(dest_name+strlen(dest_name)-4,".BMP")&&stricmp(dest_name,"PWROFF.BMP")){sprintf(destination,"%s\\SAMPLES\\DRAW",install);make_directories(destination);sprintf(destination,"%s\\SAMPLES\\DRAW\\%s",install,dest_name);}
-      else if(sample_docs&&strlen(dest_name)>3&&!stricmp(dest_name+strlen(dest_name)-3,".MD")){sprintf(destination,"%s\\SAMPLES\\MD",install);make_directories(destination);sprintf(destination,"%s\\SAMPLES\\MD\\%s",install,dest_name);}
+      else if(sample_docs&&strlen(dest_name)>4&&!stricmp(dest_name+strlen(dest_name)-4,".BMP")&&stricmp(dest_name,"PWROFF.BMP")){sprintf(destination,"%s\\SAMPLES\\%s",install,dest_name);}
+      else if(sample_docs&&strlen(dest_name)>3&&!stricmp(dest_name+strlen(dest_name)-3,".MD")){sprintf(destination,"%s\\SAMPLES\\%s",install,dest_name);}
       else if(sample_docs&&strlen(dest_name)>3&&!stricmp(dest_name+strlen(dest_name)-3,".DB")){sprintf(destination,"%s\\SAMPLES\\%s",install,dest_name);}
       else if(strlen(dest_name)>4&&!stricmp(dest_name+strlen(dest_name)-4,".LVL")){sprintf(destination,"%s\\GAMERES",install);if(!make_directories(destination)){fclose(in);return 0;}sprintf(destination,"%s\\GAMERES\\%s",install,dest_name);}
       else sprintf(destination,"%s\\%s",install,dest_name);
@@ -1048,6 +1033,7 @@ static int extract_install_files(const char *archive,const char *install,int sho
   sprintf(destination,"%s\\BOXES.LVL",install);remove(destination);
   sprintf(destination,"%s\\WORDZ.LVL",install);remove(destination);
   sprintf(destination,"%s\\JELLY.LVL",install);remove(destination);
+  sprintf(destination,"%s\\GAMERES\\JELLY.LVL",install);remove(destination);
   sprintf(destination,"%s\\!MKDOWN.EXE",install);remove(destination);
   sprintf(destination,"%s\\!WIN16.EXE",install);remove(destination);
   sprintf(destination,"%s\\!MGR16.EXE",install);remove(destination);
@@ -1068,8 +1054,8 @@ static int extract_install_files(const char *archive,const char *install,int sho
 
 /* Launch! 3.77 Windows 3.x integration.  The DOS installer records the
    Windows location and creates a conservative legacy PIF which Windows 3.x
-   can open directly.  A Win16 DDE helper source is also installed for the
-   Program Manager group-registration step. */
+   can open directly.  Program Manager registration uses a prepared GRP
+   template and does not require a one-shot Win16 setup helper. */
 static int write_windows_config(const char *install,int enabled,const char *winpath)
 {
   char path[PATH_SIZE];FILE *f;
@@ -1126,7 +1112,7 @@ static void grp_set_word(unsigned char *p,unsigned off,unsigned v)
 { p[off]=(unsigned char)(v&255);p[off+1]=(unsigned char)((v>>8)&255); }
 
 /* Translate an offset from the supplied C:\\LAUNCH template to the rebuilt
-   group after all nine installation-path strings have been resized. */
+   group after all twelve installation-path strings have been resized. */
 static unsigned grp_map_offset(unsigned oldoff,const unsigned *pos,const int *delta,int count)
 {
   int i;long n=(long)oldoff;
@@ -1135,32 +1121,50 @@ static unsigned grp_map_offset(unsigned oldoff,const unsigned *pos,const int *de
 }
 
 /* Install the real Program Manager group supplied with Launch!.
-   The three-item template contains Launch! for DOS, Launch! 16 and Menu Manager;
-   the third item is rewritten to launch the standalone !MNUMAN.EXE tool.
-   We relocate its C:\\LAUNCH paths, repair every group/item offset, resize
-   the 3.1 working-directory tags and regenerate the 16-bit GRP checksum. */
+   LAUNCH.GRP is now the clean four-icon Windows 3.1 template supplied for
+   Release 3.78.  Its visual coordinates are preserved exactly.  The item
+   directory in a GRP file is not necessarily stored in screen order, so find
+   each item by title rather than assuming fixed record positions.  We then
+   normalize the logical order to DOS, Configuration, Launch! 16, Menu Manager
+   (the first two are the Windows 3.0 subset), relocate all C:\LAUNCH paths,
+   repair item/tag offsets and regenerate the 16-bit GRP checksum. */
 static int install_launch_group(const char *install,const char *winpath,int win_version)
 {
   static char src[PATH_SIZE],dst[PATH_SIZE];FILE *f;unsigned char *in,*out;
-  long sz;unsigned old_cb,new_cb,old_items[3],new_items[3];
-  unsigned pos[12];int delta[12],reps=0;unsigned i,j,k,newsz;int dl;
+  static const char *roles[4]={"Launch! for DOS","Configuration","Launch! 16","Menu Manager"};
+  long sz;unsigned old_cb,new_cb,old_items[4],old_role[4],new_role[4];
+  unsigned old_ord[4],pos[16];int old_to_new[4],delta[16],reps=0;unsigned i,j,k,newsz;int dl;
   const char *old="C:\\LAUNCH";unsigned oldlen=9,newlen=(unsigned)strlen(install);
   unsigned fields[6]={12,14,16,18,20,22};unsigned sum,words,patched=0;const char *winexe;
   if(newlen<3||newlen>63)return 0;
   sprintf(src,"%s\\LAUNCH.GRP",install);f=fopen(src,"rb");if(!f)return 0;
   fseek(f,0,SEEK_END);sz=ftell(f);fseek(f,0,SEEK_SET);
   if(sz<100||sz>12000){fclose(f);return 0;}
-  in=(unsigned char*)malloc((unsigned)sz);out=(unsigned char*)malloc((unsigned)sz+9*(newlen+8));
+  in=(unsigned char*)malloc((unsigned)sz);out=(unsigned char*)malloc((unsigned)sz+12*(newlen+8));
   if(!in||!out){if(in)free(in);if(out)free(out);fclose(f);return 0;}
   if(fread(in,1,(unsigned)sz,f)!=(unsigned)sz){fclose(f);free(in);free(out);return 0;}fclose(f);
   if(memcmp(in,"PMCC",4)){free(in);free(out);return 0;}
-  old_cb=grp_word(in,6);if(grp_word(in,32)!=3){free(in);free(out);return 0;}
-  old_items[0]=grp_word(in,34);old_items[1]=grp_word(in,36);old_items[2]=grp_word(in,38);
-  /* Locate every template installation path. */
-  for(i=0;i+oldlen<=(unsigned)sz;i++)if(!memcmp(in+i,old,oldlen)){
-    if(reps>=12){free(in);free(out);return 0;}pos[reps]=i;delta[reps]=(int)newlen-(int)oldlen;reps++;i+=oldlen-1;
+  old_cb=grp_word(in,6);if(grp_word(in,32)!=4){free(in);free(out);return 0;}
+  for(i=0;i<4;i++)old_items[i]=grp_word(in,34+i*2);
+  /* Identify the four records from their titles.  This deliberately accepts
+     the clean template's non-sequential internal item table. */
+  for(j=0;j<4;j++){
+    int found=-1;
+    for(i=0;i<4;i++){
+      unsigned oi=old_items[i],to;
+      if(oi+24>(unsigned)sz)continue;
+      to=grp_word(in,oi+18);if(to>=(unsigned)sz)continue;
+      if(!strcmp((char *)(in+to),roles[j])){found=(int)i;break;}
+    }
+    if(found<0){free(in);free(out);return 0;}
+    old_role[j]=old_items[found];old_ord[j]=(unsigned)found;
   }
-  if(reps!=9){free(in);free(out);return 0;}
+  /* Locate every template installation path: two per item plus one working
+     directory tag per item = twelve occurrences in the supplied GRP. */
+  for(i=0;i+oldlen<=(unsigned)sz;i++)if(!memcmp(in+i,old,oldlen)){
+    if(reps>=16){free(in);free(out);return 0;}pos[reps]=i;delta[reps]=(int)newlen-(int)oldlen;reps++;i+=oldlen-1;
+  }
+  if(reps!=12){free(in);free(out);return 0;}
   /* Rebuild with resized strings. */
   i=j=k=0;while(i<(unsigned)sz){
     if(k<(unsigned)reps&&i==pos[k]){memcpy(out+j,install,newlen);j+=newlen;i+=oldlen;k++;}
@@ -1168,57 +1172,41 @@ static int install_launch_group(const char *install,const char *winpath,int win_
   }
   newsz=j;new_cb=grp_map_offset(old_cb,pos,delta,reps);grp_set_word(out,6,new_cb);
   grp_set_word(out,22,grp_map_offset(grp_word(in,22),pos,delta,reps));
-  for(i=0;i<3;i++){
-    unsigned oi=old_items[i],ni=grp_map_offset(oi,pos,delta,reps);new_items[i]=ni;grp_set_word(out,34+i*2,ni);
+  /* Repair every item record, not just the visible Windows 3.0 subset. */
+  for(i=0;i<4;i++){
+    unsigned oi=old_items[i],ni=grp_map_offset(oi,pos,delta,reps);
+    grp_set_word(out,34+i*2,ni);
     for(j=0;j<6;j++)grp_set_word(out,ni+fields[j],grp_map_offset(grp_word(in,oi+fields[j]),pos,delta,reps));
   }
-  /* Windows 3.1 tag 0x8101 carries the working directory.  Its cb field
-     includes the six-byte tag header, trailing slash and NUL. */
+  for(i=0;i<4;i++)new_role[i]=grp_map_offset(old_role[i],pos,delta,reps);
+  /* Normalize logical order while retaining the template record coordinates:
+     DOS, Configuration, Launch! 16, Menu Manager. */
+  for(i=0;i<4;i++){grp_set_word(out,34+i*2,new_role[i]);old_to_new[old_ord[i]]=(int)i;}
+  /* Windows 3.1 extension tags carry an item ordinal at +2.  Renumber it to
+     match the normalized directory.  Tag 0x8101 also carries the working
+     directory and therefore grows/shrinks with the installation path. */
   dl=(int)newlen-(int)oldlen;
   for(i=new_cb;i+6<newsz;){
-    unsigned id=grp_word(out,i),cb;
+    unsigned id=grp_word(out,i),idx,cb,nextcb;
     if(id==0xFFFF)break;
     cb=grp_word(out,i+4);if(cb<6||i+cb>newsz)break;
-    if(id==0x8101)grp_set_word(out,i+4,(unsigned)((int)cb+dl));
-    i+=(id==0x8101)?(unsigned)((int)cb+dl):cb;
+    if(id==0x8101||id==0x8102){idx=grp_word(out,i+2);if(idx<4)grp_set_word(out,i+2,(unsigned)old_to_new[idx]);}
+    nextcb=cb;
+    if(id==0x8101){nextcb=(unsigned)((int)cb+dl);grp_set_word(out,i+4,nextcb);}
+    i+=nextcb;
   }
-  /* Keep the supplied GRP layout/offsets intact and replace only the Win16
-     command string.  Both companions are installed; the icon selects W30 for
-     Windows 3.0 and W31 for Windows 3.1/3.11. */
+  /* The clean template already names !W31.EXE and !MNUMAN.EXE.  Four W31
+     references exist: Launch! 16's command plus the DOS/Configuration/Win16
+     icon sources.  Windows 3.0 swaps all four to the same-size !W30.EXE name;
+     Windows 3.1/3.11 leaves them as !W31.EXE. */
   winexe=(win_version>=31)?"!W31.EXE":"!W30.EXE";
-  for(i=0;i+10<=newsz;i++)if(!memcmp(out+i,"!WIN16.EXE",10)){
-    memcpy(out+i,winexe,8);out[i+8]=0;patched++;i+=9;
+  for(i=0;i+8<=newsz;i++)if(!memcmp(out+i,"!W31.EXE",8)){
+    memcpy(out+i,winexe,8);patched++;i+=7;
   }
-  if(patched!=1){free(in);free(out);return 0;}
-  /* The template's third item historically invoked !MGR16.EXE /MANAGE.
-     Windows 3.1/3.11 now runs Menu Manager as its own application.  The new
-     command is shorter, so it can safely replace the existing NUL-terminated
-     command string without disturbing any GRP offsets. */
-  patched=0;
-  for(i=0;i+18<=newsz;i++)if(!memcmp(out+i,"!MGR16.EXE /MANAGE",18)){
-    strcpy((char *)(out+i),"!MNUMAN.EXE");patched++;i+=17;
-  }
-  if(patched!=1){free(in);free(out);return 0;}
-  /* Both Launch! icons now live inside the selected Win16 executable.
-     Item 0 (Launch! for DOS) uses icon index 1; item 1 (Launch! 16) uses
-     the first icon.  Keep the existing GRP icon bitmap data intact, but
-     point Program Manager's icon-source metadata at the executable so
-     Properties/reloads do not require separate LAUNCH*.ICO files. */
-  {
-    char iconpath[PATH_SIZE];unsigned ip;
-    sprintf(iconpath,"%s\\%s",install,winexe);
-    for(i=0;i<2;i++){
-      ip=grp_word(out,new_items[i]+22);
-      if(ip>=newsz || strlen(iconpath)>strlen((char *)(out+ip))){free(in);free(out);return 0;}
-      strcpy((char *)(out+ip),iconpath);
-      grp_set_word(out,new_items[i]+4,i==0?1:0);
-    }
-  }
-  /* Release 3.77 intentionally withholds Launch! 16 and Menu Manager from
-     Windows 3.0.  Only the first Program Manager item (Launch! for DOS) is
-     visible there.  Windows 3.1/3.11 retains all three items.  The unused
-     template records may remain in the GRP; cItems controls visibility. */
-  if(win_version<31)grp_set_word(out,32,1);
+  if(patched!=4){free(in);free(out);return 0;}
+  /* Windows 3.0 exposes only the first two normalized items: DOS launcher and
+     Configuration.  The attached four-item template remains intact for 3.1. */
+  if(win_version<31)grp_set_word(out,32,2);
   /* Checksum is the negative 16-bit sum of all little-endian WORDs. */
   grp_set_word(out,4,0);sum=0;words=(newsz+1)/2;
   for(i=0;i<words;i++){unsigned lo=out[i*2],hi=(i*2+1<newsz)?out[i*2+1]:0;sum=(sum+lo+(hi<<8))&0xFFFF;}
@@ -1232,7 +1220,7 @@ static int install_launch_group(const char *install,const char *winpath,int win_
    Group numbers in PROGMAN.INI must remain contiguous on Windows 3.0. */
 static void cleanup_old_windows_integration(const char *install,const char *winpath)
 {
-  static const char *junk[]={"WINSETUP.EXE","WINSETUP.CFG","LAUNCH.MNU","LAUNCH.CFG","LAUNCH.PIF","LAUNCH.ICO","LAUNCH16.ICO","MENUMGR.ICO","!WIN16.EXE","!W30.EXE","!W31.EXE","!MGR16.EXE","!MNUMAN.EXE",0};
+  static const char *junk[]={"WINSETUP.EXE","WINSETUP.CFG","LAUNCH.MNU","LAUNCH.CFG","LAUNCH.PIF","LAUNCH.ICO","LAUNCH16.ICO","CONFIG.ICO","MENUMGR.ICO","!WIN16.EXE","!W30.EXE","!W31.EXE","!MGR16.EXE","!MNUMAN.EXE",0};
   static char p[PATH_SIZE],ini[PATH_SIZE],tmp[PATH_SIZE],line[512],copy[512],self[PATH_SIZE];FILE *in,*out;int i;
   /* Remove files that older 3.75 test installers may have left in WINDOWS.
      LAUNCH.GRP is intentionally excluded. */
@@ -1253,6 +1241,72 @@ static void cleanup_old_windows_integration(const char *install,const char *winp
     }else fputs(line,out);
   }
   fclose(in);if(!fclose(out)){remove(ini);rename(tmp,ini);}else remove(tmp);
+}
+
+/* Put the resident Win16 Launch! companion on WIN.INI [windows] load=.
+   Existing load= programs are preserved.  Launch! uses semicolons between
+   entries and replaces an older !W30/!W31 entry during an upgrade. */
+static int launch_load_entry(const char *entry)
+{
+  const char *p=entry,*base;char name[32];int n;
+  while(*p==' '||*p=='\t')p++;base=p;
+  while(*p&&*p!=';'&&*p!='\r'&&*p!='\n'){if(*p=='\\'||*p=='/')base=p+1;p++;}
+  n=(int)(p-base);while(n>0&&(base[n-1]==' '||base[n-1]=='\t'))n--;
+  if(n<=0||n>=(int)sizeof(name))return 0;
+  memcpy(name,base,n);name[n]=0;
+  return !stricmp(name,"!W30.EXE")||!stricmp(name,"!W31.EXE");
+}
+
+static int append_windows_load_text(char *out,int outsize,const char *text)
+{
+  int have=(int)strlen(out),need=(int)strlen(text);
+  if(have+need>=outsize)return 0;
+  memcpy(out+have,text,need+1);return 1;
+}
+
+static int rebuild_windows_load_value(const char *oldvalue,const char *launchprog,char *out,int outsize)
+{
+  const char *p=oldvalue,*q;int first=1,n;char token[256];out[0]=0;
+  while(*p){
+    q=strchr(p,';');if(!q)q=p+strlen(p);n=(int)(q-p);if(n>=(int)sizeof(token))n=(int)sizeof(token)-1;
+    memcpy(token,p,n);token[n]=0;
+    {char *a=token,*b;while(*a==' '||*a=='\t')a++;b=a+strlen(a);while(b>a&&(b[-1]==' '||b[-1]=='\t'))*--b=0;
+      if(*a&&!launch_load_entry(a)){
+        if(!first&&!append_windows_load_text(out,outsize,";"))return 0;
+        if(!append_windows_load_text(out,outsize,a))return 0;first=0;
+      }
+    }
+    p=*q?q+1:q;
+  }
+  if(!first&&!append_windows_load_text(out,outsize,";"))return 0;
+  return append_windows_load_text(out,outsize,launchprog);
+}
+
+static int register_windows_load(const char *install,const char *winpath,int win_version)
+{
+  static char ini[PATH_SIZE],tmp[PATH_SIZE],line[512],value[512],launchprog[PATH_SIZE];
+  FILE *in,*out;char *p,*q;int in_windows=0,saw_windows=0,saw_load=0;
+  sprintf(ini,"%s\\WIN.INI",winpath);sprintf(tmp,"%s\\WIN.LD$",winpath);
+  sprintf(launchprog,"%s\\%s",install,win_version>=31?"!W31.EXE":"!W30.EXE");
+  in=fopen(ini,"rt");if(!in)return 0;out=fopen(tmp,"wt");if(!out){fclose(in);return 0;}
+  while(fgets(line,sizeof(line),in)){
+    p=line;while(*p==' '||*p=='\t')p++;
+    if(*p=='['){
+      if(in_windows&&!saw_load){fprintf(out,"load=%s\n",launchprog);saw_load=1;}
+      in_windows=!strnicmp(p,"[windows]",9);if(in_windows)saw_windows=1;
+    }
+    if(in_windows){
+      q=p;if(!strnicmp(q,"load",4)){q+=4;while(*q==' '||*q=='\t')q++;if(*q=='='){
+        q++;q[strcspn(q,"\r\n")]=0;if(!rebuild_windows_load_value(q,launchprog,value,sizeof(value))){fclose(in);fclose(out);remove(tmp);return 0;}
+        fprintf(out,"load=%s\n",value);saw_load=1;continue;
+      }}
+    }
+    fputs(line,out);
+  }
+  if(in_windows&&!saw_load){fprintf(out,"load=%s\n",launchprog);saw_load=1;}
+  if(!saw_windows){fprintf(out,"\n[windows]\nload=%s\n",launchprog);saw_load=1;}
+  fclose(in);if(fclose(out)){remove(tmp);return 0;}
+  remove(ini);if(rename(tmp,ini)){remove(tmp);return 0;}return saw_load;
 }
 
 static int register_launch_group(const char *winpath)
@@ -1295,7 +1349,7 @@ int main(int argc,char **argv)
   (void)argc;
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.772 Installation");
+  colour_text("Launch!",12);puts(" 3.78 Installation");
   installer_title_rule();
   puts("");
   cpu_ok=cpu_at_least_286();display_name=display_adapter(&display_ok);vga_display=!strncmp(display_name,"VGA",3);if((!cpu_ok||!display_ok)&&!hardware_warning())return 1;
@@ -1384,7 +1438,7 @@ int main(int argc,char **argv)
 
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.772 Installation");
+  colour_text("Launch!",12);puts(" 3.78 Installation");
   installer_title_rule();
   puts("\n Please wait while files are extracted and copied...");fflush(stdout);
   source_directory(argv[0],source_dir);sprintf(archive,"%sINSTALL.DAT",source_dir);
@@ -1393,7 +1447,7 @@ int main(int argc,char **argv)
   if(!extract_install_files(archive,install,shortcut_build,accessories,games,fonts,menu_generator,sample_docs,vga_display,win_inst,win_version))return 1;
   remove_unselected_components(install,accessories,games,fonts,menu_generator,shortcut_key,sample_docs,vga_display);
   if(!win_inst){
-    static const char *winfiles[]={"!W30.EXE","!W31.EXE","!MNUMAN.EXE","LAUNCH.ICO","LAUNCH16.ICO","MENUMGR.ICO","LAUNCH.GRP",0};
+    static const char *winfiles[]={"!W30.EXE","!W31.EXE","!MNUMAN.EXE","LAUNCH.ICO","LAUNCH16.ICO","CONFIG.ICO","MENUMGR.ICO","LAUNCH.GRP",0};
     int wi;for(wi=0;winfiles[wi];wi++)remove_named(install,winfiles[wi]);
   }else if(win_version<31){
     remove_named(install,"!MNUMAN.EXE");remove_named(install,"MENUMGR.ICO");
@@ -1408,6 +1462,7 @@ int main(int argc,char **argv)
   }
   if(win_inst){
     cleanup_old_windows_integration(install,win_path);
+    if(!register_windows_load(install,win_path,win_version)){error_icon(0);puts("Windows integration selected, but WIN.INI load= could not be updated.");return 1;}
     if(!write_launch_pif(install)){error_icon(0);puts("Windows integration selected, but LAUNCH.PIF could not be created.");return 1;}
     if(!install_launch_group(install,win_path,win_version)){error_icon(0);puts("Windows integration selected, but LAUNCH.GRP could not be installed.");return 1;}
     if(!register_launch_group(win_path)){error_icon(0);puts("Windows integration selected, but LAUNCH.GRP could not be registered in PROGMAN.INI.");return 1;}

@@ -1,4 +1,4 @@
-/* Launch! 3.772 - native Windows 3.x menu companion.
+/* Launch! 3.78 - native Windows 3.0 menu companion.
    Target: Microsoft C/C++ 7.0 + Windows 3.0/3.1 SDK, medium model. */
 #ifndef WINVER
 #define WINVER 0x0300
@@ -60,7 +60,6 @@ static int close_request=0;
 #define WM_MANAGER_ACTION (WM_USER+21)
 #define WM_OPEN_PENDING_MENU (WM_USER+22)
 #define WM_OPEN_PENDING_MANAGE (WM_USER+23)
-#define WM_EXEC_MENU_COMMAND (WM_USER+24)
 
 #ifndef VK_OEM_5
 #define VK_OEM_5 0xDC
@@ -195,6 +194,7 @@ static int dde_request_ok;
 static HGLOBAL dde_reply;
 static FARPROC gHostInstProc;
 static FILE *gDebugFile;
+static unsigned long gDebugSeq;
 
 static void debug_open(void)
 {
@@ -205,17 +205,25 @@ static void debug_open(void)
     if(q){*q=0;sprintf(path,"%s\\W30DBG.LOG",exe);}
   }
   if(!path[0])strcpy(path,"W30DBG.LOG");
-  gDebugFile=fopen(path,"wt");
+  /* Append rather than truncate. Helper invocations must not erase the
+     resident instance's crash trail. */
+  gDebugFile=fopen(path,"at");
+  if(gDebugFile){fprintf(gDebugFile,"\n=== !W30 3.78 diagnostic session ===\n");fflush(gDebugFile);}
 }
 
 static void debug_msg(const char *s)
 {
-  if(gDebugFile){fprintf(gDebugFile,"%s\n",s);fflush(gDebugFile);}
+  if(gDebugFile){fprintf(gDebugFile,"%05lu %s\n",++gDebugSeq,s);fflush(gDebugFile);}
 }
 
 static void debug_val(const char *s,unsigned long v)
 {
-  if(gDebugFile){fprintf(gDebugFile,"%s: %lu (0x%lX)\n",s,v,v);fflush(gDebugFile);}
+  if(gDebugFile){fprintf(gDebugFile,"%05lu %s: %lu (0x%lX)\n",++gDebugSeq,s,v,v);fflush(gDebugFile);}
+}
+
+static void debug_text(const char *s,const char *v)
+{
+  if(gDebugFile){fprintf(gDebugFile,"%05lu %s: %s\n",++gDebugSeq,s,v?v:"(null)");fflush(gDebugFile);}
 }
 static void resize_button_for_mode(void);
 static int browse_for_program(HWND owner,char *file,int maxfile);
@@ -560,10 +568,13 @@ static COLORREF launch_colourref(int index)
 static void run_dos(const char *cmd)
 {
   FILE *f;char shell[220];
+  debug_msg("run_dos ENTER");debug_text("run_dos command",cmd);
   f=fopen(winrun_path,"wt");if(!f){show_message_dialog(gWnd,"Launch!","Could not create WINRUN.BAT.",MSG_ERROR);return;}
   fprintf(f,"@ECHO OFF\n%s\nPAUSE\n",cmd);fclose(f);
   sprintf(shell,"COMMAND.COM /C %s",winrun_path);
-  if(WinExec(shell,SW_SHOWNORMAL)<32)show_message_dialog(gWnd,"Launch!","Windows could not start the DOS command.",MSG_ERROR);
+  debug_text("run_dos WinExec",shell);
+  {UINT rc=WinExec(shell,SW_SHOWNORMAL);debug_val("run_dos WinExec rc",(unsigned long)rc);if(rc<32)show_message_dialog(gWnd,"Launch!","Windows could not start the DOS command.",MSG_ERROR);}
+  debug_msg("run_dos LEAVE");
 }
 
 static int command_is_pif(const char *cmd)
@@ -574,10 +585,13 @@ static int command_is_pif(const char *cmd)
 
 static void run_item(int idx)
 {
-  if(idx<0||idx>=node_count||nodes[idx].is_folder)return;
+  debug_msg("run_item ENTER");debug_val("run_item index",(unsigned long)idx);debug_val("run_item node_count",(unsigned long)node_count);
+  if(idx<0||idx>=node_count||nodes[idx].is_folder){debug_msg("run_item rejected index/folder");return;}
+  debug_text("run_item title",nodes[idx].title);debug_text("run_item command",nodes[idx].command);
   if(nodes[idx].windows_program||command_is_pif(nodes[idx].command)){
-    if(WinExec(nodes[idx].command,SW_SHOWNORMAL)<32)show_message_dialog(gWnd,"Launch!","Windows could not start this program.",MSG_ERROR);
+    {UINT rc=WinExec(nodes[idx].command,SW_SHOWNORMAL);debug_val("run_item WinExec rc",(unsigned long)rc);if(rc<32)show_message_dialog(gWnd,"Launch!","Windows could not start this program.",MSG_ERROR);}
   } else run_dos(nodes[idx].command);
+  debug_msg("run_item LEAVE");
 }
 
 static int wait_for_dde_flag(int *flag,DWORD timeout_ms)
@@ -700,7 +714,10 @@ static int ensure_menu_file(void)
 
 static void begin_popup_tracking(HWND *previous_active,HWND *previous_focus)
 {
+  debug_msg("popup begin ENTER");
   *previous_active=GetActiveWindow();*previous_focus=GetFocus();
+  debug_val("popup previous active",(unsigned long)*previous_active);
+  debug_val("popup previous focus",(unsigned long)*previous_focus);
   /* TrackPopupMenu on Windows 3.x needs a genuinely active/focused owner.
      The Launch! button normally uses SW_SHOWNOACTIVATE so it never steals
      focus from applications.  Temporarily promote it only while USER owns
@@ -709,10 +726,12 @@ static void begin_popup_tracking(HWND *previous_active,HWND *previous_focus)
   menu_tracking=1;KillTimer(gWnd,RAISE_TIMER);
   if(!IsWindowEnabled(gWnd))EnableWindow(gWnd,TRUE);
   BringWindowToTop(gWnd);SetActiveWindow(gWnd);
+  debug_msg("popup begin LEAVE");
 }
 
 static void end_popup_tracking(HWND previous_active,HWND previous_focus)
 {
+  debug_msg("popup end ENTER");
   menu_tracking=0;SetTimer(gWnd,RAISE_TIMER,100,NULL);
   if(previous_active && previous_active!=gWnd && IsWindow(previous_active)){
     SetActiveWindow(previous_active);
@@ -720,6 +739,7 @@ static void end_popup_tracking(HWND previous_active,HWND previous_focus)
   }
   SetWindowPos(gWnd,HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
   InvalidateRect(gWnd,NULL,FALSE);
+  debug_msg("popup end LEAVE");
 }
 
 /* TrackPopupMenu is kept to the Windows 3.0 contract: zero flags and no
@@ -727,10 +747,12 @@ static void end_popup_tracking(HWND previous_active,HWND previous_focus)
 static void show_launch_menu(void)
 {
   POINT pt;RECT wr;UINT flags;int i;HWND previous_active,previous_focus;
-  if(!ensure_menu_file())return;
-  if(!load_launch_menu()){show_message_dialog(gWnd,"Launch!","The selected menu file could not be opened.",MSG_ERROR);return;}
+  debug_msg("show_launch_menu ENTER");debug_text("menu path",menu_path);
+  if(!ensure_menu_file()){debug_msg("ensure_menu_file FAILED");return;}
+  if(!load_launch_menu()){debug_msg("load_launch_menu FAILED");show_message_dialog(gWnd,"Launch!","The selected menu file could not be opened.",MSG_ERROR);return;}
+  debug_val("menu node_count",(unsigned long)node_count);debug_val("menu section_count",(unsigned long)section_count);
   load_win_preferences();resize_button_for_mode();
-  build_native_menu();if(!root_menu)return;
+  debug_msg("before build_native_menu");build_native_menu();debug_val("root_menu",(unsigned long)root_menu);if(!root_menu){debug_msg("build_native_menu FAILED");return;}
   /* Windows 3.0 natively supports bitmap menu items through MF_BITMAP.
      Keep the branding inside USER's own menu window instead of creating a
      second popup window alongside TrackPopupMenu. */
@@ -738,17 +760,26 @@ static void show_launch_menu(void)
   pending_menu_command=0;
   begin_popup_tracking(&previous_active,&previous_focus);
   GetWindowRect(gWnd,&wr);pt.x=wr.left;flags=0;pt.y=button_edge?wr.top:wr.bottom;
+  debug_msg("before TrackPopupMenu");
   TrackPopupMenu(root_menu,flags,pt.x,pt.y,0,gWnd,NULL);
-  DestroyMenu(root_menu);root_menu=NULL;
+  debug_msg("after TrackPopupMenu");debug_val("pending after TrackPopupMenu",(unsigned long)pending_menu_command);
+  debug_msg("before DestroyMenu");DestroyMenu(root_menu);root_menu=NULL;debug_msg("after DestroyMenu");
   for(i=0;i<section_count;i++)sections[i].menu=NULL;
   if(gMenuHeaderBmp){DeleteObject(gMenuHeaderBmp);gMenuHeaderBmp=NULL;}
-  end_popup_tracking(previous_active,previous_focus);
-  /* Windows 3.0 may deliver the popup WM_COMMAND while USER is still inside
-     TrackPopupMenu.  Record it there, but execute it only through a fresh
-     application message after the modal popup loop has completely unwound.
-     Running the action from our instance-thunked WndProc also guarantees
-     that DS is re-established before dialogs, WinExec or menu-file access. */
-  if(pending_menu_command)PostMessage(gWnd,WM_EXEC_MENU_COMMAND,0,0L);
+  debug_msg("before end_popup_tracking");end_popup_tracking(previous_active,previous_focus);debug_msg("after end_popup_tracking");
+  /* Windows 3.0 delivers the selected menu ID through WM_COMMAND while
+     TrackPopupMenu is still inside USER's private modal loop.  Do not execute
+     the command on that nested stack: starting a task or opening a dialog from
+     there can fault USER on Windows 3.0.  Re-post the *normal WM_COMMAND* after
+     TrackPopupMenu has returned.  The main message loop then enters our
+     instance-thunked WndProc afresh, with USER fully out of menu tracking. */
+  if(pending_menu_command){
+    UINT id=pending_menu_command;
+    pending_menu_command=0;
+    debug_val("posting selected WM_COMMAND",(unsigned long)id);
+    debug_val("PostMessage result",(unsigned long)PostMessage(gWnd,WM_COMMAND,(WPARAM)id,0L));
+  }
+  debug_msg("show_launch_menu LEAVE");
 }
 
 
@@ -1487,6 +1518,7 @@ static void show_menu_manager_dialog(void)
 static void show_management_menu(void)
 {
   HMENU menu,add;POINT pt;RECT wr;UINT flags;HWND previous_active,previous_focus;
+  debug_msg("show_management_menu ENTER");
   manage_mode=MANAGE_MENU;resize_button_for_mode();
   menu=CreatePopupMenu();add=CreatePopupMenu();
   if(!menu||!add){if(menu)DestroyMenu(menu);if(add)DestroyMenu(add);manage_mode=MANAGE_NONE;resize_button_for_mode();return;}
@@ -1502,12 +1534,20 @@ static void show_management_menu(void)
   begin_popup_tracking(&previous_active,&previous_focus);
   add_menu_header_bitmap(menu);
   GetWindowRect(gWnd,&wr);pt.x=wr.left;flags=0;pt.y=button_edge?wr.top:wr.bottom;
+  debug_msg("manage before TrackPopupMenu");
   TrackPopupMenu(menu,flags,pt.x,pt.y,0,gWnd,NULL);
+  debug_msg("manage after TrackPopupMenu");debug_val("manage pending",(unsigned long)pending_menu_command);
   DestroyMenu(menu);
   if(gMenuHeaderBmp){DeleteObject(gMenuHeaderBmp);gMenuHeaderBmp=NULL;}
   end_popup_tracking(previous_active,previous_focus);
   manage_mode=MANAGE_NONE;resize_button_for_mode();
-  if(pending_menu_command)PostMessage(gWnd,WM_EXEC_MENU_COMMAND,0,0L);
+  if(pending_menu_command){
+    UINT id=pending_menu_command;
+    pending_menu_command=0;
+    debug_val("manage posting selected WM_COMMAND",(unsigned long)id);
+    debug_val("manage PostMessage result",(unsigned long)PostMessage(gWnd,WM_COMMAND,(WPARAM)id,0L));
+  }
+  debug_msg("show_management_menu LEAVE");
 }
 
 
@@ -1619,13 +1659,17 @@ static BOOL FAR PASCAL RunDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
 static void show_run_dialog(void)
 {
   FARPROC proc;int rc;
-  if(runWnd){SetActiveWindow(runWnd);return;}
-  proc=MakeProcInstance((FARPROC)RunDlgProc,gInst);if(!proc)return;
+  debug_msg("show_run_dialog ENTER");
+  if(runWnd){debug_msg("show_run_dialog already open");SetActiveWindow(runWnd);return;}
+  proc=MakeProcInstance((FARPROC)RunDlgProc,gInst);debug_val("RunDlg proc instance",(unsigned long)proc);if(!proc){debug_msg("RunDlg MakeProcInstance FAILED");return;}
   menu_tracking=1;
+  debug_msg("RunDlg before DialogBox");
   rc=DialogBox(gInst,MAKEINTRESOURCE(IDD_RUN),gWnd,proc);
+  debug_val("RunDlg DialogBox rc",(unsigned long)rc);
   menu_tracking=0;
   FreeProcInstance(proc);runWnd=NULL;SetActiveWindow(gWnd);
   if(rc==-1)show_message_dialog(gWnd,"Launch!","Could not create the Run dialog.",MSG_ERROR);
+  debug_msg("show_run_dialog LEAVE");
 }
 
 static BOOL FAR PASCAL ConfirmDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
@@ -1691,12 +1735,15 @@ static void show_message_dialog(HWND owner,const char *title,const char *text,in
 static int show_confirm_dialog_resource(int dialog_id,const char *title,const char *text)
 {
   FARPROC proc;int rc,old_tracking=menu_tracking;
+  debug_msg("confirm dialog ENTER");debug_val("confirm dialog id",(unsigned long)dialog_id);debug_text("confirm title",title);
   strncpy(confirm_title,title,sizeof(confirm_title)-1);confirm_title[sizeof(confirm_title)-1]=0;
   strncpy(confirm_text,text,sizeof(confirm_text)-1);confirm_text[sizeof(confirm_text)-1]=0;
   proc=MakeProcInstance((FARPROC)ConfirmDlgProc,gInst);if(!proc)return 0;
   confirm_dialog_id=dialog_id;
   { HWND owner=managerWnd?managerWnd:gWnd;
-    menu_tracking=1;rc=DialogBox(gInst,MAKEINTRESOURCE(dialog_id),owner,proc);menu_tracking=old_tracking;
+    menu_tracking=1;debug_msg("confirm before DialogBox");
+    rc=DialogBox(gInst,MAKEINTRESOURCE(dialog_id),owner,proc);
+    debug_val("confirm DialogBox rc",(unsigned long)rc);menu_tracking=old_tracking;
     FreeProcInstance(proc);SetActiveWindow(owner);
     if(rc==-1){MessageBox(owner,"Could not create the confirmation dialog.","Launch!",MB_OK|MB_ICONSTOP);return 0;}
   }
@@ -1778,15 +1825,20 @@ static BOOL FAR PASCAL ReorderDlgProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
 static void show_reorder_dialog(void)
 {
   FARPROC proc;int rc;
-  if(!load_launch_menu())return;
+  debug_msg("show_reorder_dialog ENTER");
+  if(!load_launch_menu()){debug_msg("reorder load_launch_menu FAILED");return;}
   proc=MakeProcInstance((FARPROC)ReorderDlgProc,gInst);if(!proc)return;
+  debug_msg("reorder before DialogBox");
   rc=DialogBox(gInst,MAKEINTRESOURCE(IDD_REORDER),gWnd,proc);
+  debug_val("reorder DialogBox rc",(unsigned long)rc);
   FreeProcInstance(proc);SetActiveWindow(gWnd);
   if(rc==-1)show_message_dialog(gWnd,"Re-order","Could not create the Re-order dialog.",MSG_ERROR);
+  debug_msg("show_reorder_dialog LEAVE");
 }
 
 static void dispatch_menu_command(UINT id)
 {
+  debug_msg("dispatch_menu_command ENTER");debug_val("dispatch id",(unsigned long)id);debug_val("dispatch menu_tracking",(unsigned long)menu_tracking);
   if(id>=IDM_MGMT_ADD_LAUNCHER && id<=IDM_MGMT_REORDER){
     if(id==IDM_MGMT_ADD_LAUNCHER){if(load_launch_menu())add_menu_item(0);}
     else if(id==IDM_MGMT_ADD_FOLDER){if(load_launch_menu())add_menu_item(1);}
@@ -1796,9 +1848,9 @@ static void dispatch_menu_command(UINT id)
     else if(id==IDM_MGMT_REORDER)show_reorder_dialog();
     return;
   }
-  if(id==IDM_RUN){show_run_dialog();return;}
-  if(id==IDM_EXPLORE){if(WinExec("WINFILE.EXE",SW_SHOWNORMAL)<32)show_message_dialog(gWnd,"Explore","Windows File Manager could not be started.",MSG_ERROR);return;}
-  if(id==IDM_EXITWIN){if(show_exit_windows_dialog())ExitWindows(0,0);return;}
+  if(id==IDM_RUN){debug_msg("dispatch RUN");show_run_dialog();debug_msg("dispatch RUN returned");return;}
+  if(id==IDM_EXPLORE){debug_msg("dispatch EXPLORE");if(WinExec("WINFILE.EXE",SW_SHOWNORMAL)<32)show_message_dialog(gWnd,"Explore","Windows File Manager could not be started.",MSG_ERROR);return;}
+  if(id==IDM_EXITWIN){debug_msg("dispatch EXIT WINDOWS");if(show_exit_windows_dialog()){debug_msg("ExitWindows call");ExitWindows(0,0);}debug_msg("dispatch EXIT returned/cancelled");return;}
   if(id>=IDM_EDIT_FIRST&&id<IDM_EDIT_FIRST+MAX_NODES){edit_menu_node((int)id-IDM_EDIT_FIRST);return;}
   if(id>=IDM_REMOVE_FIRST&&id<IDM_REMOVE_FIRST+MAX_NODES){remove_menu_node((int)id-IDM_REMOVE_FIRST);return;}
   if(id>=IDM_FIRST&&id<IDM_FIRST+MAX_NODES){run_item((int)id-IDM_FIRST);return;}
@@ -1948,27 +2000,25 @@ static LRESULT FAR PASCAL WndProc(HWND h,UINT msg,WPARAM wp,LPARAM lp)
       else if((int)lp==MANAGE_REMOVE)remove_menu_node((int)wp);
       return 0;
     case WM_COMMAND:
-      if(wp==BTN_ID){if(!menu_tracking&&!runWnd)show_launch_menu();return 0;}
+      debug_msg("WndProc WM_COMMAND");debug_val("WM_COMMAND wp",(unsigned long)wp);debug_val("WM_COMMAND lp",(unsigned long)lp);debug_val("WM_COMMAND menu_tracking",(unsigned long)menu_tracking);
+      if(wp==BTN_ID){debug_msg("WM_COMMAND BTN_ID");if(!menu_tracking&&!runWnd)show_launch_menu();return 0;}
       if((wp>=IDM_MGMT_ADD_LAUNCHER&&wp<=IDM_MGMT_REORDER) || wp==IDM_RUN || wp==IDM_EXPLORE || wp==IDM_EXITWIN ||
          (wp>=IDM_EDIT_FIRST&&wp<IDM_EDIT_FIRST+MAX_NODES) || (wp>=IDM_REMOVE_FIRST&&wp<IDM_REMOVE_FIRST+MAX_NODES) ||
          (wp>=IDM_FIRST&&wp<IDM_FIRST+MAX_NODES)){
-        pending_menu_command=(UINT)wp;
-        /* If USER delivered WM_COMMAND after TrackPopupMenu returned, queue
-           the fresh dispatch here.  During menu tracking show_*_menu queues
-           it only after TrackPopupMenu has returned. */
-        if(!menu_tracking)PostMessage(h,WM_EXEC_MENU_COMMAND,0,0L);
+        if(menu_tracking){
+          /* TrackPopupMenu is still active on Windows 3.0.  Save the ID; the
+             popup owner will re-post it as an ordinary WM_COMMAND only after
+             USER's native menu loop has returned. */
+          pending_menu_command=(UINT)wp;debug_val("captured pending menu command",(unsigned long)pending_menu_command);
+        } else {
+          /* A command already delivered outside popup tracking (including our
+             re-posted command) is safe to execute on this fresh WndProc entry. */
+          debug_msg("WM_COMMAND dispatching fresh");dispatch_menu_command((UINT)wp);debug_msg("WM_COMMAND dispatch returned");
+        }
         return 0;
       }
       break;
-    case WM_EXEC_MENU_COMMAND:
-      if(menu_tracking)return 0;
-      if(pending_menu_command){
-        UINT id=pending_menu_command;
-        pending_menu_command=0;
-        dispatch_menu_command(id);
-      }
-      return 0;
-    case WM_DESTROY:KillTimer(h,RAISE_TIMER);gButton=NULL;PostQuitMessage(0);return 0;
+    case WM_DESTROY:debug_msg("WndProc WM_DESTROY");KillTimer(h,RAISE_TIMER);gButton=NULL;PostQuitMessage(0);return 0;
   }
   return DefWindowProc(h,msg,wp,lp);
 }
@@ -1981,7 +2031,7 @@ int PASCAL WinMain(HINSTANCE inst,HINSTANCE prev,LPSTR cmd,int show)
   debug_msg("05 before get_base_dir");
   if(!get_base_dir()){debug_msg("06 get_base_dir FAILED");return 1;}
   debug_msg("06 get_base_dir OK");debug_msg(menu_path);
-  set_menu_path_from_command_line(cmd);debug_msg("07 command line parsed");
+  debug_text("07 raw command line",cmd);set_menu_path_from_command_line(cmd);debug_msg("08 command line parsed");
   /* Single resident instance.  A helper copy posts a request then exits;
      the resident deliberately waits several timer ticks before opening the
      popup so task termination/Program Manager activation is already over. */
@@ -2038,10 +2088,10 @@ int PASCAL WinMain(HINSTANCE inst,HINSTANCE prev,LPSTR cmd,int show)
   timer_id=SetTimer(gWnd,RAISE_TIMER,100,NULL);
   debug_val("28j SetTimer result",(unsigned long)timer_id);
   debug_msg("28k startup construction complete");
-  /* Close the diagnostic stream before the window becomes visible.  DOS/Win3.0
-     file I/O can yield to USER; once painting begins no C-runtime logging is
-     allowed to re-enter the task. */
-  if(gDebugFile){fclose(gDebugFile);gDebugFile=NULL;}
+  /* Diagnostic build: keep W30DBG.LOG open for the resident lifetime.  Every
+     record is fflush()'d immediately so the last completed step survives a
+     Windows 3.0 Unrecoverable Application Error. */
+  debug_msg("29 entering resident message loop diagnostics");
   ShowWindow(gWnd,SW_SHOWNOACTIVATE);
   SetWindowPos(gWnd,HWND_TOP,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
   /* The host popup paints itself through the normal Win16 message loop. */

@@ -524,6 +524,7 @@ static int acc_button_icon(const char *text,int *a,int *b)
   if(strstr(text,"Exit")){*a=214;*b=233;return 1;}
   if(strstr(text,"Run")&&!strstr(text,"Preview")){*a=202;*b=224;return 2;}
   if(strstr(text,"Maximize")){*a=ACC_MAXIMIZE_L;*b=ACC_MAXIMIZE_R;return 1;}
+  if(strstr(text,"Search")){*a=206;*b=231;return 1;}
   if(strstr(text,"Print")){*a=206;*b=229;return 1;}
   if(strstr(text,"Add")||strstr(text,"New")){*a=208;*b=187;return 1;}
   if(strstr(text,"Edit")){*a=210;*b=182;return 1;}
