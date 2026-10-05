@@ -34,9 +34,9 @@
 - Integrated [file searching](https://github.com/therenegar/launch/wiki/File-Open#file-search) including "Go Deep" mode for searching file contents as well.
 - Built in [Power Off/Reboot control](https://github.com/therenegar/launch/wiki/Shutdown) with retro Windows 95 power off experience.
 - Handy and modern text-mode [accessories](https://github.com/therenegar/launch/wiki/Accessories)
-    - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MD.EXE) - and [Viewer](https://github.com/therenegar/launch/wiki/!MDVIEW.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE) , [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE). 
+    - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MD.EXE) - and [Viewer](https://github.com/therenegar/launch/wiki/!MDVIEW.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE) , [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE). 
 - Fun and addictive text-mode [games](https://github.com/therenegar/launch/wiki/Games)
-    - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE), [Jell-Oh](https://github.com/therenegar/launch/wiki/!JELLOH.EXE), [Metro](https://github.com/therenegar/launch/wiki/!METRO.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
+    - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE), [Jell-Oh](https://github.com/therenegar/launch/wiki/!JELLOH.EXE), [Metro](https://github.com/therenegar/launch/wiki/!METRO.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
 - Awesome [screensavers](https://github.com/therenegar/launch/wiki/Screen-Savers) including a 7-segment digital clock, starry night skyline, bouncing DOS logo, disk defrag simulation, 3D pipes, bouncing 3D ball, paintball, and more!
 - Various [Command Prompt styles](https://github.com/therenegar/launch/wiki/Configuration#prompt) to choose from to uplift your C:\
 - Custom [EGA & VGA display fonts](https://github.com/therenegar/launch/wiki/Fonts) to change the look of your whole DOS environment.
@@ -125,10 +125,9 @@ Handy accessories with a goal of turning an old DOS PC into something useful in 
 <img width="360" height="300" alt="Journal" src="https://github.com/user-attachments/assets/f0cc9962-3a04-4ca6-921f-d532f852885b" />
 <img width="360" height="300" alt="Markdown" src="https://github.com/user-attachments/assets/9f33f588-e579-402e-97ba-f2cb8913b419" />
 <img width="360" height="300" alt="Note" src="https://github.com/user-attachments/assets/65e8f34e-61c6-40fa-b2ac-785ef5c9f051" />
-
 <img width="360" height="300" alt="Stack" src="https://github.com/user-attachments/assets/5da2b0be-3d43-4684-bbba-30935e09aaac" />
-<img width="360" height="300" alt="Todos" src="https://github.com/user-attachments/assets/400ab708-44c9-4c75-ba7c-cbcd9472afb5" />
-<img width="360" height="300" alt="Typo" src="https://github.com/user-attachments/assets/00b4d154-1d18-4cc1-b79d-6859a6b1a5bf" />
+<img width="360" height="300" alt="To-dos" src="https://github.com/user-attachments/assets/400ab708-44c9-4c75-ba7c-cbcd9472afb5" />
+
 
 ----
 
@@ -139,14 +138,15 @@ Fun games with some more modern ideas taken back in time, to push text mode DOS 
 **Learn more about [Games](https://github.com/therenegar/launch/wiki/Games).**
 
 <img width="360" height="300" alt="boxes" src="https://github.com/user-attachments/assets/ac5d5edf-cf7d-4a45-ba55-305095763bf1" />
-<img width="360" height="300" alt="plumb" src="https://github.com/user-attachments/assets/389a9c8f-4d8c-425f-8f12-90b4154b91fb" />
+<img width="360" height="300" alt="fcell" src="https://github.com/user-attachments/assets/acd785ad-0b7b-4e37-b1b5-203ec5eb166c" />
 <img width="360" height="300" alt="jelloh" src="https://github.com/user-attachments/assets/02d53dc8-e3cb-4605-873e-8ce7934f5995" />
 <img width="360" height="300" alt="metro" src="https://github.com/user-attachments/assets/23489e48-47db-47fe-927d-3f7f691c6c83" />
+<img width="360" height="300" alt="plumb" src="https://github.com/user-attachments/assets/389a9c8f-4d8c-425f-8f12-90b4154b91fb" />
 <img width="360" height="300" alt="pop" src="https://github.com/user-attachments/assets/274239b0-7ad7-48d2-8079-f99820646b8d" />
 <img width="360" height="300" alt="snake" src="https://github.com/user-attachments/assets/8857dc7d-7e91-444c-8e33-7cd111fbdb8e" />
-<img width="360" height="300" alt="wordz" src="https://github.com/user-attachments/assets/484df84f-35fb-485d-a5b0-f120332e340e" />
-<img width="360" height="300" alt="fcell" src="https://github.com/user-attachments/assets/acd785ad-0b7b-4e37-b1b5-203ec5eb166c" />
 <img width="360" height="300" alt="sol" src="https://github.com/user-attachments/assets/25ebb582-f0c1-400a-954b-85a2ac28e199" />
+<img width="360" height="300" alt="Typo" src="https://github.com/user-attachments/assets/00b4d154-1d18-4cc1-b79d-6859a6b1a5bf" />
+<img width="360" height="300" alt="wordz" src="https://github.com/user-attachments/assets/484df84f-35fb-485d-a5b0-f120332e340e" />
 
 ----
 
