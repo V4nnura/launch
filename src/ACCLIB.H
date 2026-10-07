@@ -84,8 +84,8 @@ void acc_input_bounds(int x,int y,int w,int h);
 void acc_set_idle_hook(void (*fn)(void));
 void acc_modal_begin(void);
 void acc_modal_end(void);
-void acc_region_save(int x,int y,int width,int height,void *buffer);
-void acc_region_restore(int x,int y,int width,int height,const void *buffer);
+void acc_region_save(int x,int y,int width,int height,void far *buffer);
+void acc_region_restore(int x,int y,int width,int height,const void far *buffer);
 /* Core-style anchored drop-down: returns the selected zero-based item, or -1. */
 int acc_select_popup(int x,int anchor_y,const char **items,int count,int current,int width);
 /* Shared print-mode contract: Basic, Epson ESC/P, Postscript PS. */

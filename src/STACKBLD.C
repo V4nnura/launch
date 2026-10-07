@@ -191,12 +191,10 @@ static int stack_view_position(int index)
 static void stack_draw_pager(int x,int y)
 {
   char number[8];int attr=stack_search_mode?ACC_HEADING:ACC_LABEL;
-  /* Compact two-line pager: current position, then /total directly below it.
-     In Find results both values are result positions/counts, not card IDs. */
-  sprintf(number,"%d",stack_search_mode?stack_search_pos+1:current+1);
-  acc_text(x,y,number,attr,4);
+  /* STACK.ASC: show only the total count beside the lower-right of the
+     active card.  In Find mode the count is the number of results. */
   sprintf(number,"/%d",stack_view_count());
-  acc_text(x,y+1,number,attr,4);
+  acc_text(x,y,number,attr,5);
 }
 static int stack_sel_low(void){return stack_sel_anchor<stack_sel_caret?stack_sel_anchor:stack_sel_caret;}
 static int stack_sel_high(void){return stack_sel_anchor>stack_sel_caret?stack_sel_anchor:stack_sel_caret;}
@@ -451,7 +449,7 @@ int main(int argc,char **argv)
 
   while(!quit){
     if(dirty){cards_draw(px,y,focus,title_edit,tp,cx,cy,top);dirty=0;}
-    stack_draw_pager(x+57,y+8);
+    stack_draw_pager(x+57,y+11);
     /* STACK.ASC geometry: Search, Prev, Next, divider, Add, Delete,
        Export, Print and Exit. */
     acc_button(x,y+13," Search ",focus==2);

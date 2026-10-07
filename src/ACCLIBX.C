@@ -256,17 +256,17 @@ void acc_button(int x,int y,const char *text,int selected)
   if(found>=0){acc_buttons[found].x=x;acc_buttons[found].y=y;acc_buttons[found].text=text;acc_buttons[found].selected=selected;acc_buttons[found].width=w;if(hovered)acc_hover_button=found;}
 }
 
-void acc_region_save(int x,int y,int width,int height,void *buffer)
+void acc_region_save(int x,int y,int width,int height,void far *buffer)
 {
-  int i,j; unsigned short *dst=(unsigned short *)buffer;
+  int i,j; unsigned short far *dst=(unsigned short far *)buffer;
   if(!buffer)return;
   for(j=0;j<height;j++)for(i=0;i<width;i++)
     dst[j*width+i]=*(unsigned short far *)MAKE_FP(saved_video_segment,(((y+j)*acc_cols+x+i)*2));
 }
 
-void acc_region_restore(int x,int y,int width,int height,const void *buffer)
+void acc_region_restore(int x,int y,int width,int height,const void far *buffer)
 {
-  int i,j; const unsigned short *src=(const unsigned short *)buffer;
+  int i,j; const unsigned short far *src=(const unsigned short far *)buffer;
   if(!buffer)return;
   acc_mouse_display(0);
   for(j=0;j<height;j++)for(i=0;i<width;i++)
@@ -278,16 +278,18 @@ int acc_select_popup(int x,int anchor_y,const char **items,int count,int current
 {
   int h=count<10?count:10,top=current>=h?current-h+1:0,sel=current,py=anchor_y-h-2;
   int k=0,mx=0,my=0,lastx=-1,lasty=-1,i,choice=-1,old_buttons=0,buttons;
-  unsigned short *under;
+  unsigned short far *under;
   if(!items||count<1)return -1;if(width<8)width=8;if(width>28)width=28;
   if(x<0)x=0;if(x+width>acc_cols)width=acc_cols-x;
   if(py<0)py=anchor_y+1;if(py+h+1>=acc_rows)py=acc_rows-h-2;if(py<0)py=0;
-  /* acc_region_save()/restore() deliberately accept near buffers.  This popup
-     is at most 28 x 12 cells (672 bytes), so use the near heap.  The old
-     _fmalloc() buffer was passed through a near void *, truncating the far
-     pointer under 16-bit small model and corrupting DGROUP -- including the
-     caller's drop-down item pointers. */
-  under=(unsigned short *)malloc((unsigned)(width*(h+2))*sizeof(unsigned short));
+  /* Popup backing stores belong in the far heap.  Small-model accessories
+     share DGROUP between static data, the near heap and the stack; using
+     malloc() here needlessly consumes that scarce segment and can trip
+     stack guards in data-heavy accessories such as !TODOS.  The original
+     corruption was not _fmalloc() itself: it was passing a far allocation
+     through near acc_region_save()/restore() parameters.  Those APIs are
+     now explicitly far-pointer safe, so keep the screen image out of DGROUP. */
+  under=(unsigned short far *)_fmalloc((unsigned)(width*(h+2))*sizeof(unsigned short));
   if(under)acc_region_save(x,py,width,h+2,under);
   acc_mouse_display(1);
   if(acc_mouse_present){acc_mouse(&lastx,&lasty,&old_buttons);}
@@ -301,7 +303,7 @@ int acc_select_popup(int x,int anchor_y,const char **items,int count,int current
       if((buttons&1)&&!(old_buttons&1)){if(mx==x+width-1&&my==py+1&&top>0){top--;if(sel<top)sel=top;}else if(mx==x+width-1&&my==py+h&&top+h<count){top++;if(sel>=top+h)sel=top+h-1;}else if(mx>x&&mx<x+width-1&&my>py&&my<py+h+1){choice=top+my-py-1;if(choice<count)break;}else if(!(mx>=x&&mx<x+width&&my>=py&&my<py+h+2))break;}
       old_buttons=buttons;}
   }
-  if(under){acc_region_restore(x,py,width,h+2,under);free(under);}return choice;
+  if(under){acc_region_restore(x,py,width,h+2,under);_ffree(under);}return choice;
 }
 
 int acc_print_popup(int x,int anchor_y)
