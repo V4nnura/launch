@@ -125,8 +125,9 @@ Handy accessories with a goal of turning an old DOS PC into something useful in 
 <img width="360" height="300" alt="Journal" src="https://github.com/user-attachments/assets/f0cc9962-3a04-4ca6-921f-d532f852885b" />
 <img width="360" height="300" alt="Markdown" src="https://github.com/user-attachments/assets/9f33f588-e579-402e-97ba-f2cb8913b419" />
 <img width="360" height="300" alt="Note" src="https://github.com/user-attachments/assets/65e8f34e-61c6-40fa-b2ac-785ef5c9f051" />
-<img width="360" height="300" alt="Stack" src="https://github.com/user-attachments/assets/5da2b0be-3d43-4684-bbba-30935e09aaac" />
-<img width="360" height="300" alt="To-dos" src="https://github.com/user-attachments/assets/400ab708-44c9-4c75-ba7c-cbcd9472afb5" />
+<img width="360" height="300" alt="Stack" src="https://github.com/user-attachments/assets/68e552a4-64e0-437b-87d1-fa925981558f" />
+<img width="360" height="300" alt="To-Dos" src="https://github.com/user-attachments/assets/57d01ded-0614-4e03-a4f4-548213b7edab" />
+<img width="360" height="300" alt="Units" src="https://github.com/user-attachments/assets/593f0de4-a4c9-4367-8843-2be88c782695" />
 
 
 ----
