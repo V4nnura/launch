@@ -166,6 +166,8 @@ Behind the UI, everything is plain text configuration. You can configure everyth
 
 **Read [Technical Information](https://github.com/therenegar/launch/wiki/Tech-Info)** to learn more.
 
+<img width="640" alt="It's now safe to turn off your computer." src="https://github.com/user-attachments/assets/af65078c-4ba2-44e2-9067-4e7d39c8b8c6" />
+
 ----
 
 Launch is created on a custom build ASUSTeK 486DX4/100 machine running IBM PC DOS 7.0. 
@@ -174,7 +176,6 @@ Graphical glyphs created using [Fontraption](https://int10h.org/blog/2019/05/fon
 Screen layout and composition done with [TheDraw](https://www.abandonwaredos.com/abandonware-game.php?abandonware=TheDraw+4&gid=3563).
 Compiled with Microsoft C/C++ Optimizing Compiler 7.00 from 1992 (Takes approx 30-45 minutes to build the whole shebang).<br/>
 Screenshots taken on this machine using [Screen Thief](http://www.win3x.org/win3board/viewtopic.php?t=2710&view=min).<br/>
-Builds transferred using FTP to a Linux host where a simple Python script integrates the build into (this) GIT repository- and automates creation of release zip/img files. Automated regression testing executed with 86Box across 10 different DOS environments/hardware configs (still a work in progress itself).
 
 <img width="720" alt="About Launch!" src="https://github.com/user-attachments/assets/1681a081-3eae-4890-a672-ca8dc04d1626" />
 
