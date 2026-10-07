@@ -376,7 +376,7 @@ static void journal_typewriter_backspace(int *pcx,int *pcy)
 static void journal_print_button(int x,int y,int focus)
 {
  int a;acc_button(x,y,"  Print  ",focus);if(!journal_print_mode)return;
- a=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.launchers);acc_put(x+2,y,206,a);acc_put(x+3,y,229,a);
+ a=ACC_ATTR(acc_appearance.controls_bg,acc_appearance.launchers);acc_put(x+2,y,234,a);acc_put(x+3,y,229,a);
 }
 int main(int argc,char**argv)
 {

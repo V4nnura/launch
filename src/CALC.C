@@ -182,6 +182,17 @@ static void draw_tape(int x,int y)
 #define SCI_KEY_COUNT 24
 #define FIN_KEY_COUNT 10
 
+static void draw_calc_toolbar(int bx,int by,int w,int h,int focus,int mode)
+{
+ const char *mode_text=mode==CALC_MODE_BAS?" BAS ":(mode==CALC_MODE_SCI?" SCI ":" FIN ");
+ /* CALC.ASC uses deliberately tighter toolbar padding than the suite default:
+    C/CE/mode occupy 3/4/5 cells and Exit is a compact four-cell icon button. */
+ acc_button(bx+3,by+h-3," C ",focus==18);
+ acc_button(bx+8,by+h-3," CE ",focus==19);
+ acc_button(bx+14,by+h-3,mode_text,focus==20);
+ acc_button(bx+w-8,by+h-3," \326\351 ",focus==21);
+}
+
 static const char *sci_label[SCI_KEY_COUNT]={
  "SIN","COS","TAN","PI","ASIN","ACOS","ATAN","e",
  "LOG","LN","EXP","10^x","x^y","x^2","x^3","SQRT",
@@ -389,7 +400,6 @@ static int calc_lpt1_detected(void)
 int main(int argc,char **argv)
 {
  double value=0;char entry[24]="",op=0,t[2];int bx,by,w,h,x,y,tx,ty,i,focus=-1,key=0,mx=0,my=0,ki,mode=CALC_MODE_BAS,extra,hit;unsigned mb=0;
- const char *mode_text;
  if(acc_help(argc,argv,"!CALC","Basic, scientific and financial calculator.  /PRINT sends calculator tape lines to LPT1."))return 0;
  for(i=1;i<argc;i++)if(!stricmp(argv[i],"/PRINT")||!stricmp(argv[i],"-PRINT"))print_mode=1;
  if(!acc_begin(argv[0],"Calculator",0))return 1;
@@ -403,8 +413,7 @@ int main(int argc,char **argv)
   if(mode==CALC_MODE_SCI){acc_text(bx+3,by+5,sci_degrees?"Scientific - Degrees":"Scientific - Radians",ACC_HEADING,21);draw_sci_keys(bx+3,by+6,focus);acc_put(bx+40,by+5,179,ACC_BORDER);for(i=6;i<18;i++)acc_put(bx+40,by+i,179,ACC_BORDER);}
   else if(mode==CALC_MODE_FIN){draw_fin_panel(bx+3,by+5,focus);acc_put(bx+40,by+5,179,ACC_BORDER);for(i=6;i<18;i++)acc_put(bx+40,by+i,179,ACC_BORDER);}
   draw_keys(x,y,focus);
-  mode_text=mode==CALC_MODE_BAS?" BAS ":(mode==CALC_MODE_SCI?" SCI ":" FIN ");
-  acc_button(bx+3,by+h-3,"  C  ",focus==18);acc_button(bx+10,by+h-3,"  CE  ",focus==19);acc_button(bx+17,by+h-3,mode_text,focus==20);acc_button(bx+w-9,by+h-3,"  Exit  ",focus==21);
+  draw_calc_toolbar(bx,by,w,h,focus,mode);
   acc_wait(&key,&mx,&my,&mb);
   if(mode==CALC_MODE_BAS){
     if(key==256+72&&focus<0){if(tape_view<tape_count-TAPE_VISIBLE)tape_view++;key=0;continue;}
@@ -418,10 +427,10 @@ int main(int argc,char **argv)
   if(mode==CALC_MODE_SCI&&(mb&1)){hit=sci_hit(bx+3,by+6,mx,my);if(hit>=0){focus=22+hit;flash_sci(bx+3,by+6,hit,focus);sci_action(hit,&value,entry,&op);key=0;continue;}}
   if(mode==CALC_MODE_FIN&&(mb&1)){hit=fin_hit(bx+3,by+5,mx,my);if(hit>=0){focus=22+hit;flash_fin(bx+3,by+5,hit,focus);fin_action(hit,&value,entry,&op);key=0;continue;}}
   if((mb&1)&&my==by+h-3){
-    if(mx>=bx+3&&mx<bx+8){focus=18;value=0;entry[0]=op=0;tape_clear();key=0;continue;}
-    else if(mx>=bx+10&&mx<bx+16){focus=19;entry[0]=0;key=0;continue;}
-    else if(mx>=bx+17&&mx<bx+22){focus=20;acc_restore_text_screen();mode=(mode+1)%3;focus=-1;key=0;continue;}
-    else if(mx>=bx+w-9&&mx<bx+w-3){focus=21;key=27;continue;}
+    if(mx>=bx+3&&mx<bx+6){focus=18;value=0;entry[0]=op=0;tape_clear();key=0;continue;}
+    else if(mx>=bx+8&&mx<bx+12){focus=19;entry[0]=0;key=0;continue;}
+    else if(mx>=bx+14&&mx<bx+19){focus=20;acc_restore_text_screen();mode=(mode+1)%3;focus=-1;key=0;continue;}
+    else if(mx>=bx+w-8&&mx<bx+w-4){focus=21;key=27;continue;}
   }
   extra=mode==CALC_MODE_SCI?SCI_KEY_COUNT:(mode==CALC_MODE_FIN?FIN_KEY_COUNT:0);
   if(key==9||key==271){int total=22+extra;focus=focus<0?((key==271)?total-1:0):((key==271)?(focus+total-1)%total:(focus+1)%total);key=0;continue;}

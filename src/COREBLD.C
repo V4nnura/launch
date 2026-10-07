@@ -910,11 +910,12 @@ static int merge_default_menu_nodes(int *changed)
       !stricmp(nodes[i].command,"!MKDOWN")){strcpy(nodes[i].command,"!MD");*changed=1;}
   }
 
-  if(sibling_exists("!CAL.EXE")||sibling_exists("!CALC.EXE")||sibling_exists("!DRAW.EXE")||sibling_exists("!MD.EXE")||
+  if(sibling_exists("!CAL.EXE")||sibling_exists("!CALC.EXE")||sibling_exists("!UNITS.EXE")||sibling_exists("!DRAW.EXE")||sibling_exists("!MD.EXE")||
      sibling_exists("!JOURNAL.EXE")||sibling_exists("!NOTE.EXE")||sibling_exists("!STACK.EXE")||
      sibling_exists("!TODOS.EXE")||sibling_exists("!DFETCH.EXE")){
     folder=ensure_default_folder("Accessories",changed);if(folder<0)return 0;
     if(sibling_exists("!CALC.EXE")&&!ensure_launcher(folder,"Calculator","!CALC",1,changed))return 0;
+    if(sibling_exists("!UNITS.EXE")&&!ensure_launcher(folder,"Units","!UNITS",1,changed))return 0;
     if(sibling_exists("!CAL.EXE")&&!ensure_launcher(folder,"Calendar","!CAL",1,changed))return 0;
     if(sibling_exists("!STACK.EXE")&&!ensure_launcher(folder,"Card Stack","!STACK",1,changed))return 0;
     if(sibling_exists("!JOURNAL.EXE")&&!ensure_launcher(folder,"Journal","!JOURNAL",1,changed))return 0;
@@ -7673,15 +7674,16 @@ static void show_help(void)
 #else
 
   puts("Launch! 3.78 - a lightweight command menu for DOS\n");
-  puts("Usage: ! [menu.mnu] [/EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
+  puts("Usage: ! [menu.mnu] [/CONFIG | /EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
   puts("Menu management shortcuts:");
   puts("  Ctrl+A        Add a folder, launcher or separator");
   puts("  Ctrl+D        Delete the selected item");
   puts("  Ctrl+E        Edit the selected item");
   puts("  Ctrl+Up/Down  Move the selected item");
   puts("  Ctrl+S        Sort the current menu\n");
-  puts("Configuration: run !CONFIG\n");
+  puts("Configuration: ! /CONFIG (or run !CONFIG)\n");
   puts("Command-line parameters:");
+  puts("  /CONFIG       Open the standalone Configuration program");
   puts("  /EXPLORE      Open Explore & Run directly");
   puts("  /OPEN         Open the File Open dialog");
   puts("  /BYE          Open Shutdown... directly");
@@ -7779,6 +7781,9 @@ int main(int argc,char **argv)
 int main(int argc,char **argv)
 {
   int i,result,config_status,explore_mode=0,open_mode=0,bye_mode=0,now_mode=0,initmenu_mode=0;
+#ifndef LIGHT86
+  int config_mode=0;
+#endif
   int preview_saver=-1,preview_color=-1;
   static char macro[MAX_MACRO],open_to[MAX_TITLE];
   config_path(argv[0]);
@@ -7814,7 +7819,8 @@ int main(int argc,char **argv)
   for(i=1;i<argc;i++){
     if(!stricmp(argv[i],"/?") || !stricmp(argv[i],"-?")){show_help();return 0;}
 #ifndef LIGHT86
-    if(!stricmp(argv[i],"/EXPLORE"))explore_mode=1;
+    if(!stricmp(argv[i],"/CONFIG"))config_mode=1;
+    else if(!stricmp(argv[i],"/EXPLORE"))explore_mode=1;
     else if(!stricmp(argv[i],"/OPEN"))open_mode=1;
     else if(!stricmp(argv[i],"/BYE"))bye_mode=1;
     else if(!stricmp(argv[i],"/NOW"))now_mode=1;
@@ -7836,6 +7842,11 @@ int main(int argc,char **argv)
     else {printf("Launch!: unknown option %s (use ! /?)\n",argv[i]);return 1;}
   }
 #ifndef LIGHT86
+  if(config_mode){
+    macro[0]=0;if(program_dir[0])strcpy(macro,program_dir);strcat(macro,"!CONFIG\r");
+    if(!dispatch_command_text(macro)){puts("Launch!: cannot start !CONFIG");return 1;}
+    return 0;
+  }
   if(!windows_session){
     display_columns((explore_mode||open_mode||bye_mode)?80:screen_columns);
   }

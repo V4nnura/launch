@@ -30,14 +30,16 @@ Launch! for DOS ---------------------
 #define MIN_MATCH 3
 #define MAX_CHAIN 256
 
+/* The Windows 3.0 companion is intentionally omitted from the first-floppy
+   archive until it is ready for the planned second Windows disk. */
 static const char *files[]={
   "!.EXE","!86.EXE","!CONFIG.EXE","!KEY.COM","!KEYDB.COM","!KEY286.COM","!TKEY.COM","!TKEYDB.COM","!TKEY286.COM","!MNUGEN.EXE","AUTOGEN.DAT",
   "PWROFF.BMP","FONT.DAT","FONT14.DAT","!FONT.COM","PROMPTS.CFG","COLORS.CFG","README.MD","MENU.MD","WININT.MD","ACCESS.MD","GAMES.MD","TSHOOT.MD","!MDVIEW.EXE","CAL.ICS","!CAL.EXE",
-  "!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE","!NOTE.EXE","!STACK.EXE",
+  "!CALC.EXE","!UNITS.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE","!NOTE.EXE","!STACK.EXE",
   "!DFETCH.EXE","!TODOS.EXE","!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL",
   "!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE",
   "WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLOH.LVL",
-  "!W30.EXE","!W31.EXE","!MNUMAN.EXE","LAUNCH.GRP",0
+  "!W31.EXE","!MNUMAN.EXE","LAUNCH.GRP",0
 };
 
 

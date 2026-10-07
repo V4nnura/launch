@@ -850,7 +850,7 @@ static DAT_ENTRY dat_entry[128];
 static int component_member(const char *name,int component)
 {
   static const char *accessories[]={
-    "CAL.ICS","!CAL.EXE","!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE",
+    "CAL.ICS","!CAL.EXE","!CALC.EXE","!UNITS.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE",
     "!NOTE.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
   static const char *games[]={
     "!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE",
@@ -892,7 +892,7 @@ static void remove_sample_documents(const char *install)
 
 static void remove_unselected_components(const char *install,int accessories,int games,int fonts,int menu_generator,int shortcut_key,int sample_docs,int vga_display)
 {
-  static const char *acc[]={"CAL.ICS","!CAL.EXE","!CALC.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE","!NOTE.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
+  static const char *acc[]={"CAL.ICS","!CAL.EXE","!CALC.EXE","!UNITS.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE","!NOTE.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
   static const char *gm[]={"!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLOH.LVL",0};
   int i;
   if(!accessories)for(i=0;acc[i];i++)remove_named(install,acc[i]);

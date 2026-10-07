@@ -138,7 +138,7 @@ static int stack_search_dialog(void)
   for(;;){
     int n=(int)strlen(stack_search_text);
     acc_subbox(x,y,w,h,"Search Cards",1);
-    acc_text(x+3,y+2,"Search for:",ACC_LABEL,11);
+    acc_text(x+3,y+2,"Find:",ACC_LABEL,5);
     acc_fill(x+15,y+2,38,1,' ',focus==0?ACC_SELECT:ACC_CONTROL);
     acc_text(x+15,y+2,stack_search_text,focus==0?ACC_SELECT:ACC_CONTROL,38);
     if(focus==0)acc_caret_set(x+15+(pos<38?pos:37),y+2);else acc_caret_hide();
@@ -187,6 +187,16 @@ static int stack_view_count(void){return stack_search_mode?stack_search_count:co
 static int stack_view_position(int index)
 {
   int i;if(!stack_search_mode)return index;for(i=0;i<stack_search_count;i++)if(stack_search_result[i]==index)return i;return 0;
+}
+static void stack_draw_pager(int x,int y)
+{
+  char number[8];int attr=stack_search_mode?ACC_HEADING:ACC_LABEL;
+  /* Compact two-line pager: current position, then /total directly below it.
+     In Find results both values are result positions/counts, not card IDs. */
+  sprintf(number,"%d",stack_search_mode?stack_search_pos+1:current+1);
+  acc_text(x,y,number,attr,4);
+  sprintf(number,"/%d",stack_view_count());
+  acc_text(x,y+1,number,attr,4);
 }
 static int stack_sel_low(void){return stack_sel_anchor<stack_sel_caret?stack_sel_anchor:stack_sel_caret;}
 static int stack_sel_high(void){return stack_sel_anchor>stack_sel_caret?stack_sel_anchor:stack_sel_caret;}
@@ -431,23 +441,27 @@ static void stack_fullscreen(char *exported,char *message)
 
 int main(int argc,char **argv)
 {
-  char counter[12],exported[ACC_PATH],message[ACC_PATH+32];
-  int x,y,px,cx=0,cy=0,top=0,tp=0,key=0,mx=0,my=0,focus=0,title_edit=0,i,dirty=1,insert=1,ch;
+  char exported[ACC_PATH],message[ACC_PATH+32];
+  int x,y,px,cx=0,cy=0,top=0,tp=0,key=0,mx=0,my=0,focus=0,title_edit=0,dirty=1,insert=1,ch;
   int oldcy,oldtop,base,quit=0;
   unsigned mb=0;
   if(acc_help(argc,argv,"!STACK","A persistent card stack of editable titled text cards."))return 0;
   if(!acc_begin(argv[0],"Card Stack",0))return 1;
-  load_cards();stack_search_text[0]=0;x=(acc_cols-68)/2+3;px=x+1;y=(acc_rows-22)/2+6;acc_box(x-3,y-6,68,22,"Card Stack");
+  load_cards();stack_search_text[0]=0;x=(acc_cols-68)/2+3;px=x;y=(acc_rows-22)/2+6;acc_box(x-3,y-6,68,22,"Card Stack");
 
   while(!quit){
     if(dirty){cards_draw(px,y,focus,title_edit,tp,cx,cy,top);dirty=0;}
-    if(stack_view_count()>1)acc_button(x,y+13," Prev ",focus==2);else acc_button_disabled(x,y+13," Prev ");
-    if(stack_view_count()>1)acc_button(x+6,y+13," Next ",focus==3);else acc_button_disabled(x+6,y+13," Next ");
-    sprintf(counter,"%d",stack_search_mode?stack_search_pos+1:current+1);i=(int)strlen(counter);acc_text(x+12,y+13,"      ",ACC_LABEL,6);acc_text(x+12,y+13,counter,ACC_HEADING,i);sprintf(counter,"/%d",stack_view_count());acc_text(x+12+i,y+13,counter,ACC_LABEL,(int)strlen(counter));
-    acc_put(x+18,y+13,179,ACC_BORDER);if(!stack_search_mode)acc_button(x+20,y+13,"  Add  ",focus==4);else acc_button_disabled(x+20,y+13,"  Add  ");
-    if(!stack_search_mode&&count>1)acc_button(x+28,y+13,"  Delete  ",focus==5);else acc_button_disabled(x+28,y+13,"  Delete  ");
-    acc_button(x+36,y+13,"  Export  ",focus==6);acc_button(x+44,y+13,"  Print  ",focus==7);acc_button(x+50,y+13," Search ",focus==8);
-    acc_button(x+57,y+13,"  Exit  ",focus==9);acc_wait(&key,&mx,&my,&mb);
+    stack_draw_pager(x+57,y+8);
+    /* STACK.ASC geometry: Search, Prev, Next, divider, Add, Delete,
+       Export, Print and Exit. */
+    acc_button(x,y+13," Search ",focus==2);
+    if(stack_view_count()>1)acc_button(x+7,y+13," Prev ",focus==3);else acc_button_disabled(x+7,y+13," Prev ");
+    if(stack_view_count()>1)acc_button(x+13,y+13," Next ",focus==4);else acc_button_disabled(x+13,y+13," Next ");
+    acc_put(x+20,y+13,179,ACC_BORDER);
+    if(!stack_search_mode)acc_button(x+22,y+13,"  Add  ",focus==5);else acc_button_disabled(x+22,y+13,"  Add  ");
+    if(!stack_search_mode&&count>1)acc_button(x+29,y+13,"  Delete  ",focus==6);else acc_button_disabled(x+29,y+13,"  Delete  ");
+    acc_button(x+36,y+13,"  Export  ",focus==7);acc_button(x+43,y+13,"  Print  ",focus==8);
+    acc_button(x+55,y+13,"  Exit  ",focus==9);acc_wait(&key,&mx,&my,&mb);
     /* ACCLIBX suppresses bare Esc at top level.  A returned 27 here is the
        suite-wide Ctrl+Q / Alt+F4 close request. */
     if(key==27){if(stack_search_mode){stack_search_mode=0;stack_search_count=0;stack_search_pos=0;acc_modal_end();current=stack_search_origin;cx=cy=top=0;focus=0;title_edit=0;dirty=1;key=0;continue;}quit=1;continue;}
@@ -457,8 +471,8 @@ int main(int argc,char **argv)
     if(key==1&&!stack_search_mode){stack_add_card();cx=cy=top=0;focus=0;dirty=1;key=0;continue;}
     if(key==4&&!stack_search_mode){stack_delete_current();cx=cy=top=0;focus=0;dirty=1;key=0;continue;}
     if(key==19){if(!export_cards(exported))acc_notice("Export","Unable to export stack.");else{sprintf(message,"Card Stack exported to\n%s",exported);acc_notice("Export",message);}acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;key=0;continue;}
-    if(key==16){int pm=acc_print_popup(x+44,y+13);if(pm&&!stack_print_mode(pm))acc_notice("Print","Unable to print card.");acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;key=0;continue;}
-    if(key==6){if(stack_search_dialog()){if(!stack_search_mode)stack_search_origin=current;if(stack_search_build()){if(!stack_search_mode)acc_modal_begin();stack_search_mode=1;cx=cy=top=0;focus=0;title_edit=0;}else acc_notice("Search","No matching cards found.");acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;}key=0;continue;}
+    if(key==16){int pm=acc_print_popup(x+43,y+13);if(pm&&!stack_print_mode(pm))acc_notice("Print","Unable to print card.");acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;key=0;continue;}
+    if(key==6||key==256+0x3D){if(stack_search_dialog()){if(!stack_search_mode)stack_search_origin=current;if(stack_search_build()){if(!stack_search_mode)acc_modal_begin();stack_search_mode=1;cx=cy=top=0;focus=0;title_edit=0;}else acc_notice("Find","No matching cards found.");acc_box(x-3,y-6,68,22,"Card Stack");dirty=1;}key=0;continue;}
 
     if((mb&1)&&stack_view_count()>=2&&my==y-1&&mx>=px+4&&mx<px+26){stack_selection_clear();select_card(lower_card(1));cx=cy=top=0;focus=0;title_edit=0;dirty=1;key=0;continue;}
     if((mb&1)&&stack_view_count()>=3&&my==y-3&&mx>=px+6&&mx<px+28){stack_selection_clear();select_card(lower_card(2));cx=cy=top=0;focus=0;title_edit=0;dirty=1;key=0;continue;}
@@ -477,14 +491,14 @@ int main(int argc,char **argv)
       focus=1;title_edit=0;dirty=1;key=0;continue;
     }
     if((mb&1)&&my>=y+3&&my<y+3+VISIBLE_LINES&&mx>=px+2&&mx<px+2+CW){focus=1;title_edit=0;stack_selection_clear();cx=mx-(px+2);cy=top+my-(y+3);dirty=1;key=0;continue;}
-    if((mb&1)&&my==y+13){stack_selection_clear();title_edit=0;if(mx>=x&&mx<x+5)focus=2;else if(mx>=x+6&&mx<x+11)focus=3;else if(!stack_search_mode&&mx>=x+20&&mx<x+26)focus=4;else if(!stack_search_mode&&count>1&&mx>=x+28&&mx<x+34)focus=5;else if(mx>=x+36&&mx<x+42)focus=6;else if(mx>=x+44&&mx<x+50)focus=7;else if(mx>=x+50&&mx<x+56)focus=8;else if(mx>=x+57&&mx<x+63){focus=9;quit=1;continue;}key=13;}
+    if((mb&1)&&my==y+13){stack_selection_clear();title_edit=0;if(mx>=x&&mx<x+6)focus=2;else if(mx>=x+7&&mx<x+12)focus=3;else if(mx>=x+13&&mx<x+18)focus=4;else if(!stack_search_mode&&mx>=x+22&&mx<x+28)focus=5;else if(!stack_search_mode&&count>1&&mx>=x+29&&mx<x+35)focus=6;else if(mx>=x+36&&mx<x+42)focus=7;else if(mx>=x+43&&mx<x+49)focus=8;else if(mx>=x+55&&mx<x+61){focus=9;quit=1;continue;}key=13;}
 
     /* Escape is handled above so search-results mode can dismiss locally. */
     if(key==9||key==271){
       int dir=(key==271)?-1:1;
       title_edit=0;
       if(focus<0)focus=(dir<0)?9:0;
-      else do { focus=(focus+dir+10)%10; } while((stack_view_count()<=1&&(focus==2||focus==3))||(focus==5&&(stack_search_mode||count<=1))||(focus==4&&stack_search_mode));
+      else do { focus=(focus+dir+10)%10; } while((stack_view_count()<=1&&(focus==3||focus==4))||(focus==6&&(stack_search_mode||count<=1))||(focus==5&&stack_search_mode));
       if(focus!=1)stack_selection_clear();dirty=1;key=0;continue;
     }
     if(key==13&&focus==0){
@@ -493,13 +507,13 @@ int main(int argc,char **argv)
       dirty=1;key=0;continue;
     }
     if(key==13&&focus>=2){
-      if(focus==2){stack_selection_clear();select_card(higher_card());cx=cy=top=0;}
-      else if(focus==3){stack_selection_clear();select_card(lower_card(1));cx=cy=top=0;}
-      else if(focus==4&&!stack_search_mode&&count<CARDS){stack_add_card();cx=cy=top=0;}
-      else if(focus==5&&!stack_search_mode&&count>1){stack_delete_current();cx=cy=top=0;}
-      else if(focus==6){if(!export_cards(exported))acc_notice("Export","Unable to export stack.");else{sprintf(message,"Card Stack exported to\n%s",exported);acc_notice("Export",message);}}
-      else if(focus==7){int pm=acc_print_popup(x+44,y+13);if(pm&&!stack_print_mode(pm))acc_notice("Print","Unable to print card.");}
-      else if(focus==8){if(stack_search_dialog()){if(!stack_search_mode)stack_search_origin=current;if(stack_search_build()){if(!stack_search_mode)acc_modal_begin();stack_search_mode=1;cx=cy=top=0;focus=0;title_edit=0;}else acc_notice("Search","No matching cards found.");acc_box(x-3,y-6,68,22,"Card Stack");}}
+      if(focus==2){if(stack_search_dialog()){if(!stack_search_mode)stack_search_origin=current;if(stack_search_build()){if(!stack_search_mode)acc_modal_begin();stack_search_mode=1;cx=cy=top=0;focus=0;title_edit=0;}else acc_notice("Find","No matching cards found.");acc_box(x-3,y-6,68,22,"Card Stack");}}
+      else if(focus==3){stack_selection_clear();select_card(higher_card());cx=cy=top=0;}
+      else if(focus==4){stack_selection_clear();select_card(lower_card(1));cx=cy=top=0;}
+      else if(focus==5&&!stack_search_mode&&count<CARDS){stack_add_card();cx=cy=top=0;}
+      else if(focus==6&&!stack_search_mode&&count>1){stack_delete_current();cx=cy=top=0;}
+      else if(focus==7){if(!export_cards(exported))acc_notice("Export","Unable to export stack.");else{sprintf(message,"Card Stack exported to\n%s",exported);acc_notice("Export",message);}}
+      else if(focus==8){int pm=acc_print_popup(x+43,y+13);if(pm&&!stack_print_mode(pm))acc_notice("Print","Unable to print card.");}
       else if(focus==9){quit=1;continue;}
       dirty=1;key=0;continue;
     }
