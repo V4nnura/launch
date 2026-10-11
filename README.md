@@ -124,7 +124,7 @@ Handy accessories with a goal of turning an old DOS PC into something useful in 
 **Learn more about [Accessories](https://github.com/therenegar/launch/wiki/Accessories).**
 
 <img width="360" height="300" alt="Calendar" src="https://github.com/user-attachments/assets/44aa11dc-9af2-46aa-bac9-14bcf57163fe" />
-<img width="360" height="300" alt="Calculator" src="https://github.com/user-attachments/assets/c95a3cb5-7456-443b-830c-73fce099fdcb" />
+<img width="360" height="300" alt="Calculator" src="https://github.com/user-attachments/assets/55be336b-eb01-4507-9466-bd167e1f3375" />
 <img width="360" height="300" alt="DOS Fetch" src="https://github.com/user-attachments/assets/2b0589d9-9403-4aa3-9364-ac82a1c59858" />
 <img width="360" height="300" alt="Draw" src="https://github.com/user-attachments/assets/941d84df-a3fa-4343-a352-08eecfa3ed2c" />
 <img width="360" height="300" alt="Journal" src="https://github.com/user-attachments/assets/f0cc9962-3a04-4ca6-921f-d532f852885b" />
