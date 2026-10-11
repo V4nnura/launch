@@ -63,22 +63,7 @@ static void font_plane_open(FONT_REGS *old){old->seq2=indexed_read(0x3C4,2);old-
 static void font_plane_close(const FONT_REGS *old){indexed_write(0x3C4,2,old->seq2);indexed_write(0x3C4,4,old->seq4);indexed_write(0x3CE,4,old->gc4);indexed_write(0x3CE,5,old->gc5);indexed_write(0x3CE,6,old->gc6);}
 int acc_font_height(void){unsigned char far *h=(unsigned char far *)MAKE_FP(0x40,0x85);int v=*h;return(v>=8&&v<=32)?v:16;}
 
-/* EGA 8x14 font access.
-   launchui_font() first fills block 0 with the complete ROM font and selects
-   that block.  Custom glyphs are then overlaid with the BIOS one at a time. */
-static void ega14_rom_reset(void)
-{
-  union REGS r;
-  memset(&r,0,sizeof(r));
-  r.x.ax=0x1101;
-  r.x.bx=0;
-  int86(0x10,&r,&r);
-  memset(&r,0,sizeof(r));
-  r.x.ax=0x1103;
-  r.x.bx=0;
-  int86(0x10,&r,&r);
-}
-
+/* Preserve selected EGA font: only overlay and restore accessory glyph slots. */
 static void ega14_glyph_write(int code,const unsigned char far *glyph)
 {
   unsigned fseg=FP_SEG(glyph),foff=FP_OFF(glyph);
@@ -103,25 +88,40 @@ static void ega14_glyph_write(int code,const unsigned char far *glyph)
   }
 }
 
-static void ega14_rom_read(int code,unsigned char *glyph)
+/* EGA: preserve the complete selected 8x14 font across BIOS mode sets.
+   Overlays only change individual glyphs, but mode 03h reloads the ROM font. */
+static unsigned char far ega_font_saved[256U*14U];
+static int ega_font_saved_valid=0;
+static void ega_font_snapshot(void)
 {
-  unsigned fseg,foff;unsigned char far *font;int i;
+  FONT_REGS old;unsigned char far *font;unsigned i,j;
+  if(acc_font_height()!=14){ega_font_saved_valid=0;return;}
+  font_plane_open(&old);
+  font=(unsigned char far *)MAKE_FP(0xA000,0);
+  for(i=0;i<256U;i++)for(j=0;j<14U;j++)ega_font_saved[i*14U+j]=font[i*32U+j];
+  font_plane_close(&old);
+  ega_font_saved_valid=1;
+}
+static void ega_font_restore_after_mode_set(void)
+{
+  unsigned fseg,foff;
+  if(!ega_font_saved_valid)return;
+  fseg=FP_SEG(ega_font_saved);foff=FP_OFF(ega_font_saved);
   _asm {
     push bp
     push es
-    mov ax,1130h
-    mov bh,2
+    mov ax,fseg
+    mov es,ax
+    mov bp,foff
+    mov ax,1100h
+    mov bh,14
+    mov bl,0
+    mov cx,256
+    xor dx,dx
     int 10h
-    mov ax,es
-    mov fseg,ax
-    mov foff,bp
     pop es
     pop bp
   }
-  font=(unsigned char far *)MAKE_FP(fseg,foff);
-  font+=(unsigned)code*14U;
-  for(i=0;i<14;i++)glyph[i]=font[i];
-  for(;i<32;i++)glyph[i]=0;
 }
 
 static unsigned char far acc_glyph_stage[32];
@@ -144,10 +144,7 @@ static void mouse_glyph_write(const unsigned char *glyph);
 void acc_glyph_read(int code,unsigned char *glyph)
 {
   FONT_REGS old;unsigned char far *font;int i;
-  if(acc_font_height()==14){
-    ega14_rom_read(code,glyph);
-    return;
-  }
+  /* Read the active EGA font plane, not the BIOS ROM font. */
   font_plane_open(&old);
   font=(unsigned char far *)MAKE_FP(0xA000,code*32);
   for(i=0;i<32;i++)glyph[i]=font[i];
@@ -211,8 +208,6 @@ static const unsigned char launchui_codes[41]={16,17,30,31,169,170,173,174,175,1
    retained only as the unrelocated source/default slot. */
 static int acc_print_left_code=234;
 int acc_glyph_is_custom(int code){int i;if(code==127||code==216||code==255||code==8||code==206||code==231||code==214||code==233||code==ACC_MAXIMIZE_L||code==ACC_MAXIMIZE_R)return 1;for(i=0;i<(int)sizeof(launchui_codes);i++)if((unsigned)code==(unsigned)launchui_codes[i])return 1;return 0;}
-static int launchui_ega14(void)
-{unsigned char far *h=(unsigned char far *)MAKE_FP(0x40,0x85);return *h==14;}
 static unsigned char launchui_old[41][32];
 static unsigned char exit_old[2][32];
 static unsigned char search_old[2][32];
@@ -220,23 +215,11 @@ static unsigned char open_old[2][32];
 static unsigned char divider_old[32];
 static int launchui_installed=0;
 static int acc_screen_restored=0;
+/* Save/restore every affected glyph in both VGA and EGA. */
 static void launchui_font(int install)
 {
   int i;
   if(saved_mode==7)return;
-  if(launchui_ega14()){
-    if(install){
-      if(launchui_installed)return;
-      ega14_rom_reset();
-      for(i=0;i<(int)sizeof(launchui_codes);i++)acc_glyph_library(i+1,launchui_codes[i]);
-      acc_glyph_library(93,214);acc_glyph_library(94,233);
-      acc_glyph_library(89,199);acc_glyph_library(90,230);
-      acc_glyph_library(91,206);acc_glyph_library(92,231);
-      acc_glyph_library(56,216);
-      launchui_installed=1;
-    }else if(launchui_installed){ega14_rom_reset();launchui_installed=0;}
-    return;
-  }
   if(install){
     if(launchui_installed)return;
     for(i=0;i<(int)sizeof(launchui_codes);i++){acc_glyph_read(launchui_codes[i],launchui_old[i]);acc_glyph_library(i+1,launchui_codes[i]);}
@@ -580,6 +563,7 @@ int acc_begin(const char *argv0,const char *title,int graphics)
   r.h.ah=3;r.h.bh=0;int86(0x10,&r,&r);saved_cursor_start=r.h.ch;saved_cursor_end=r.h.cl;
   saved_cursor_y=r.h.dh;saved_cursor_x=r.h.dl;
   r.h.ah=1;r.h.ch=0x20;r.h.cl=0;int86(0x10,&r,&r);
+  ega_font_snapshot();
   launchui_font(1);
   r.x.ax=0;int86(0x33,&r,&r);acc_mouse_present=r.x.ax!=0;mouse_visible=0;
   if(acc_mouse_present){
@@ -613,7 +597,7 @@ void acc_restore_screen(void)
   /* A video mode set restores VGA/EGA attribute bit 7 to blink.  Launch! uses
      it as the bright-background bit, so explicitly select intensity again. */
   memset(&r,0,sizeof(r));r.x.ax=0x1003;r.x.bx=0;int86(0x10,&r,&r);
-  launchui_installed=0;launchui_font(1);for(i=0;i<acc_cols*acc_rows;i++)*(unsigned short far *)(((unsigned long)saved_video_segment<<16)|(i*2))=saved_screen[i];r.h.ah=1;r.h.ch=0x20;r.h.cl=0;int86(0x10,&r,&r);if(acc_mouse_present){r.x.ax=0;int86(0x33,&r,&r);mouse_visible=0;mouse_pointer_install();r.x.ax=3;int86(0x33,&r,&r);mouse_last_buttons=r.x.bx;mouse_raw_x=r.x.cx;mouse_raw_y=r.x.dx;}
+  launchui_installed=0;ega_font_restore_after_mode_set();launchui_font(1);for(i=0;i<acc_cols*acc_rows;i++)*(unsigned short far *)(((unsigned long)saved_video_segment<<16)|(i*2))=saved_screen[i];r.h.ah=1;r.h.ch=0x20;r.h.cl=0;int86(0x10,&r,&r);if(acc_mouse_present){r.x.ax=0;int86(0x33,&r,&r);mouse_visible=0;mouse_pointer_install();r.x.ax=3;int86(0x33,&r,&r);mouse_last_buttons=r.x.bx;mouse_raw_x=r.x.cx;mouse_raw_y=r.x.dx;}
 }
 
 void acc_end_screen(void)
