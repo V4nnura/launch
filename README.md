@@ -25,7 +25,7 @@
 
 <img height="75" alt="So. Many. Features." src="https://github.com/user-attachments/assets/0192af1f-a429-4d77-b570-05c9d66106e9" />
 
-- Displays a hierarchical folder based menu, modally over the top of the existing console contents.
+- Displays a folder based menu, modally over the top of the existing console contents, giving a multi-tasking feel in a single-tasking OS.
 - Supports trigger by a customizable keyboard shortcut.
 - Launches commands using the existing command interpreter and shell by using non-resident keyboard macros (a novel approach and a first in 40+ years of DOS).
 - [Quick Launch](https://github.com/therenegar/launch/wiki/Quick-Launch#quick-launch) to search the menu and run with minimal keystrokes.
@@ -35,7 +35,7 @@
 - Built in [file opener](https://github.com/therenegar/launch/wiki/File-Open) to create associations between files and launchers for easy open.
 - Integrated [file searching](https://github.com/therenegar/launch/wiki/File-Open#file-search) including "Go Deep" mode for searching file contents as well.
 - Built in [Power Off/Reboot control](https://github.com/therenegar/launch/wiki/Shutdown) with Windows 95 power off vibes.
-- Handy and modern text-mode [accessories](https://github.com/therenegar/launch/wiki/Accessories)
+- Handy, helpful and modern text-mode [accessories](https://github.com/therenegar/launch/wiki/Accessories)
     - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MD.EXE) - and [Viewer](https://github.com/therenegar/launch/wiki/!MDVIEW.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE), [SysEdit](https://github.com/therenegar/launch/wiki/!SYSEDIT.EXE), [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE) and [Units](https://github.com/therenegar/launch/wiki/!UNITS.EXE). 
 - Fun and addictive text-mode [games](https://github.com/therenegar/launch/wiki/Games)
     - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE), [Jell-Oh](https://github.com/therenegar/launch/wiki/!JELLOH.EXE), [Metro](https://github.com/therenegar/launch/wiki/!METRO.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
