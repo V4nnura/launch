@@ -1002,6 +1002,8 @@ static int selected_member(const char *name,int shortcut_build,int accessories,
   if(!stricmp(name,"!.EXE")||!stricmp(name,"!86.EXE")||!stricmp(name,"!CONFIG.EXE")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
   /* The core and !CONFIG now read the common Launch! UI glyph resource too. */
   if(!stricmp(name,"LAUNCH.OVL"))return 1;
+  /* Your Text screensaver always needs its bitmap font at runtime. */
+  if(!stricmp(name,"SAV74.DAT"))return 1;
   /* Help rides with component 7.  It invokes the single Markdown viewer implementation
      in !MD /VIEW; !MDVIEW is now only a tiny convenience alias for Accessories. */
   if(sample_docs&&is_help_document(name))return 1;

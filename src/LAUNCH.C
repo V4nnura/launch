@@ -2445,7 +2445,6 @@ static void run_screensaver(void)
    installed core, so Configuration does not carry a second saver engine. */
 static void run_screensaver(void)
 {
-  char command[MAX_CMD*2];
   if(!appearance.screensaver || windows_session)return;
   if(appearance.screensaver==YOUR_TEXT_ID){
     char path[MAX_CMD];FILE *f;
@@ -2453,12 +2452,22 @@ static void run_screensaver(void)
     f=fopen(path,"wt");
     if(f){fprintf(f,"%u\n74\n%s\n",(unsigned)saver_text_colour,saver_message);fclose(f);}
   }
-  sprintf(command,"%s!.EXE /PREVIEWSAVER=%u,%u",program_dir,
-          (unsigned)appearance.screensaver,(unsigned)appearance.saver_color);
-  system(command);
-  /* The child restores the saved configured font/mouse glyphs. Reapply the
-     unsaved Configuration preview state before returning to this dialog. */
-  font_preview(appearance.font_id);mouse_pointer_install();
+  /* Launch the core directly: system() opened a command shell whose prompt
+     could scroll the parent Configuration dialog up the screen. */
+  {
+    char exe[MAX_CMD],arg[MAX_CMD];
+    sprintf(exe,"%s!.EXE",program_dir);
+    sprintf(arg,"/PREVIEWSAVER=%u,%u",(unsigned)appearance.screensaver,
+            (unsigned)appearance.saver_color);
+    mouse_stop();
+    spawnl(P_WAIT,exe,exe,arg,(char *)0);
+    /* The child has changed video modes. Rebase the parent video pointer and
+       restore the untouched background; the caller redraws its dialog. */
+    video_init();
+    restore_saved_target();
+    font_preview(appearance.font_id);
+    mouse_pointer_install();
+  }
 }
 #endif /* !CONFIG_PROGRAM saver engine */
 
