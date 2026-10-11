@@ -88,7 +88,9 @@ Configuration includes the menu, colors, screen savers, prompt customization, fo
 
 <img width="720" alt="Configuration" src="https://github.com/user-attachments/assets/bb8bc7e1-a34b-4137-b394-436e6bc9c324" />
 
-<img width="720" alt="Color Schemes" src="https://github.com/user-attachments/assets/189807a7-5fd1-4b88-98e5-b120dc750bcc" />
+Everything is fully customizable, you can make Launch! look however you like.
+
+<img width="720" alt="Customized" src="https://github.com/user-attachments/assets/49ca8c60-7544-4482-a036-078c7c810f76" />
 
 ----
 
