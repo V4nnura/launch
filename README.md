@@ -86,7 +86,7 @@ Configuration includes the menu, colors, screen savers, prompt customization, fo
 
 **Learn more about [Configuration](https://github.com/therenegar/launch/wiki/Configuration).**
 
-<img width="720" alt="Configuration" src="https://github.com/user-attachments/assets/bb8bc7e1-a34b-4137-b394-436e6bc9c324" />
+<img width="720" alt="Configuration" src="https://github.com/user-attachments/assets/dad4956a-b2f3-44b1-972d-7c6ecae1877f" />
 
 Everything is fully customizable, you can make Launch! look however you like.
 
