@@ -62,6 +62,12 @@ typedef struct {
 
 static const APPEARANCE default_appearance={1,11,15,7,12,14,15,10,15,3,0,7,7,0,1,1,1,1,0,1,10,0,1,6,0,0,0};
 static APPEARANCE appearance={1,11,15,7,12,14,15,10,15,3,0,7,7,0,1,1,1,1,0,1,10,0,1,6,0,0,0};
+/* Your Text: separate persisted settings, shared between core and !CONFIG. */
+#define YOUR_TEXT_ID 15
+#define YOUR_TEXT_MAX 58
+static char saver_message[YOUR_TEXT_MAX+1]="Welcome to Launch!";
+static unsigned char saver_text_colour=15;
+
 #ifdef LIGHT86
 static APPEARANCE light_standard_snapshot;
 #endif
@@ -639,7 +645,7 @@ static int appearance_value(APPEARANCE *a,const char *key,int value)
   else if(!stricmp(key,"SHOW_TIME")){field=&a->show_time;limit=1;}
   else if(!stricmp(key,"SHOW_SYSBAR")){field=&a->show_sysbar;limit=1;}
   else if(!stricmp(key,"SCREENSAVER")){
-    field=&a->screensaver;limit=14;
+    field=&a->screensaver;limit=15;
   }
   else if(!stricmp(key,"SAVER_COLOR"))field=&a->saver_color;
   else if(!stricmp(key,"SAVER_DELAY")){field=&a->saver_delay;limit=3;}
@@ -672,6 +678,9 @@ static int load_appearance(void)
     if(!stricmp(p,"PROMPT_STYLE")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>=24){fclose(f);return 0;} prompt_style=prompt_boot_style=(int)value;continue;}
     if(!stricmp(p,"PROMPT_SET")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} prompt_set=(int)value;continue;}
     if(!stricmp(p,"shortcutEnabled")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} shortcut_enabled=(int)value;continue;}
+    if(!stricmp(p,"SAVER_TEXT")){strncpy(saver_message,q,YOUR_TEXT_MAX);saver_message[YOUR_TEXT_MAX]=0;continue;}
+    if(!stricmp(p,"SAVER_TEXT_COLOR")){value=strtol(q,&end,10);end=trim(end);if(*end||value<0||value>15){fclose(f);return 0;}saver_text_colour=(unsigned char)value;continue;}
+    if(!stricmp(p,"SAVER_TEXT_SIZE"))continue; /* compatibility with older settings */
     if(!stricmp(p,"SAVERS_INSTALLED")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} screensavers_installed=(int)value;continue;}
     if(!stricmp(p,"FONTS_INSTALLED")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} fonts_installed=(int)value;continue;}
     if(!stricmp(p,"SHORTCUT_INSTALLED")){ value=strtol(q,&end,10);end=trim(end); if(!*q||*end||value<0||value>1){fclose(f);return 0;} shortcut_component_installed=(int)value;continue;}
@@ -2309,6 +2318,120 @@ static void logo_saver_loop(unsigned start_x,unsigned start_y)
   }
 }
 
+
+/* Your Text scrolls raster glyphs extracted from HELV72E.FON.
+   SAVxx.DAT is a compact DOS ASCII raster font. */
+#ifndef CONFIG_PROGRAM
+/* Raster-scroller draws only the changed edges of each horizontal glyph run.
+   With one-pixel motion the interior pixels remain on screen, eliminating
+   the full-strip erase/redraw that caused visible flashing. */
+static void saver_text_draw(const unsigned char far *font,unsigned len,
+  const unsigned short *offsets,const unsigned char *widths,
+  unsigned char height,unsigned char colour,int x,int y,int incremental)
+{
+  unsigned i;int row,col,first,visible;unsigned byte_index,mask,xpos=0;
+  for(i=0;saver_message[i];i++){
+    unsigned c=(unsigned char)saver_message[i],w,stride,base;
+    if(c<32||c>126){xpos+=8;continue;}
+    c-=32;w=widths[c];stride=(w+7)/8;base=291+offsets[c];
+    if((long)x+(long)xpos+(long)w>=-1 && (long)x+(long)xpos<641){
+      for(row=0;row<height;row++){
+        first=-1;
+        for(col=0;col<=(int)w;col++){
+          visible=0;
+          if(col<(int)w){byte_index=base+row*stride+(col>>3);mask=0x80>>(col&7);
+            if(byte_index<len)visible=(font[byte_index]&mask)!=0;
+          }
+          if(visible&&first<0)first=col;
+          if(!visible&&first>=0){
+            int left=x+(int)xpos+first,right=x+(int)xpos+col-1;
+            if(incremental){
+              /* Old run was [left+1,right+1]. Do not touch its interior. */
+              if(right+1>=0&&right+1<640)ega_span(y+row,right+1,right+1,0);
+              if(left>=0&&left<640)ega_span(y+row,left,left,colour);
+            }else{
+              if(left<0)left=0;if(right>639)right=639;
+              if(left<=right)ega_span(y+row,left,right,colour);
+            }
+            first=-1;
+          }
+        }
+      }
+    }
+    xpos+=w+2;
+  }
+}
+
+static void your_text_saver_loop(unsigned start_x,unsigned start_y)
+{
+  char filename[MAX_CMD];FILE *f;unsigned char *stage;
+  unsigned char far *font;unsigned len,got,i,n,xpos;
+  unsigned short offsets[95];unsigned char widths[95],height,colour;
+  unsigned long last;int x,y,total=0,row,col,mask,first,visible;unsigned byte_index;
+  if(strlen(program_dir)+10>=MAX_CMD)return;
+  sprintf(filename,"%sSAV74.DAT",program_dir);
+  f=fopen(filename,"rb");if(!f)return;
+  fseek(f,0,SEEK_END);len=(unsigned)ftell(f);fseek(f,0,SEEK_SET);
+  if(len<300||len>60000){fclose(f);return;}
+  font=(unsigned char far *)_fmalloc(len);if(!font){fclose(f);return;}
+  stage=(unsigned char *)malloc(256);if(!stage){_ffree(font);fclose(f);return;}
+  for(i=0;i<len;i+=got){
+    n=len-i;if(n>256)n=256;
+    got=(unsigned)fread(stage,1,n,f);
+    if(!got)break;
+    _fmemcpy(font+i,stage,got);
+  }
+  free(stage);fclose(f);
+  if(i!=len||font[0]!='S'||font[1]!='T'||font[2]!='F'||font[3]!='1'){
+    _ffree(font);return;
+  }
+  height=font[4];colour=saver_text_colour&15;
+  for(i=0;i<95;i++){
+    widths[i]=font[6+i];
+    offsets[i]=(unsigned short)(font[101+i*2]|((unsigned)font[102+i*2]<<8));
+  }
+  for(i=0;saver_message[i];i++){
+    unsigned c=(unsigned char)saver_message[i];
+    total+=(c>=32&&c<=126)?widths[c-32]+2:8;
+  }
+  if(!total)total=32;
+  ega_rectangle(0,0,640,350,0);x=640;y=(int)saver_random(351-height);
+  last=bios_ticks();
+  /* 33 pixels per 25 BIOS ticks (~24 pixels/second).  Accumulate real
+     elapsed time rather than incrementing a frame counter: rendering delays
+     cannot change the average scroll rate.  The remainder preserves subpixel
+     progress between ticks. */
+  {
+    unsigned long fraction=0;int fresh=1;
+    while(!saver_input(start_x,start_y)){
+      unsigned long tick=bios_ticks(),elapsed;
+      unsigned moves,m;
+      if(tick==last)continue;
+      /* BIOS time-of-day wraps once at midnight (0x1800B0 ticks). */
+      elapsed=(tick>=last)?tick-last:tick+0x1800B0UL-last;
+      last=tick;
+      fraction+=elapsed*33UL;
+      moves=(unsigned)(fraction/25UL);
+      fraction%=25UL;
+      if(!moves)continue;
+      /* No repaint during timer waits; show each one-pixel transition in
+         sequence, including when we need to catch up after a slow frame. */
+      wait_vertical_retrace();
+      for(m=0;m<moves;m++){
+        x--;
+        saver_text_draw(font,len,offsets,widths,height,colour,x,y,!fresh);
+        fresh=0;
+        if(x< -total){
+          x=640;y=(int)saver_random(351-height);fresh=1;
+          ega_rectangle(0,0,640,350,0);
+        }
+      }
+    }
+  }
+  _ffree(font);
+}
+#endif
+
 #include "SAVERS.H"
 
 static void run_screensaver(void)
@@ -2325,6 +2448,7 @@ static void run_screensaver(void)
   /* A mode change can rescale or reset the mouse driver's coordinates. */
   (void)mouse_poll(&mx,&my);start_x=mouse_raw_x;start_y=mouse_raw_y;
   if(appearance.screensaver==1)clock_saver_loop(start_x,start_y);
+  else if(appearance.screensaver==YOUR_TEXT_ID)your_text_saver_loop(start_x,start_y);
   else if(appearance.screensaver==2)boing_saver_loop(start_x,start_y);
   else if(appearance.screensaver==3)logo_saver_loop(start_x,start_y);
   else if(appearance.screensaver==4)abstractile_saver_loop(start_x,start_y);
@@ -2358,6 +2482,12 @@ static void run_screensaver(void)
 {
   char command[MAX_CMD*2];
   if(!appearance.screensaver || windows_session)return;
+  if(appearance.screensaver==YOUR_TEXT_ID){
+    char path[MAX_CMD];FILE *f;
+    strcpy(path,program_dir);strcat(path,"SAVPRE.$$$");
+    f=fopen(path,"wt");
+    if(f){fprintf(f,"%u\n74\n%s\n",(unsigned)saver_text_colour,saver_message);fclose(f);}
+  }
   sprintf(command,"%s!.EXE /PREVIEWSAVER=%u,%u",program_dir,
           (unsigned)appearance.screensaver,(unsigned)appearance.saver_color);
   system(command);
@@ -2521,6 +2651,7 @@ static int save_appearance(void)
       appearance.show_collections,appearance.show_explore,appearance.show_power,
       appearance.show_time,appearance.show_sysbar,appearance.font_id,appearance.font_persist,
       appearance.mouse_cursor)<0)ok=0;
+  if(ok && fprintf(f,"SAVER_TEXT=%s\nSAVER_TEXT_COLOR=%u\n",saver_message,saver_text_colour)<0)ok=0;
   if(ok && fprintf(f,"WinInst=%d\nWinPath=%s\nShortcutTarget=%s\nOPEN_MENU_BOOT=%u\nPROMPT_STYLE=%d\nPROMPT_SET=%d\nfontPersist=%u\nshortcutEnabled=%d\nshortcutCtrl=%d\nshortcutAlt=%d\nshortcutShift=%d\nshortcutKey=%s\nSAVERS_INSTALLED=%d\nFONTS_INSTALLED=%d\nSHORTCUT_INSTALLED=%d\n",win_inst_cfg?1:0,win_path_cfg,shortcut_target_light?"LIGHT":"STANDARD",open_menu_at_boot,prompt_boot_style,prompt_set,appearance.font_persist,shortcut_enabled,shortcut_ctrl,shortcut_alt,shortcut_shift,shortcut_key_cfg,screensavers_installed,fonts_installed,shortcut_component_installed)<0)ok=0;
   if(fclose(f)!=0)ok=0;
   if(!ok){remove(appearance_temp_file);return 0;}
@@ -3475,18 +3606,18 @@ static void apply_colour_scheme(int index)
 /* Presentation order is alphabetical after the fixed None, Clock entries.
    screensaver_order maps each presentation slot to the stable saver ID stored
    in LAUNCH.CFG, so sorting the UI does not change existing configurations. */
-static const char *screensaver_names[15]={
-  "None","Clock","Boing","Defrag","Logo","Mosaic","Mystic","Paintball",
+static const char *screensaver_names[16]={
+  "None","Clock","Your Text","Boing","Defrag","Logo","Mosaic","Mystic","Paintball",
   "Particles","Pipes","Scooter","Space Junk","Space Wars","Starry Nite","Warp"
 };
-static const unsigned char screensaver_order[15]={0,1,2,12,3,4,5,6,7,8,9,10,11,13,14};
+static const unsigned char screensaver_order[16]={0,1,15,2,12,3,4,5,6,7,8,9,10,11,13,14};
 static int screensaver_ui_index(unsigned char id)
 {
-  int i;for(i=0;i<15;i++)if(screensaver_order[i]==id)return i;return 0;
+  int i;for(i=0;i<16;i++)if(screensaver_order[i]==id)return i;return 0;
 }
 static unsigned char screensaver_id_from_ui(int index)
 {
-  if(index<0||index>=15)return 0;return screensaver_order[index];
+  if(index<0||index>=16)return 0;return screensaver_order[index];
 }
 static const char *screensaver_name_from_id(unsigned char id)
 {
@@ -3498,12 +3629,12 @@ static const char *saver_delay_names[4]={
 };
 static const char *mouse_cursor_names[5]={"Pointer","Block","Up Arrow","Triangle","Hand"};
 
-static const char *font_names[36]={
+static const char *font_names[37]={
   "Standard","Nix Term","ISO","Clean","Big","Tall","Launch!","Bold",
   "Extra","Max","Chunky","Pixel","Humanist","Elite","Max Elite","Elergon",
   "Neat","Gothic","Hand","Scribble","Script","ProFont","ProFont Bold",
   "Bauhaus '89","Bold Italic","Broadway","Courier","Italic","Modern","Nutso",
-  "Super","Times","Tiny","Serif","Poster","News"
+  "Super","Times","Tiny","Serif","Poster","News","Tektite"
 };
 /* EGA has its own native 8x14 catalogue.  IDs 1..13 map directly to
    FONT14.DAT slots.  Launch! remains ID 6 so the same
@@ -3512,7 +3643,7 @@ static const char *ega_font_names[14]={
   "Standard","Humanist","Neat","Script","Serif","Serif Bold","Launch!","Super",
   "Bold","Broadway","Italics","Medieval","Poster","Thin Sans"
 };
-#define VGA_BUILTIN_FONT_COUNT 36
+#define VGA_BUILTIN_FONT_COUNT 37
 #define EGA_BUILTIN_FONT_COUNT 14
 #define MAX_EXTERNAL_FONTS 28
 static char external_font_file[MAX_EXTERNAL_FONTS][13],external_font_name[MAX_EXTERNAL_FONTS][13];
@@ -3610,7 +3741,7 @@ static int config_count(int tab)
 #else
   if(tab==0)return 9; /* Menu */
   if(tab==1)return 14; /* Colors */
-  if(tab==2)return screensavers_installed?(appearance.screensaver==1?4:3):0; /* Savers */
+  if(tab==2)return screensavers_installed?(appearance.screensaver==1?4:(appearance.screensaver==YOUR_TEXT_ID?5:3)):0; /* Savers */
   if(tab==3)return 2; /* Prompt style + Set */
   if(tab==4)return (fonts_installed&&font_custom_supported())?3:0; /* Font */
   if(tab==SHORTCUT_TAB)return shortcut_component_installed?3:0; /* Shortcut */
@@ -3651,10 +3782,13 @@ static unsigned char *config_field(int tab,int item,int *limit)
   }
 #ifndef LIGHT86
   if(tab==2){
-    if(item==0){*limit=14;return &appearance.screensaver;}
+    if(item==0){*limit=15;return &appearance.screensaver;}
     if(appearance.screensaver==1){
       if(item==1)return &appearance.saver_color;
       if(item==2){*limit=3;return &appearance.saver_delay;}
+    } else if(appearance.screensaver==YOUR_TEXT_ID){
+      if(item==2)return &saver_text_colour;
+      if(item==3){*limit=3;return &appearance.saver_delay;}
     } else {
       if(item==1){*limit=3;return &appearance.saver_delay;}
     }
@@ -3678,7 +3812,7 @@ static void change_config_value(int tab,int item,int direction)
   }
   if(tab==2 && item==0){
     value=screensaver_ui_index(appearance.screensaver);
-    value+=direction;if(value<0)value=14;if(value>14)value=0;
+    value+=direction;if(value<0)value=15;if(value>15)value=0;
     appearance.screensaver=screensaver_id_from_ui(value);return;
   }
   if(tab==4&&item==1){screen_columns=screen_columns==40?80:40;return;}
@@ -3929,6 +4063,15 @@ static void draw_config_page(int x,int y,int tab,int focus,int hover,int full)
       textout(x+5,y+6,"Clock colour",C_INPUT_LABEL,18);cycle_control(x+25,y+6,colour_names[appearance.saver_color],f==1||h==1);
       textout(x+5,y+8,"Inactivity period",C_INPUT_LABEL,18);cycle_control(x+25,y+8,saver_delay_names[appearance.saver_delay],f==2||h==2);
       draw_button(x+25,y+10,"  Preview  ",11,f==3||h==3);textout(x+5,y+12,"Monitoring",C_INPUT_LABEL,18);textout(x+25,y+12,config_shortcut_active?"Command Prompt and Menu":"Menu only",C_ITEM,23);
+    } else if(appearance.screensaver==YOUR_TEXT_ID){
+      textout(x+5,y+6,"Text:",C_INPUT_LABEL,18);
+      textout(x+25,y+6,"                                    ",(f==1||h==1)?C_SELECTED:C_INPUT_FIELD,36);
+      textout(x+25,y+6,saver_message,(f==1||h==1)?C_SELECTED:C_INPUT_FIELD,36);
+      textout(x+5,y+8,"Color:",C_INPUT_LABEL,18);
+      cycle_control(x+25,y+8,colour_names[saver_text_colour],f==2||h==2);
+      textout(x+5,y+10,"Inactivity period",C_INPUT_LABEL,18);
+      cycle_control(x+25,y+10,saver_delay_names[appearance.saver_delay],f==3||h==3);
+      draw_button(x+25,y+12,"  Preview  ",11,f==4||h==4);
     } else {
       textout(x+5,y+6,"Inactivity period",C_INPUT_LABEL,18);cycle_control(x+25,y+6,saver_delay_names[appearance.saver_delay],f==1||h==1);
       draw_button(x+25,y+8,"  Preview  ",11,f==2||h==2);textout(x+5,y+10,"Monitoring",C_INPUT_LABEL,18);textout(x+25,y+10,config_shortcut_active?"Command Prompt and Menu":"Menu only",C_ITEM,23);
@@ -4004,9 +4147,16 @@ static int config_hit(int x,int y,int tab,int mx,int my)
   } else if(tab==2){
     if(my==y+4&&mx>=x+25&&mx<x+40)return CONFIG_CONTROL_BASE;
     if(my==y+6&&mx>=x+25&&mx<x+40)return CONFIG_CONTROL_BASE+1;
+    if(appearance.screensaver==YOUR_TEXT_ID){
+      if(mx>=x+25 && mx<x+61){
+        if(my==y+8)return CONFIG_CONTROL_BASE+2;
+        if(my==y+10)return CONFIG_CONTROL_BASE+3;
+        if(my==y+12)return CONFIG_CONTROL_BASE+4;
+      }
+    }
     if(appearance.screensaver==1&&my==y+8&&mx>=x+25&&mx<x+40)return CONFIG_CONTROL_BASE+2;
     if(appearance.screensaver==1&&my==y+10&&mx>=x+25&&mx<x+36)return CONFIG_CONTROL_BASE+3;
-    if(appearance.screensaver!=1&&my==y+8&&mx>=x+25&&mx<x+36)return CONFIG_CONTROL_BASE+2;
+    if(appearance.screensaver!=1&&appearance.screensaver!=YOUR_TEXT_ID&&my==y+8&&mx>=x+25&&mx<x+36)return CONFIG_CONTROL_BASE+2;
   } else if(tab==3){
     if(my==y+4&&mx>=x+25&&mx<x+40)return CONFIG_CONTROL_BASE;
     if(my==y+4&&mx>=x+43&&mx<x+50)return CONFIG_CONTROL_BASE+1;
@@ -4153,7 +4303,7 @@ static int config_is_select(int tab,int item)
 {
   if(tab==0)return item==0||item==5||item==7||item==8;
   if(tab==1)return 1;
-  if(tab==2){if(item==0||item==1)return 1;if(appearance.screensaver==1&&item==2)return 1;return 0;}
+  if(tab==2){if(item==0)return 1;if(appearance.screensaver==YOUR_TEXT_ID)return item==2||item==3;if(item==1)return 1;if(appearance.screensaver==1&&item==2)return 1;return 0;}
   if(tab==3)return item==0;if(tab==4)return item==0||item==1;return 0;
 }
 static void config_select_control(int tab,int item,int x,int y)
@@ -4168,7 +4318,12 @@ static void config_select_control(int tab,int item,int x,int y)
   else if(tab==0&&item==8){for(i=0;i<5;i++)opts[i]=mouse_cursor_names[i];n=5;current=appearance.mouse_cursor;}
   else if(tab==1&&item==0){for(i=0;i<total_colour_schemes();i++)opts[i]=colour_scheme_at(i)->name;n=total_colour_schemes();current=colour_scheme_index();if(current<0)current=0;}
   else if(tab==1){field=config_field(tab,item,&limit);for(i=0;i<=limit;i++)opts[i]=colour_names[i];n=limit+1;current=field?*field:0;}
-  else if(tab==2&&item==0){for(i=0;i<15;i++)opts[i]=screensaver_names[i];n=15;current=screensaver_ui_index(appearance.screensaver);}
+  else if(tab==2&&item==0){for(i=0;i<16;i++)opts[i]=screensaver_names[i];n=16;current=screensaver_ui_index(appearance.screensaver);}
+  else if(tab==2&&appearance.screensaver==YOUR_TEXT_ID){
+    field=config_field(tab,item,&limit);
+    if(item==2){for(i=0;i<16;i++)opts[i]=colour_names[i];n=16;current=saver_text_colour;}
+    if(item==3){for(i=0;i<4;i++)opts[i]=saver_delay_names[i];n=4;current=appearance.saver_delay;}
+  }
   else if(tab==2){field=config_field(tab,item,&limit);if(appearance.screensaver==1&&item==1){for(i=0;i<=limit;i++)opts[i]=colour_names[i];}else{for(i=0;i<=limit;i++)opts[i]=saver_delay_names[i];}n=limit+1;current=field?*field:0;}
   else if(tab==3&&item==0){for(i=0;i<prompt_count;i++)opts[i]=prompt_names[i];n=prompt_count;current=prompt_style;}
   else if(tab==4&&item==1){opts[0]="40 cpl";opts[1]="80 cpl";n=2;current=screen_columns==40?0:1;sy=y+6;}
@@ -4186,7 +4341,7 @@ static void config_select_control(int tab,int item,int x,int y)
   }
   if(tab==0){if(item==5)sy=y+13;else if(item==7){sy=y+9;sx=x+47;}else if(item==8)sy=y+15;}
   else if(tab==1){static const int ry[14]={4,6,7,8,8,9,10,11,12,13,13,14,14,15};static const int rx[14]={25,45,25,25,45,25,25,25,25,25,45,25,45,25};sy=y+ry[item];sx=x+rx[item];}
-  else if(tab==2){sy=y+(item==0?4:(item==1?6:8));}
+  else if(tab==2){sy=y+(appearance.screensaver==YOUR_TEXT_ID?4+item*2:(item==0?4:(item==1?6:8)));}
   if(!n)return;chosen=select_popup(sx,sy,opts,n,current,20);if(chosen==current)return;
   if(tab==1&&item==0){apply_colour_scheme(chosen);return;}if(tab==3&&item==0){prompt_style=chosen;return;}
   if(tab==2&&item==0){appearance.screensaver=screensaver_id_from_ui(chosen);return;}
@@ -4235,14 +4390,50 @@ static int config_reset_box(void)
 
 /* Keep the modal controller out of the 64K default code segment. */
 #pragma code_seg("CFGRUN_TEXT")
+static int config_edit_saver_text(int x,int y,int click_col)
+{
+  char scratch[YOUR_TEXT_MAX+1];int k=0,mx=0,my=0,pos,len;
+  unsigned mb=0;
+  strcpy(scratch,saver_message);len=strlen(scratch);pos=len;
+  if(click_col>=0){
+    int scroll=len>36?len-36:0;
+    pos=scroll+click_col;
+    if(pos>len)pos=len;
+    if(pos<0)pos=0;
+  }
+  for(;;){
+    char line[37];int start=pos>35?pos-35:0;
+    memset(line,' ',36);line[36]=0;
+    memcpy(line,scratch+start,(len-start)>36?36:len-start);
+    textout(x+25,y+6,line,C_SELECTED,36);
+    edit_caret_set(x+25+pos-start,y+6);
+    wait_input(&k,&mx,&my,&mb);
+    if(k==27){edit_caret_hide();return 0;}
+    if(mb)continue; /* The click that focused the field must not close it. */
+    if(k==13||k==9||k==0x0F00){
+      strcpy(saver_message,scratch);edit_caret_hide();
+      return k==9?1:(k==0x0F00?-1:0);
+    }
+    if(k==8 && pos){memmove(scratch+pos-1,scratch+pos,len-pos+1);pos--;len--;}
+    else if(k==0x4B00 && pos)pos--;
+    else if(k==0x4D00 && pos<len)pos++;
+    else if(k==0x5300&&pos<len){memmove(scratch+pos,scratch+pos+1,len-pos);len--;}
+    else if(k==0x4700)pos=0;
+    else if(k==0x4F00)pos=len;
+    else if(k>=32&&k<=126&&len<YOUR_TEXT_MAX){memmove(scratch+pos+1,scratch+pos,len-pos+1);scratch[pos++]=(char)k;len++;}
+  }
+}
+
 static int configure_appearance_wide(void)
 {
-  APPEARANCE original,before_reset;unsigned char original_open_menu;int original_columns=screen_columns,before_columns;int x,y,k=0,mx=0,my=0,tab=0,focus=-1,hover=-1;
+  APPEARANCE original,before_reset;unsigned char original_open_menu;int original_columns=screen_columns,before_columns;
+  char original_saver_message[YOUR_TEXT_MAX+1];
+  unsigned char original_saver_colour=saver_text_colour;int x,y,k=0,mx=0,my=0,tab=0,focus=-1,hover=-1;
   int hit,count,item,redraw=2,reset_choice;unsigned mb=0;
 #ifndef LIGHT86
   font_activation_pending=0;
 #endif
-  original=appearance;original_open_menu=open_menu_at_boot;
+  original=appearance;original_open_menu=open_menu_at_boot;strcpy(original_saver_message,saver_message);
   video_init();if(!save_screen()){puts("Launch!: insufficient memory");return 0;}
   cursor_hide();mouse_present=mouse_start();mouse_stop();
   config_shortcut_changed=0;shortcut_activation_pending=0;shortcut_refresh();
@@ -4262,6 +4453,10 @@ static int configure_appearance_wide(void)
       if(hit>=0&&hit<CONFIG_TAB_COUNT){tab=hit;focus=hit;hover=-1;redraw=2;continue;}
       if(hit>=CONFIG_CONTROL_BASE&&hit<20){
         focus=hit;item=hit-CONFIG_CONTROL_BASE;
+        if(tab==2&&appearance.screensaver==YOUR_TEXT_ID&&item==1){{int advance=config_edit_saver_text(x,y,mx-(x+25));
+          if(advance>0)focus=CONFIG_CONTROL_BASE+2;
+          else if(advance<0)focus=CONFIG_CONTROL_BASE;
+          redraw=2;continue;}}
         if(config_is_select(tab,item)){config_select_control(tab,item,x,y);redraw=2;continue;}
         if(tab==SHORTCUT_TAB&&item==0){
           shortcut_enabled=!shortcut_enabled;config_shortcut_changed=1;
@@ -4275,8 +4470,9 @@ static int configure_appearance_wide(void)
         } else if(tab==SHORTCUT_TAB&&item==2){
           if(config_shortcut_active)shortcut_unload();shortcut_target_light=!shortcut_target_light;config_shortcut_changed=1;if(shortcut_enabled)shortcut_activation_pending=1;
         } else if(tab==2&&((appearance.screensaver==1&&item==3) ||
-                           (appearance.screensaver!=1&&item==2))){
-          press_button(x+25,appearance.screensaver==1?y+10:y+8,"  Preview  ",11);
+                           (appearance.screensaver==YOUR_TEXT_ID&&item==4) ||
+                           (appearance.screensaver!=1&&appearance.screensaver!=YOUR_TEXT_ID&&item==2))){
+          press_button(x+25,appearance.screensaver==YOUR_TEXT_ID?y+12:(appearance.screensaver==1?y+10:y+8),"  Preview  ",11);
           run_screensaver();
         } else if(tab==3&&item==0){prompt_style=prompt_next_style(prompt_style,1);
         } else if(tab==3&&item==1){
@@ -4310,6 +4506,7 @@ static int configure_appearance_wide(void)
         notice_box("Write Error","Could not save the configuration.");redraw=2;continue;
       }
       if(hit==21){TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(bcancel.x,y+17,"  Cancel  ",bcancel.w);mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;screen_columns=original_columns;
+        strcpy(saver_message,original_saver_message);saver_text_colour=original_saver_colour;
 #ifndef LIGHT86
       font_restore();
 #endif
@@ -4319,6 +4516,7 @@ static int configure_appearance_wide(void)
         {TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(breset.x,y+17,"  Reset  ",breset.w);}reset_choice=config_reset_box();
         if(reset_choice==1||reset_choice==3){
           {char before_title[SUITE_TITLE_MAX];strcpy(before_title,suite_title);before_reset=appearance;before_columns=screen_columns;mouse_pointer_restore();appearance=default_appearance;screen_columns=80;strcpy(suite_title,"Launch!");
+          strcpy(saver_message,"Welcome to Launch!");saver_text_colour=15;
           if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;original_columns=screen_columns;sync_startup_services();mouse_pointer_install();}
           else {appearance=before_reset;screen_columns=before_columns;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
         }
@@ -4331,7 +4529,8 @@ static int configure_appearance_wide(void)
       if(hit==23){TOOLBAR_RECT bok,bcancel,breset,bhelp;config_toolbar_geometry(x,&bok,&bcancel,&breset,&bhelp);press_button(bhelp.x,y+17,"  ?  ",bhelp.w);config_about_box();redraw=2;continue;}
       continue;
     }
-    if(k==27){mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;screen_columns=original_columns;
+    if(k==27||k==17||k==0x6B00){mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;screen_columns=original_columns;
+        strcpy(saver_message,original_saver_message);saver_text_colour=original_saver_colour;
 #ifndef LIGHT86
       font_restore();
 #endif
@@ -4382,6 +4581,10 @@ static int configure_appearance_wide(void)
     }
     if(focus<20){
       item=focus-CONFIG_CONTROL_BASE;
+      if(tab==2&&appearance.screensaver==YOUR_TEXT_ID&&item==1&&(k==13||k==' ')){{int advance=config_edit_saver_text(x,y,-1);
+          if(advance>0)focus=CONFIG_CONTROL_BASE+2;
+          else if(advance<0)focus=CONFIG_CONTROL_BASE;
+          redraw=2;continue;}}
       if(config_is_select(tab,item)&&(k==13||k==' ')){config_select_control(tab,item,x,y);redraw=2;continue;}
       if(tab==SHORTCUT_TAB&&item==0){
         if(k==13||k==' '){
@@ -4399,7 +4602,8 @@ static int configure_appearance_wide(void)
       } else if(tab==SHORTCUT_TAB&&item==2){
         if(k==0x4B00||k==0x4D00||k==' '||k==13){if(config_shortcut_active)shortcut_unload();shortcut_target_light=!shortcut_target_light;config_shortcut_changed=1;if(shortcut_enabled)shortcut_activation_pending=1;redraw=2;}
       } else if(tab==2&&((appearance.screensaver==1&&item==3) ||
-                         (appearance.screensaver!=1&&item==2))){
+                         (appearance.screensaver==YOUR_TEXT_ID&&item==4) ||
+                         (appearance.screensaver!=1&&appearance.screensaver!=YOUR_TEXT_ID&&item==2))){
         if(k==13||k==' '){run_screensaver();redraw=2;}
       } else if(tab==3&&item==0&&(k==0x4B00||k==0x4D00||k==' ')){prompt_style=prompt_next_style(prompt_style,k==0x4B00?-1:1);redraw=2;
       } else if(tab==3&&item==1&&(k==13||k==' ')){
@@ -4429,6 +4633,7 @@ static int configure_appearance_wide(void)
         mouse_pointer_install();
       notice_box("Write Error","Could not save the configuration.");redraw=2;
     } else if((k==13||k==' ')&&focus==21){mouse_pointer_restore();appearance=original;open_menu_at_boot=original_open_menu;screen_columns=original_columns;
+        strcpy(saver_message,original_saver_message);saver_text_colour=original_saver_colour;
 #ifndef LIGHT86
       font_restore();
 #endif
@@ -4438,6 +4643,7 @@ static int configure_appearance_wide(void)
       reset_choice=config_reset_box();
       if(reset_choice==1||reset_choice==3){
         {char before_title[SUITE_TITLE_MAX];strcpy(before_title,suite_title);before_reset=appearance;before_columns=screen_columns;mouse_pointer_restore();appearance=default_appearance;screen_columns=80;strcpy(suite_title,"Launch!");
+          strcpy(saver_message,"Welcome to Launch!");saver_text_colour=15;
         if(font_commit(appearance.font_id)&&save_appearance()){original=appearance;original_columns=screen_columns;sync_startup_services();mouse_pointer_install();}
         else {appearance=before_reset;screen_columns=before_columns;strcpy(suite_title,before_title);font_commit(appearance.font_id);mouse_pointer_install();notice_box("Reset Error","Could not reset the configuration.");reset_ok=0;}}
       }
@@ -8010,7 +8216,7 @@ int main(int argc,char **argv)
     else if(!strnicmp(argv[i],"/PREVIEWSAVER=",14)){
       char *comma=strchr(argv[i]+14,',');preview_saver=atoi(argv[i]+14);
       if(comma)preview_color=atoi(comma+1);
-      if(preview_saver<1||preview_saver>14){puts("Launch!: invalid saver preview request.");return 1;}
+      if(preview_saver<1||preview_saver>15){puts("Launch!: invalid saver preview request.");return 1;}
       now_mode=1;
     }
     else if(!stricmp(argv[i],"/INITMENU"))initmenu_mode=1;
@@ -8096,7 +8302,24 @@ int main(int argc,char **argv)
     return 0;
   }
   if(now_mode){
-    if(preview_saver>0){appearance.screensaver=(unsigned char)preview_saver;if(preview_color>=0&&preview_color<=15)appearance.saver_color=(unsigned char)preview_color;}
+    if(preview_saver>0){
+      appearance.screensaver=(unsigned char)preview_saver;
+      if(preview_color>=0&&preview_color<=15)appearance.saver_color=(unsigned char)preview_color;
+      if(preview_saver==YOUR_TEXT_ID){
+        char path[MAX_CMD],line[YOUR_TEXT_MAX+8];FILE *f;
+        strcpy(path,program_dir);strcat(path,"SAVPRE.$$$");
+        f=fopen(path,"rt");
+        if(f){
+          if(fgets(line,sizeof(line),f)){int n=atoi(line);if(n>=0&&n<=15)saver_text_colour=(unsigned char)n;}
+          if(fgets(line,sizeof(line),f)){/* legacy size line, now fixed at 74 pixels */}
+          if(fgets(line,sizeof(line),f)){
+            size_t n=strlen(line);while(n&&(line[n-1]=='\n'||line[n-1]=='\r'))line[--n]=0;
+            strncpy(saver_message,line,YOUR_TEXT_MAX);saver_message[YOUR_TEXT_MAX]=0;
+          }
+          fclose(f);remove(path);
+        }
+      }
+    }
     video_init();if(!save_screen()){puts("Launch!: insufficient memory");return 1;}
     cursor_hide();mouse_present=mouse_start();run_screensaver();close_menu();return 0;
   }

@@ -498,6 +498,43 @@ static int write_initial_font_cache(const char *install,int vga_display,int font
   if(fwrite("Launch!",1,8,out)!=8){fclose(in);fclose(out);remove(dst);return 0;}
   fclose(in);if(fclose(out)!=0){remove(dst);return 0;}return 1;
 }
+/* Refresh a font-service cache after replacing the catalogue on upgrade.
+   The installed !FONT.COM reads FONT.CUR rather than FONT.DAT, so without
+   refreshing this cache the previous bitmap survives subsequent boots. */
+static int refresh_installed_font_cache(const char *install,int vga_display)
+{
+  char cache[PATH_SIZE],temp[PATH_SIZE],dat[PATH_SIZE];
+  unsigned char header[12],tail[64];
+  unsigned font_size=vga_display?4096:3584,used=0,want,n;
+  FILE *old,*in,*out;
+  sprintf(cache,"%s\\FONT.CUR",install);
+  old=fopen(cache,"rb");if(!old)return 1; /* No existing service cache. */
+  if(fread(header,1,12,old)!=12 || memcmp(header,"LFCUR100",8) ||
+     header[8]!=(vga_display?16:14) ||
+     (unsigned)(header[10]|((unsigned)header[11]<<8))!=font_size ||
+     header[9]<1){fclose(old);return 1;}
+  sprintf(dat,"%s\\%s",install,vga_display?"FONT.DAT":"FONT14.DAT");
+  in=fopen(dat,"rb");if(!in){fclose(old);return 0;}
+  if(fseek(in,((long)header[9]-1)*font_size,SEEK_SET)!=0){fclose(in);fclose(old);return 0;}
+  /* Keep the original name / trailing metadata unchanged. */
+  if(fseek(old,12L+font_size,SEEK_SET)!=0){fclose(in);fclose(old);return 0;}
+  n=(unsigned)fread(tail,1,sizeof(tail),old);fclose(old);
+  sprintf(temp,"%s\\FONT.$$$",install);
+  out=fopen(temp,"wb");if(!out){fclose(in);return 0;}
+  if(fwrite(header,1,12,out)!=12)goto bad_cache;
+  while(used<font_size){
+    want=font_size-used;if(want>sizeof(copy_buffer))want=sizeof(copy_buffer);
+    if(fread(copy_buffer,1,want,in)!=want || fwrite(copy_buffer,1,want,out)!=want)goto bad_cache;
+    used+=want;
+  }
+  if(n&&fwrite(tail,1,n,out)!=n)goto bad_cache;
+  fclose(in);if(fclose(out)!=0){remove(temp);return 0;}
+  if(remove(cache)!=0 || rename(temp,cache)!=0){remove(temp);return 0;}
+  return 1;
+bad_cache:
+  fclose(in);fclose(out);remove(temp);return 0;
+}
+
 static int hardware_warning(void){char answer[16];error_icon(0);fputs("This system's hardware doesn't meet minimum recommended requirements. Proceed ",stdout);choice_default(0);if(!fgets(answer,sizeof(answer),stdin))return 0;return toupper(answer[0])=='Y';}
 
 static unsigned char far *bios_byte(unsigned offset)
@@ -1548,6 +1585,7 @@ int main(int argc,char **argv)
   /* A machine gets exactly one built-in font catalogue.  Also remove an
      opposite-format catalogue left behind by an earlier installation. */
   if(fonts){if(vga_display)remove_named(install,"FONT14.DAT");else remove_named(install,"FONT.DAT");}
+  if(upgrade&&fonts&&display_ok&&!refresh_installed_font_cache(install,vga_display)){error_icon(0);puts("Font catalogue copied, but existing FONT.CUR could not be refreshed.");return 1;}
   if(!upgrade&&!write_initial_font_config(install,(fonts&&display_ok)?6:0)){error_icon(0);puts("Files were copied, but the initial font configuration could not be created.");return 1;}
   if(!upgrade&&fonts&&display_ok&&!write_initial_font_cache(install,vga_display,6)){error_icon(0);puts("Files were copied, but the initial Launch! font cache could not be created.");return 1;}
   if(!apply_component_config(install,screensavers,fonts,shortcut_key)){

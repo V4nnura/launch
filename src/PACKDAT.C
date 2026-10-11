@@ -34,7 +34,7 @@ Launch! for DOS ---------------------
    archive until it is ready for the planned second Windows disk. */
 static const char *files[]={
   "!.EXE","!86.EXE","!CONFIG.EXE","!KEY.COM","!KEYDB.COM","!KEY286.COM","!TKEY.COM","!TKEYDB.COM","!TKEY286.COM","!MNUGEN.EXE","AUTOGEN.DAT",
-  "PWROFF.BMP","LAUNCH.OVL","FONT.DAT","FONT14.DAT","!FONT.COM","PROMPTS.CFG","COLORS.CFG","README.MD","MENU.MD","WININT.MD","ACCESS.MD","GAMES.MD","TSHOOT.MD","CAL.ICS","!CAL.EXE",
+  "PWROFF.BMP","LAUNCH.OVL","SAV74.DAT","FONT.DAT","FONT14.DAT","!FONT.COM","PROMPTS.CFG","COLORS.CFG","README.MD","MENU.MD","WININT.MD","ACCESS.MD","GAMES.MD","TSHOOT.MD","CAL.ICS","!CAL.EXE",
   "!CALC.EXE","!UNITS.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE","!MDVIEW.EXE","!NOTE.EXE","!SYSEDIT.EXE","!STACK.EXE",
   "!DFETCH.EXE","!TODOS.EXE","!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL",
   "!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE",
@@ -174,10 +174,84 @@ static int compress_file(FILE *in,FILE *out,unsigned long *usize,unsigned long *
   *usize=pos;*csize=(unsigned long)ftell(out)-start;return !ferror(in)&&!ferror(out);
 }
 
+/* Built-in font ID 0 is the ROM Standard face and has no FONT.DAT block.
+   Built-in ID 36 (Tektite) is therefore block 35, at (36-1)*4096.
+   Always rebuild FONT.DAT from the corrected resource and verify the same
+   offset as font_read_vga() in LAUNCH.C.  Eliminate stale extra blocks. */
+#define TEKTITE_ID 36
+#define VGA_FONT_BYTES 4096U
+#define TEKTITE_OFFSET ((long)(TEKTITE_ID-1)*4096L)
+#define VGA_CATALOG_BYTES ((long)TEKTITE_ID*4096L)
+static int refresh_tektite(void)
+{
+  FILE *source,*catalog,*temp;
+  unsigned char bytes[256],original[256];
+  unsigned remaining,chunk,i;
+  long len;
+  source=fopen("res\\TEKTITE.FNT","rb");
+  if(!source){puts("PACKDAT: missing res\\TEKTITE.FNT");return 0;}
+  if(fseek(source,0L,SEEK_END)!=0 || ftell(source)!=4096L ||
+     fseek(source,0L,SEEK_SET)!=0){
+    puts("PACKDAT: Tektite must be exactly 4096 bytes");fclose(source);return 0;
+  }
+  catalog=fopen("FONT.DAT","rb");
+  if(!catalog){fclose(source);puts("PACKDAT: missing FONT.DAT");return 0;}
+  if(fseek(catalog,0L,SEEK_END)!=0){fclose(source);fclose(catalog);return 0;}
+  len=ftell(catalog);
+  /* Allow a catalogue from TC22-TC26, but discard its erroneous extra block. */
+  if(len!=VGA_CATALOG_BYTES && len!=VGA_CATALOG_BYTES+4096L){
+    printf("PACKDAT: unexpected FONT.DAT size %ld\n",len);
+    fclose(source);fclose(catalog);return 0;
+  }
+  rewind(catalog);
+  temp=fopen("FONT.$$$","w+b");
+  if(!temp){fclose(source);fclose(catalog);return 0;}
+  remaining=(unsigned)(TEKTITE_OFFSET/4096L);
+  /* Copy original fonts ID 1..35 exactly, without reordering their IDs. */
+  for(i=0;i<remaining;i++){
+    unsigned left=4096U;
+    while(left){
+      chunk=left>sizeof(bytes)?sizeof(bytes):left;
+      if(fread(bytes,1,chunk,catalog)!=chunk || fwrite(bytes,1,chunk,temp)!=chunk)
+        goto failed;
+      left-=chunk;
+    }
+  }
+  remaining=4096U;
+  while(remaining){
+    chunk=remaining>sizeof(bytes)?sizeof(bytes):remaining;
+    if(fread(bytes,1,chunk,source)!=chunk || fwrite(bytes,1,chunk,temp)!=chunk)
+      goto failed;
+    remaining-=chunk;
+  }
+  if(fflush(temp)!=0 || fseek(temp,0L,SEEK_END)!=0 || ftell(temp)!=VGA_CATALOG_BYTES ||
+     fseek(temp,TEKTITE_OFFSET,SEEK_SET)!=0 || fseek(source,0L,SEEK_SET)!=0)
+    goto failed;
+  remaining=4096U;
+  while(remaining){
+    chunk=remaining>sizeof(bytes)?sizeof(bytes):remaining;
+    if(fread(bytes,1,chunk,source)!=chunk || fread(original,1,chunk,temp)!=chunk)
+      goto failed;
+    for(i=0;i<chunk;i++)if(bytes[i]!=original[i])goto failed;
+    remaining-=chunk;
+  }
+  fclose(source);fclose(catalog);fclose(temp);
+  if(remove("FONT.DAT")!=0 || rename("FONT.$$$","FONT.DAT")!=0){
+    puts("PACKDAT: could not replace FONT.DAT");return 0;
+  }
+  puts("PACKDAT: verified Tektite ID 36 at offset 143360");
+  return 1;
+failed:
+  fclose(source);fclose(catalog);fclose(temp);remove("FONT.$$$");
+  puts("PACKDAT: failed to rebuild and verify FONT.DAT");
+  return 0;
+}
+
 int main(void)
 {
   FILE *in,*out;char name[13],source[64];unsigned long data_start,total_raw=0,total_cmp=0;
   int i,base_count=0,count,ok=1;
+  if(!refresh_tektite())return 1;
   while(files[base_count])base_count++;
   collect_samples();
   count=base_count+sample_count;
