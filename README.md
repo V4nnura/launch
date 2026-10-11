@@ -36,7 +36,7 @@
 - Integrated [file searching](https://github.com/therenegar/launch/wiki/File-Open#file-search) including "Go Deep" mode for searching file contents as well.
 - Built in [Power Off/Reboot control](https://github.com/therenegar/launch/wiki/Shutdown) with Windows 95 power off vibes.
 - Handy and modern text-mode [accessories](https://github.com/therenegar/launch/wiki/Accessories)
-    - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MD.EXE) - and [Viewer](https://github.com/therenegar/launch/wiki/!MDVIEW.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE), [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE) and [Units](https://github.com/therenegar/launch/wiki/!UNITS.EXE). 
+    - [Calendar](https://github.com/therenegar/launch/wiki/!CAL.EXE), [Calculator](https://github.com/therenegar/launch/wiki/!CALC.EXE), [Card Stack](https://github.com/therenegar/launch/wiki/!STACK.EXE), [DOS Fetch](https://github.com/therenegar/launch/wiki/!DFETCH.EXE), [Journal](https://github.com/therenegar/launch/wiki/!JOURNAL.EXE), [Markdown](https://github.com/therenegar/launch/wiki/!MD.EXE) - and [Viewer](https://github.com/therenegar/launch/wiki/!MDVIEW.EXE), [Note](https://github.com/therenegar/launch/wiki/!NOTE.EXE), [Pixel Draw](https://github.com/therenegar/launch/wiki/!DRAW.EXE), [SysEdit](https://github.com/therenegar/launch/wiki/!SYSEDIT.EXE), [To-dos](https://github.com/therenegar/launch/wiki/!TODOS.EXE) and [Units](https://github.com/therenegar/launch/wiki/!UNITS.EXE). 
 - Fun and addictive text-mode [games](https://github.com/therenegar/launch/wiki/Games)
     - [Boxes](https://github.com/therenegar/launch/wiki/!BOXES.EXE), [Jell-Oh](https://github.com/therenegar/launch/wiki/!JELLOH.EXE), [Metro](https://github.com/therenegar/launch/wiki/!METRO.EXE), [Pop](https://github.com/therenegar/launch/wiki/!POP.EXE), [Snake](https://github.com/therenegar/launch/wiki/!SNAKE.EXE), [Solitaire](https://github.com/therenegar/launch/wiki/!SOL.EXE), [FreeCell](https://github.com/therenegar/launch/wiki/!FCELL.EXE), [Plumb](https://github.com/therenegar/launch/wiki/!PLUMB.EXE), [Typo](https://github.com/therenegar/launch/wiki/!TYPO.EXE) and [Wordz](https://github.com/therenegar/launch/wiki/!WORDZ.EXE)
 - Awesome [screensavers](https://github.com/therenegar/launch/wiki/Screen-Savers) including a 7-segment digital clock, starry night skyline, bouncing DOS logo, disk defrag simulation, 3D pipes, bouncing 3D ball, paintball, and more!
@@ -125,15 +125,15 @@ Handy accessories with a goal of turning an old DOS PC into something useful in 
 
 <img width="360" height="300" alt="Calendar" src="https://github.com/user-attachments/assets/44aa11dc-9af2-46aa-bac9-14bcf57163fe" />
 <img width="360" height="300" alt="Calculator" src="https://github.com/user-attachments/assets/c95a3cb5-7456-443b-830c-73fce099fdcb" />
-<img width="360" height="300" alt="DOS Fetch" src="https://github.com/user-attachments/assets/c24803c7-7576-4ece-8b02-01ae1d9753ec" />
+<img width="360" height="300" alt="DOS Fetch" src="https://github.com/user-attachments/assets/2b0589d9-9403-4aa3-9364-ac82a1c59858" />
 <img width="360" height="300" alt="Draw" src="https://github.com/user-attachments/assets/941d84df-a3fa-4343-a352-08eecfa3ed2c" />
 <img width="360" height="300" alt="Journal" src="https://github.com/user-attachments/assets/f0cc9962-3a04-4ca6-921f-d532f852885b" />
 <img width="360" height="300" alt="Markdown" src="https://github.com/user-attachments/assets/9f33f588-e579-402e-97ba-f2cb8913b419" />
 <img width="360" height="300" alt="Note" src="https://github.com/user-attachments/assets/65e8f34e-61c6-40fa-b2ac-785ef5c9f051" />
 <img width="360" height="300" alt="Stack" src="https://github.com/user-attachments/assets/68e552a4-64e0-437b-87d1-fa925981558f" />
+<img width="360" height="300" alt="SysEdit" src="https://github.com/user-attachments/assets/a2ed502b-d3a5-4998-abfe-b167fdcbc56f" />
 <img width="360" height="300" alt="To-Dos" src="https://github.com/user-attachments/assets/57d01ded-0614-4e03-a4f4-548213b7edab" />
-<img width="360" height="300" alt="Units" src="https://github.com/user-attachments/assets/840f362c-4a89-4da7-aa0e-2d19b4946ab5" />
-
+<img width="360" height="300" alt="Units" src="https://github.com/user-attachments/assets/b1acc3cb-a441-4bb1-8122-8122ad5b3184" />
 
 ----
 
