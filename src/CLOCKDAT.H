@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: CLOCKDAT.H
  * Role: Clock/status bitmap/resource data
  * Build/ownership: Consumed by Core.

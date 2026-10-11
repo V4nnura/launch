@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: INSTALL.C
  * Role: Canonical installer source
  * Build/ownership: Authoritative installer source; GENBUILD produces INSTBLD.C.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.79 installer - Microsoft C/C++ 7.0, DOS small model. */
+/* Launch! 3.8 installer - Microsoft C/C++ 7.0, DOS small model. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -932,7 +932,7 @@ static int component_member(const char *name,int component)
 {
   static const char *accessories[]={
     "CAL.ICS","!CAL.EXE","!CALC.EXE","!UNITS.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE",
-    "!NOTE.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
+    "!NOTE.EXE","!SYSEDIT.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
   static const char *games[]={
     "!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE",
     "!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLOH.LVL",0};
@@ -952,7 +952,7 @@ static int write_help_batch(const char *install)
 {
   char p[PATH_SIZE];FILE *f;
   sprintf(p,"%s\\!HELP.BAT",install);f=fopen(p,"w");if(!f)return 0;
-  fprintf(f,"@ECHO OFF\n%s\\!MDVIEW /HELP %s\\HELP\\README.MD\n",install,install);
+  fprintf(f,"@ECHO OFF\n%s\\!MD /VIEW /HELP %s\\HELP\\README.MD\n",install,install);
   return fclose(f)==0;
 }
 
@@ -973,13 +973,14 @@ static void remove_sample_documents(const char *install)
 
 static void remove_unselected_components(const char *install,int accessories,int games,int fonts,int menu_generator,int shortcut_key,int sample_docs,int vga_display)
 {
-  static const char *acc[]={"CAL.ICS","!CAL.EXE","!CALC.EXE","!UNITS.EXE","!DRAW.EXE","!JOURNAL.EXE","!MD.EXE","!NOTE.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
+  static const char *acc[]={"CAL.ICS","!CAL.EXE","!CALC.EXE","!UNITS.EXE","!DRAW.EXE","!JOURNAL.EXE","!NOTE.EXE","!SYSEDIT.EXE","!STACK.EXE","!DFETCH.EXE","!TODOS.EXE",0};
   static const char *gm[]={"!TYPO.EXE","TYPO.LVL","!BOXES.EXE","BOXES.LVL","!FCELL.EXE","!PLUMB.EXE","!POP.EXE","!SNAKE.EXE","!SOL.EXE","!WORDZ.EXE","WORDZ.LVL","!METRO.EXE","!JELLOH.EXE","JELLOH.LVL",0};
   int i;
   if(!accessories)for(i=0;acc[i];i++)remove_named(install,acc[i]);
+  if(!accessories&&!sample_docs)remove_named(install,"!MD.EXE");
   if(!games)for(i=0;gm[i];i++)remove_named(install,gm[i]);
   if(!sample_docs)remove_sample_documents(install);
-  if(!accessories&&!sample_docs)remove_named(install,"!MDVIEW.EXE");
+  if(!accessories)remove_named(install,"!MDVIEW.EXE");
   if(!fonts)remove_named(install,"!FONT.COM");
   if(!fonts&&!accessories&&!sample_docs){remove_named(install,"FONT.DAT");remove_named(install,"FONT14.DAT");}
   else if(vga_display)remove_named(install,"FONT14.DAT");else remove_named(install,"FONT.DAT");
@@ -999,11 +1000,13 @@ static int selected_member(const char *name,int shortcut_build,int accessories,
 {
   *dest_name=name;
   if(!stricmp(name,"!.EXE")||!stricmp(name,"!86.EXE")||!stricmp(name,"!CONFIG.EXE")||!stricmp(name,"PROMPTS.CFG")||!stricmp(name,"COLORS.CFG")||!stricmp(name,"PWROFF.BMP"))return 1;
-  /* Help rides with component 7.  The read-only Markdown viewer is shared by
-     Help and Accessories, so a minimal install that excludes both gets neither
-     the viewer nor its font catalogue dependency. */
+  /* The core and !CONFIG now read the common Launch! UI glyph resource too. */
+  if(!stricmp(name,"LAUNCH.OVL"))return 1;
+  /* Help rides with component 7.  It invokes the single Markdown viewer implementation
+     in !MD /VIEW; !MDVIEW is now only a tiny convenience alias for Accessories. */
   if(sample_docs&&is_help_document(name))return 1;
-  if((accessories||sample_docs)&&!stricmp(name,"!MDVIEW.EXE"))return 1;
+  if(sample_docs&&!stricmp(name,"!MD.EXE"))return 1;
+  if(accessories&&!stricmp(name,"!MDVIEW.EXE"))return 1;
   /* Windows integration is optional.  A DOS-only install does not extract
      the Win16 companion, icons or Program Manager group template. */
   if(windows_integration&&(!stricmp(name,"!W30.EXE")||!stricmp(name,"!W31.EXE")||!stricmp(name,"LAUNCH.GRP")))return 1;
@@ -1203,7 +1206,7 @@ static unsigned grp_map_offset(unsigned oldoff,const unsigned *pos,const int *de
 
 /* Install the real Program Manager group supplied with Launch!.
    LAUNCH.GRP is now the clean four-icon Windows 3.1 template supplied for
-   Release 3.79.  Its visual coordinates are preserved exactly.  The item
+   Release 3.8.  Its visual coordinates are preserved exactly.  The item
    directory in a GRP file is not necessarily stored in screen order, so find
    each item by title rather than assuming fixed record positions.  We then
    normalize the logical order to DOS, Configuration, Launch! 16, Menu Manager
@@ -1430,7 +1433,7 @@ int main(int argc,char **argv)
   (void)argc;
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.79 Installation");
+  colour_text("Launch!",12);puts(" 3.8 Installation");
   installer_title_rule();
   puts("");
   cpu_ok=cpu_at_least_286();display_name=display_adapter(&display_ok);vga_display=!strncmp(display_name,"VGA",3);if((!cpu_ok||!display_ok)&&!hardware_warning())return 1;
@@ -1515,12 +1518,12 @@ int main(int argc,char **argv)
       error_icon(0);printf("%s does not appear to contain Windows 3.x (WIN.COM/PROGMAN.EXE not found).\n",win_path);
     }
     win_version=detect_windows_version(win_path);
-    /* Release 3.79 keeps !W30.EXE out of the first-floppy distribution while
+    /* Release 3.8 keeps !W30.EXE out of the first-floppy distribution while
        Windows 3.0 support remains under development.  Do not register a
        missing companion, WIN.INI load= entry, or Program Manager group. */
     if(win_version<31){
       puts("");
-      info_icon(0);puts("Windows 3.0 integration is not included in Release 3.79.");
+      info_icon(0);puts("Windows 3.0 integration is not included in Release 3.8.");
       puts("DOS installation will continue without Windows integration.");
       win_inst=0;
     }
@@ -1528,7 +1531,7 @@ int main(int argc,char **argv)
 
   installer_clear_screen();
   puts("\n");
-  colour_text("Launch!",12);puts(" 3.79 Installation");
+  colour_text("Launch!",12);puts(" 3.8 Installation");
   installer_title_rule();
   puts("\n Please wait while files are extracted and copied...");fflush(stdout);
   source_directory(argv[0],source_dir);sprintf(archive,"%sINSTALL.DAT",source_dir);

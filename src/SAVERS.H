@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: SAVERS.H
  * Role: Screensaver interface
  * Build/ownership: Consumed by Core.

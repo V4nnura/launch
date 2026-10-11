@@ -4,7 +4,7 @@
 #  / /___/ /_/ / /_/ / / / /__/ / / /_/  
 # /_____/\__,_/\__,_/_/ /_/\___/_/ /_(_)   
 # Launch! for DOS ---------------------
-# MAINTAINER NOTES - Launch! 3.73
+# MAINTAINER NOTES - Launch! 3.8
 # File: MAKEGLYP.PY
 # Role: Maintainer glyph-data generation helper
 # Build/ownership: Host-side utility, not part of DOS runtime.

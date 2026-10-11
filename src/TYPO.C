@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: TYPO.C
  * Role: !TYPO typing/word game
  * Build/ownership: Loads TYPO*.LVL packs.

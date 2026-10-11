@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: SYSBAR.C
  * Role: !SYSBAR modular system-bar accessory
  * Build/ownership: Discovers APPDATA\*.SBM packages, captures module stdout and composes the SysBar. /CONFIG manages installed module order.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* !SYSBAR - Launch! SysBar accessory / module host, Release 3.73. */
+/* !SYSBAR - Launch! SysBar accessory / module host, Release 3.8. */
 #include <dos.h>
 #include <stdio.h>
 #include <stdlib.h>

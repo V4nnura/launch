@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: GENBUILD.C
  * Role: Maintainer build-source generator
  * Build/ownership: Used by REGEN.BAT, not normal BUILD.BAT.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.72 build-time source generator.
+/* Launch! 3.8 build-time source generator.
    Keeps the large Release 3.72 canonical sources while generating Release 3.72
    build intermediates for core/installer changes and intelligent editor word
    wrapping.  Generated files are build intermediates, not distribution files.
@@ -266,5 +266,5 @@ int main(void)
      !copy_generated_source("STACK.C","STACKBLD.C")||
      !copy_generated_source("POP.C","POPBLD.C")||
      !copy_generated_source("METRO.C","METROBLD.C"))return 1;
-  puts("Generated Launch! 3.79 Core, Installer, Journal, Note, Stack, Pop and Metro build sources.");return 0;
+  puts("Generated Launch! 3.8 Core, Installer, Journal, Note, Stack, Pop and Metro build sources.");return 0;
 }

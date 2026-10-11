@@ -5,7 +5,7 @@
 # /_____/\__,_/\__,_/_/ /_/\___/_/ /_(_)   
 # Launch! for DOS ---------------------
 /*
- * MAINTAINER NOTES - Launch! 3.73
+ * MAINTAINER NOTES - Launch! 3.8
  * File: !KEY.ASM
  * Role: !KEY.COM hotkey TSR
  * Build/ownership: Primary keyboard shortcut TSR for supported DOS systems.

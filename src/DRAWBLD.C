@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: DRAW.C
  * Role: !DRAW 16-color bitmap/pixel editor
  * Build/ownership: Canonical Draw source; build copy is DRAWBLD.C.

@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: MKDOWN.C
  * Role: !MD Markdown editor and shared !MDVIEW renderer
  * Build/ownership: Standalone accessory using ACCLIB and MDFONTS.
@@ -17,7 +17,7 @@ Launch! for DOS ---------------------
  */
 /* Launch! Markdown - persistent Markdown editor, live text preview, VGA page
    renderer and formatted Epson-compatible printing.  The same source is built
-   with MDVIEW_BUILD for the standalone read-only !MDVIEW renderer.
+   !MDVIEW is now a tiny compatibility alias that invokes !MD /VIEW.
    Microsoft C/C++ 7.0. */
 #include <stdio.h>
 #include <string.h>
@@ -494,6 +494,7 @@ static const MDCOLOR md_colours[7]={
  {15,3,1}    /* /HELP: Bright White on Cyan; Blue links */
 };
 static int graph_colour_scheme=0,graph_colour_locked=0;
+static int md_viewer_mode=0;
 static int focus_colour_scheme=3;
 static int graph_fg(void){return md_colours[graph_colour_scheme].fg;}
 static int graph_bg(void){return md_colours[graph_colour_scheme].bg;}
@@ -509,13 +510,7 @@ static int md_link_is_web(const char *t)
 static int md_link_is_markdown(const char *t)
 {char b[ACC_PATH],*hash,*dot,*slash,*other;int n;if(!t||!*t||md_link_is_web(t))return 0;strncpy(b,t,ACC_PATH-1);b[ACC_PATH-1]=0;hash=strchr(b,'#');if(hash)*hash=0;n=(int)strlen(b);while(n&&isspace((unsigned char)b[n-1]))b[--n]=0;if(!n)return 0;slash=strrchr(b,'\\');other=strrchr(b,'/');if(other&&(!slash||other>slash))slash=other;dot=strrchr(b,'.');return dot&&(!slash||dot>slash)&&!stricmp(dot,".MD");}
 static int graph_link_supported(const char *t)
-{if(!t||!*t)return 0;if(*t=='#')return 1;
-#ifdef MDVIEW_BUILD
- return md_link_is_markdown(t);
-#else
- return 0;
-#endif
-}
+{if(!t||!*t)return 0;if(*t=='#')return 1;return md_viewer_mode&&md_link_is_markdown(t);}
 static void graph_link_add(int x0,int y0,int x1,int y1,const char*t){int n;if(!graph_links||graph_link_count>=GLINK_MAX||!graph_link_supported(t))return;n=(int)strlen(t);if(n>=ACC_PATH)n=ACC_PATH-1;graph_links[graph_link_count].x0=x0;graph_links[graph_link_count].y0=y0;graph_links[graph_link_count].x1=x1;graph_links[graph_link_count].y1=y1;_fmemcpy(graph_links[graph_link_count].target,t,n);graph_links[graph_link_count].target[n]=0;graph_link_count++;}
 static void md_slug(const char*s,char*out,int max){int i=0,o=0,dash=0;while(s[i]&&o<max-1){unsigned char c=(unsigned char)s[i++];if(isalnum(c)){out[o++]=(char)tolower(c);dash=0;}else if((c==' '||c=='-'||c=='_')&&o&&!dash){out[o++]='-';dash=1;}}while(o&&out[o-1]=='-')o--;out[o]=0;}
 static int graph_find_anchor(int p,const char*target){int r,n,i,h;char b[DOC_COLS+1],slug[64];const char*t=target&&*target=='#'?target+1:target;if(!t||!*t)return -1;for(r=0;r<LINES;r++){md_line(p,r,b,&n);i=md_lead(b,n);h=0;if(i<n&&b[i]=='#'){while(i<n&&b[i]=='#'&&h<6){h++;i++;}while(i<n&&b[i]==' ')i++;md_slug(b+i,slug,sizeof(slug));if(!stricmp(slug,t))return r;}}return -1;}
@@ -681,14 +676,12 @@ static void graph_render(int p,int first)
 {int row,ypos=GP_T+12,last=first+23,fence=code_fence_before(p,first),fk,endrow=graph_last_row(p);if(last>LINES)last=LINES;graph_link_count=0;graph_page();for(row=first;row<last&&ypos<GP_B-14;row++){fk=line_fence_kind(p,row);if(fk){if(!fence)fence=fk;else if(fence==fk)fence=0;ypos+=3;continue;}ypos+=graph_line(p,row,ypos,fence!=0);if(graph_rows_consumed>1)row+=graph_rows_consumed-1;if(row>=endrow){if(ypos<GP_B){graph_box(0,ypos,GP_L-1,479,8);graph_box(GP_L,ypos,GP_R,479,graph_bg());graph_box(GP_R+9,ypos,639,479,8);}break;}}graph_page_indicator(first,endrow);}
 static void graph_redraw(int p,int first)
 {union REGS r;if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=2;int86(0x33,&r,&r);}graph_render(p,first);if(acc_mouse_present){memset(&r,0,sizeof(r));r.x.ax=1;int86(0x33,&r,&r);}}
-#ifdef MDVIEW_BUILD
 static void mdview_dirname(const char *path,char *dir)
 {const char *a=strrchr(path,'\\'),*b=strrchr(path,'/'),*q=a;if(b&&(!q||b>q))q=b;if(q){int n=(int)(q-path);if(n>=ACC_PATH)n=ACC_PATH-1;memcpy(dir,path,n);dir[n]=0;}else dir[0]=0;}
 static void mdview_resolve_link(const char *base,const char *target,char *out,char *anchor)
 {char work[ACC_PATH],dir[ACC_PATH],*hash;int i;strncpy(work,target,ACC_PATH-1);work[ACC_PATH-1]=0;hash=strchr(work,'#');anchor[0]=0;if(hash){strncpy(anchor,hash,63);anchor[63]=0;*hash=0;}for(i=0;work[i];i++)if(work[i]=='/')work[i]='\\';if(strchr(work,':')||work[0]=='\\'){strncpy(out,work,ACC_PATH-1);out[ACC_PATH-1]=0;return;}mdview_dirname(base,dir);if(dir[0])sprintf(out,"%s\\%s",dir,work);else{strncpy(out,work,ACC_PATH-1);out[ACC_PATH-1]=0;}}
 static int mdview_follow_link(int *p,int *first,const char *target)
 {char next[ACC_PATH],anchor[64];int r;if(!target||!*target||md_link_is_web(target))return 0;if(target[0]=='#'){r=graph_find_anchor(*p,target);if(r>=0){*first=r;return 1;}return 0;}if(!md_link_is_markdown(target))return 0;mdview_resolve_link(paths[*p],target,next,anchor);if(!next[0]||!md_text_file(next)||!load_file(0,next))return 0;*p=0;current=0;count=1;*first=0;if(anchor[0]){r=graph_find_anchor(0,anchor);if(r>=0)*first=r;}return 1;}
-#endif
 static void print_current(void);
 static int print_silent=0;
 static void graph_show(void)
@@ -722,10 +715,8 @@ static void graph_show(void)
    else if(scan==0x4F){endrow=graph_last_row(p);first=endrow-21;if(first<0)first=0;}
    else if(scan==0x48||scan==0x49){first-=20;if(first<0)first=0;}
    else if(scan==0x50||scan==0x51){first+=20;endrow=graph_last_row(p);if(first>endrow)first=endrow;if(first<0)first=0;}
-#ifndef MDVIEW_BUILD
-   else if(scan==0x4B&&p>0){p--;first=0;}
-   else if(scan==0x4D&&p+1<count){p++;first=0;}
-#endif
+   else if(!md_viewer_mode&&scan==0x4B&&p>0){p--;first=0;}
+   else if(!md_viewer_mode&&scan==0x4D&&p+1<count){p++;first=0;}
    else continue;
    graph_redraw(p,first);continue;
   }
@@ -734,11 +725,8 @@ static void graph_show(void)
    if((mb&1)&&!(lastmb&1)){
     for(i=0;i<graph_link_count;i++)if(mx>=graph_links[i].x0&&mx<=graph_links[i].x1&&my>=graph_links[i].y0&&my<=graph_links[i].y1){
      _fmemcpy(linktarget,graph_links[i].target,ACC_PATH);linktarget[ACC_PATH-1]=0;
-#ifdef MDVIEW_BUILD
-     if(mdview_follow_link(&p,&first,linktarget))graph_redraw(p,first);
-#else
-     tr=graph_find_anchor(p,linktarget);if(tr>=0){first=tr;graph_redraw(p,first);}
-#endif
+     if(md_viewer_mode){if(mdview_follow_link(&p,&first,linktarget))graph_redraw(p,first);}
+     else {tr=graph_find_anchor(p,linktarget);if(tr>=0){first=tr;graph_redraw(p,first);}}
      break;
     }
    }
@@ -1075,7 +1063,7 @@ static void focus_mode(void)
    else graph_show();
    acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);focus_bright_backgrounds(1);acc_clear(focus_attr());key=0;
   }else if(key==256+0x3C){focus_colour_scheme=(focus_colour_scheme+1)%6;acc_clear(focus_attr());key=0;}
-  else if(key==31){view_mode=(view_mode+1)%3;break;}
+  else if(key==12){view_mode=(view_mode+1)%3;break;}
   else if(key!=27)editor_key(key,24);
   if(cy<top)top=cy;if(cy>=top+24)top=cy-23;if(key!=27)focus_draw();
  }
@@ -1111,7 +1099,7 @@ static void maximize_mode(void)
   if(key==15){static char openlist[ACC_PATH];if(view_mode!=2)reflow_page(current,COLS);if(md_open_dialog(openlist))md_open_files(openlist);if(view_mode!=2)reflow_page(current,FULL_COLS);cx=cy=top=0;maximize_draw();key=0;continue;}
   if(key==14){if(md_prompt_current()){blank_page(current);memset(softwrap[current],0,LINES);paths[current][0]=0;external[current]=0;dirty[current]=0;cx=cy=top=0;clear_selection();}maximize_draw();key=0;continue;}
   if(key==256+0x92){int ch;acc_modal_begin();ch=character_palette();acc_modal_end();if(ch>=0){if(has_selection())delete_selection();insert_one(ch);clear_selection();}acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);maximize_draw();key=0;continue;}
-  if(key==31){if(view_mode!=2)reflow_page(current,COLS);view_mode=(view_mode+1)%3;top=0;if(view_mode!=2)reflow_page(current,FULL_COLS);clear_selection();maximize_draw();key=0;continue;}
+  if(key==12){if(view_mode!=2)reflow_page(current,COLS);view_mode=(view_mode+1)%3;top=0;if(view_mode!=2)reflow_page(current,FULL_COLS);clear_selection();maximize_draw();key=0;continue;}
   if(key==6){if(view_mode!=2)reflow_page(current,COLS);focus_mode();if(view_mode!=2)reflow_page(current,FULL_COLS);maximize_draw();key=0;continue;}
   if(key==256+0x3F){if(view_mode!=2)reflow_page(current,COLS);graph_show();if(view_mode!=2)reflow_page(current,FULL_COLS);maximize_draw();key=0;continue;}if(key==256+0x32){headings_popup();acc_close_target_suspend(0,0);acc_input_bounds(0,0,acc_cols,acc_rows);maximize_draw();key=0;continue;}
   if((mb&1)&&view_mode!=2&&mx>=0&&mx<FULL_COLS&&((view_mode==0&&my>=0&&my<12)||(view_mode==1&&my>=0&&my<24))){cx=mx;cy=top+my;clear_selection();if(view_mode==0)draw_source(0,0,12,1,FULL_COLS);else draw_source(0,0,24,1,FULL_COLS);key=0;continue;}
@@ -1139,17 +1127,14 @@ static void md_remove_current(void)
   int i;if(count<=1){blank_page(0);memset(softwrap[0],0,LINES);paths[0][0]=0;external[0]=0;dirty[0]=0;current=0;cx=cy=top=0;clear_selection();return;}
   if(page[current]){_ffree(page[current]);page[current]=0;}for(i=current;i<count-1;i++){page[i]=page[i+1];memcpy(softwrap[i],softwrap[i+1],LINES);wrap_width[i]=wrap_width[i+1];external[i]=external[i+1];dirty[i]=dirty[i+1];strcpy(paths[i],paths[i+1]);}page[count-1]=0;memset(softwrap[count-1],0,LINES);wrap_width[count-1]=COLS;count--;if(current>=count)current=count-1;cx=cy=top=0;clear_selection();
 }
-#ifdef MDVIEW_BUILD
-int main(int argc,char **argv)
+static int md_viewer_main(int argc,char **argv)
 {
  int rc=0,i,filearg=0,help_mode=0;
+ md_viewer_mode=1;
  for(i=1;i<argc;i++){
+  if(!stricmp(argv[i],"/VIEW"))continue;
   if(!stricmp(argv[i],"/HELP")){help_mode=1;continue;}
-  if(!strcmp(argv[i],"/?")||!strcmp(argv[i],"-?")){
-   puts("!MDVIEW - Launch! Markdown viewer");
-   puts("Usage: !MDVIEW file.md");
-   return 0;
-  }
+  if(!strcmp(argv[i],"/?")||!strcmp(argv[i],"-?")){puts("!MDVIEW - Launch! Markdown viewer");puts("Usage: !MDVIEW file.md");return 0;}
   if(!filearg)filearg=i;
  }
  if(!filearg){puts("!MDVIEW - Launch! Markdown viewer");puts("Usage: !MDVIEW file.md");return 1;}
@@ -1161,8 +1146,12 @@ int main(int argc,char **argv)
  if(!md_text_file(argv[filearg])||!load_file(0,argv[filearg])){free_pages();acc_end();puts("!MDVIEW: unable to open Markdown file.");return 1;}
  count=1;current=0;graph_show();free_pages();acc_end();return rc;
 }
-#else
+
+static int md_editor_main(int argc,char **argv);
 int main(int argc,char **argv)
+{int i;for(i=1;i<argc;i++)if(!stricmp(argv[i],"/VIEW"))return md_viewer_main(argc,argv);md_viewer_mode=0;return md_editor_main(argc,argv);}
+
+static int md_editor_main(int argc,char **argv)
 {
   int x,y,key=0,mx=0,my=0,focus=0,i,argn=0,rows,editkey,oldtop,done=0,discarded=0,choice;unsigned mb=0;
   if(acc_help(argc,argv,"!MD","Markdown editor with live preview, graphical pages and formatted printing."))return 0;
@@ -1172,7 +1161,7 @@ int main(int argc,char **argv)
   x=(acc_cols-DLG_W)/2;y=(acc_rows-DLG_H)/2;draw_ui(x,y,focus);
   while(!done){acc_wait(&key,&mx,&my,&mb);rows=view_mode==0?VIEW:FULL_VIEW;
     if(key==19){save_current();draw_ui(x,y,focus);key=0;continue;} /* Ctrl+S */
-    if(key==31){view_mode=(view_mode+1)%3;top=0;if(view_mode==2)clear_selection();draw_ui(x,y,focus);key=0;continue;} /* Ctrl+/ */
+    if(key==12){view_mode=(view_mode+1)%3;top=0;if(view_mode==2)clear_selection();draw_ui(x,y,focus);key=0;continue;} /* Ctrl+L */
     if(key==6){focus_mode();draw_ui(x,y,focus);key=0;continue;} /* Ctrl+F */
     if(key==256+0x3F){graph_show();draw_ui(x,y,focus);key=0;continue;} /* F5 */
     if(key==14){if(md_prompt_current()){blank_page(current);memset(softwrap[current],0,LINES);paths[current][0]=0;external[current]=0;dirty[current]=0;cx=cy=top=0;clear_selection();draw_ui(x,y,focus);}key=0;continue;}
@@ -1198,5 +1187,3 @@ int main(int argc,char **argv)
   }
   if(clip){_ffree(clip);clip=0;}free_pages();acc_end();return 0;
 }
-
-#endif

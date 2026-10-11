@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: ACCLIB.H
  * Role: Public interface for accessory/game runtime
  * Build/ownership: Included by accessories and games.

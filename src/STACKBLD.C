@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: STACK.C
  * Role: !STACK persistent card stack
  * Build/ownership: Canonical Stack source; build copy is STACKBLD.C.

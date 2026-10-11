@@ -5,7 +5,7 @@
 # /_____/\__,_/\__,_/_/ /_/\___/_/ /_(_)   
 # Launch! for DOS ---------------------
 /*
- * MAINTAINER NOTES - Launch! 3.73
+ * MAINTAINER NOTES - Launch! 3.8
  * File: !KEYDB.ASM
  * Role: Debug/alternate !KEY TSR build
  * Build/ownership: Diagnostic TSR variant.

@@ -5,7 +5,7 @@
 # /_____/\__,_/\__,_/_/ /_/\___/_/ /_(_)   
 # Launch! for DOS ---------------------
 /*
- * MAINTAINER NOTES - Launch! 3.73
+ * MAINTAINER NOTES - Launch! 3.8
  * File: !KEY286.ASM
  * Role: 286-compatible !KEY TSR variant
  * Build/ownership: Installed where the 286-specific variant is required.

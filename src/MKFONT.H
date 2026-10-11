@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: MKFONT.H
  * Role: Font helper/resource declarations
  * Build/ownership: Used by font-management code.

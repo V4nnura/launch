@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: FREEC.C
  * Role: !FCELL FreeCell game
  * Build/ownership: Standalone card game.

@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: SOL.C
  * Role: !SOL draw-three solitaire
  * Build/ownership: Canonical source; build copy is SOLBLD.C.

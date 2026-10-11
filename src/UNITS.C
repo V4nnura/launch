@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: UNITS.C
  * Role: !UNITS unit-conversion accessory
  * Build/ownership: Standalone accessory using the shared Launch! accessory runtime.
@@ -234,8 +234,8 @@ static double convert_value(double value,int in_cat,int in_unit,int out_cat,int 
 }
 static void display_box(int x,int y,int w,const char *text,int output)
 {
-  int i,start,inside_bg=output?acc_appearance.controls_bg:0;
-  int digit_fg=output?acc_appearance.controls_fg:10;
+  int i,start,inside_bg=output?acc_appearance.selected_bg:acc_appearance.controls_bg;
+  int digit_fg=output?acc_appearance.background:acc_appearance.controls_fg;
   int edge=ACC_ATTR(acc_appearance.background,inside_bg),inside=ACC_ATTR(inside_bg,digit_fg);
   for(i=0;i<w;i++){acc_put(x+i,y,UNIT_LOWER_HALF,edge);acc_put(x+i,y+1,' ',inside);acc_put(x+i,y+2,223,edge);}
   start=x+w-2-(int)strlen(text);if(start<x+1)start=x+1;
@@ -313,8 +313,7 @@ static void draw_units(int bx,int by,int focus,const char *entry,int in_cat,int 
   acc_box(bx,by,59,18,"Units");
   format_number(output,sizeof(output),out);
   display_box(bx+3,by+2,24,entry,0);display_box(bx+32,by+2,24,output,1);
-  for(i=2;i<=5;i++)acc_put(bx+29,by+i,179,ACC_BORDER);
-  acc_put(bx+29,by+13,179,ACC_BORDER);
+  for(i=2;i<=4;i++)acc_put(bx+29,by+i,179,ACC_BORDER);
   acc_text(bx+3,by+6,"From",ACC_HEADING,4);acc_text(bx+40,by+6,"To",ACC_HEADING,2);
   cycle_control(bx+3,by+8,16,categories[in_cat].name,focus==0);
   cycle_control(bx+40,by+8,16,categories[out_cat].name,focus==2);

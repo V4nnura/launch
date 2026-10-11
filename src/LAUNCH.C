@@ -7,7 +7,7 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: COREBLD.C
  * Role: Generated/build copy of Launch! core
  * Build/ownership: Derived from LAUNCH.C; normal BUILD compiles this file. Keep behavioral edits in LAUNCH.C and synchronize/regenerate.
@@ -15,7 +15,7 @@ Launch! for DOS ---------------------
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
-/* Launch! 3.79 - modal command menu for DOS
+/* Launch! 3.8 - modal command menu for DOS
  * Microsoft C/C++ 7.0, medium model (.EXE), 286/EGA or later.
  */
 #include <dos.h>
@@ -32,8 +32,11 @@ Launch! for DOS ---------------------
 #include "CLOCKDAT.H"
 #include "LOGODAT.H"
 #endif
-#define LAUNCH_GLYPH_FAR
-#include "GLYPHDAT.H"
+/* Release 3.8: canonical Launch! UI artwork is loaded from LAUNCH.OVL.
+   Keep executable code independent of the generated GLYPHDAT.H tables so the
+   core, Configuration and every accessory share one on-disk resource copy. */
+#define LAUNCH_GLYPH_COUNT 111
+#define LAUNCH_OVL_EGA_OFFSET 4096L
 
 #define MAX_NODES 96
 #define MAX_TITLE 24
@@ -207,6 +210,7 @@ static unsigned short far *video;
 static int flashing_enabled=1;
 static int screen_columns=80; /* Persisted separately: preserve accessory ABI. */
 static int menu_first_panel=0;
+static int menu_root_builtin_gap=0;
 static int menu_scroll[MAX_DEPTH];
 static unsigned short far *saved;
 static unsigned short far *render_buffer;
@@ -952,7 +956,7 @@ static int merge_default_menu_nodes(int *changed)
   }
 
   if(sibling_exists("!CAL.EXE")||sibling_exists("!CALC.EXE")||sibling_exists("!UNITS.EXE")||sibling_exists("!DRAW.EXE")||sibling_exists("!MD.EXE")||
-     sibling_exists("!JOURNAL.EXE")||sibling_exists("!NOTE.EXE")||sibling_exists("!STACK.EXE")||
+     sibling_exists("!JOURNAL.EXE")||sibling_exists("!NOTE.EXE")||sibling_exists("!SYSEDIT.EXE")||sibling_exists("!STACK.EXE")||
      sibling_exists("!TODOS.EXE")||sibling_exists("!DFETCH.EXE")){
     folder=ensure_default_folder("Accessories",changed);if(folder<0)return 0;
     if(sibling_exists("!CALC.EXE")&&!ensure_launcher(folder,"Calculator","!CALC",1,changed))return 0;
@@ -962,6 +966,7 @@ static int merge_default_menu_nodes(int *changed)
     if(sibling_exists("!JOURNAL.EXE")&&!ensure_launcher(folder,"Journal","!JOURNAL",1,changed))return 0;
     if(sibling_exists("!MD.EXE")&&!ensure_launcher(folder,"Markdown","!MD",1,changed))return 0;
     if(sibling_exists("!NOTE.EXE")&&!ensure_launcher(folder,"Note","!NOTE",1,changed))return 0;
+    if(sibling_exists("!SYSEDIT.EXE")&&!ensure_launcher(folder,"System File Editor","!SYSEDIT",1,changed))return 0;
     if(sibling_exists("!DRAW.EXE")&&!ensure_launcher(folder,"Pixel Draw","!DRAW",1,changed))return 0;
     if(sibling_exists("!DFETCH.EXE")&&!ensure_launcher(folder,"DOS Fetch","!DFETCH",1,changed))return 0;
     if(sibling_exists("!TODOS.EXE")&&!ensure_launcher(folder,"To-Dos","!TODOS",1,changed))return 0;
@@ -1510,7 +1515,8 @@ static const unsigned char launchui_codes[41]={16,17,30,31,169,170,173,174,175,1
 #define UI_EXIT_R    233
 #define UI_WINDOWS_PROGRAM 225
 static const unsigned char launchui_extra_codes[9]={UI_OPEN_L,UI_OPEN_R,UI_SEARCH_L,UI_SEARCH_R,UI_PARENT_L,UI_PARENT_R,UI_EXIT_L,UI_EXIT_R,UI_WINDOWS_PROGRAM};
-/* Source character position 63 maps to launch_glyph[] index 62 because MAKEGLYP.PY stores source positions 1..106. */
+/* Source character position 63 maps to cache index 62.  LAUNCH.OVL stores
+   source positions 1..111 in their original font positions. */
 static const unsigned char launchui_extra_logical[9]={89,90,91,92,61,62,93,94,63};
 /* Browser runtime slots are referenced by the EGA BIOS overlay helpers
    below, so declare them here before first use (MSC 7.0 requires this). */
@@ -1521,6 +1527,29 @@ static const unsigned char far legacy_browser_file_l14[32]={0x07,0x0C,0x1C,0x3D,
 static int launchui_ega14(void)
 {
   return font_is_ega();
+}
+
+/* The overlay stores the complete 8x16 font followed by the complete 8x14
+   font.  Logical Launch! glyph IDs are source character positions 1..111.
+   Cache only the active adapter's 111 glyphs in FAR BSS: this removes the
+   duplicated initialized tables from !.EXE/!CONFIG.EXE while avoiding dozens
+   of disk reads every time the menu is redrawn. */
+static unsigned char far launchui_glyph_cache[LAUNCH_GLYPH_COUNT][32];
+static int launchui_glyph_cache_height=0;
+static int launchui_resource_load(void)
+{
+  char path[MAX_CMD];FILE *f;unsigned char row[32];int i,j,h=launchui_ega14()?14:16;long base=h==14?LAUNCH_OVL_EGA_OFFSET:0L;
+  if(launchui_glyph_cache_height==h)return 1;
+  if(strlen(program_dir)+11>=MAX_CMD)return 0;
+  strcpy(path,program_dir);strcat(path,"LAUNCH.OVL");f=fopen(path,"rb");if(!f)return 0;
+  /* IDs 1..111 are contiguous in both font images: seek once, then stream. */
+  if(fseek(f,base+(long)h,SEEK_SET)!=0){fclose(f);return 0;}
+  for(i=0;i<LAUNCH_GLYPH_COUNT;i++){
+    memset(row,0,sizeof(row));
+    if(fread(row,1,h,f)!=(size_t)h){fclose(f);launchui_glyph_cache_height=0;return 0;}
+    for(j=0;j<32;j++)launchui_glyph_cache[i][j]=row[j];
+  }
+  fclose(f);launchui_glyph_cache_height=h;return 1;
 }
 
 /* Genuine EGA keeps the proven BIOS glyph-loading path.  Direct character-
@@ -1561,10 +1590,10 @@ static void ega14_glyph_write(int code,const unsigned char far *glyph)
 static void ega14_overlay_ui_bios(void)
 {
   const unsigned char far *src;int i;
-  for(i=0;i<(int)sizeof(launchui_codes);i++)ega14_glyph_write(launchui_codes[i],launch_glyph14[i]);
-  for(i=0;i<6;i++){src=i?launch_glyph14[49+i]:legacy_browser_file_l14;ega14_glyph_write(launchui_browser_codes[i],src);}
-  for(i=0;i<9;i++)ega14_glyph_write(launchui_extra_codes[i],launch_glyph14[launchui_extra_logical[i]-1]);
-  ega14_glyph_write(216,launch_glyph14[55]);
+  for(i=0;i<(int)sizeof(launchui_codes);i++)ega14_glyph_write(launchui_codes[i],launchui_glyph_cache[i]);
+  for(i=0;i<6;i++){src=i?launchui_glyph_cache[49+i]:legacy_browser_file_l14;ega14_glyph_write(launchui_browser_codes[i],src);}
+  for(i=0;i<9;i++)ega14_glyph_write(launchui_extra_codes[i],launchui_glyph_cache[launchui_extra_logical[i]-1]);
+  ega14_glyph_write(216,launchui_glyph_cache[55]);
   if(ega_mouse_override_active)ega14_glyph_write(127,(const unsigned char far *)ega_mouse_override_glyph);
   if(ega_target_override_active)ega14_glyph_write(8,(const unsigned char far *)ega_target_override_glyph);
 }
@@ -1617,17 +1646,17 @@ static int ega14_build_and_load(int with_ui)
   if(!font_read_ega(appearance.font_id,segment)){_dos_freemem(segment);return 0;}
   if(with_ui){
     for(i=0;i<(int)sizeof(launchui_codes);i++){
-      src=launch_glyph14[i];for(j=0;j<14;j++)dst[(unsigned)launchui_codes[i]*14U+j]=src[j];
+      src=launchui_glyph_cache[i];for(j=0;j<14;j++)dst[(unsigned)launchui_codes[i]*14U+j]=src[j];
     }
     for(i=0;i<6;i++){
-      src=i?launch_glyph14[49+i]:legacy_browser_file_l14;
+      src=i?launchui_glyph_cache[49+i]:legacy_browser_file_l14;
       for(j=0;j<14;j++)dst[(unsigned)launchui_browser_codes[i]*14U+j]=src[j];
     }
     for(i=0;i<9;i++){
-      src=launch_glyph14[launchui_extra_logical[i]-1];
+      src=launchui_glyph_cache[launchui_extra_logical[i]-1];
       for(j=0;j<14;j++)dst[(unsigned)launchui_extra_codes[i]*14U+j]=src[j];
     }
-    src=launch_glyph14[55];for(j=0;j<14;j++)dst[216U*14U+j]=src[j];
+    src=launchui_glyph_cache[55];for(j=0;j<14;j++)dst[216U*14U+j]=src[j];
   }
   if(ega_mouse_override_active)for(j=0;j<14;j++)dst[127U*14U+j]=ega_mouse_override_glyph[j];
   if(ega_target_override_active)for(j=0;j<14;j++)dst[8U*14U+j]=ega_target_override_glyph[j];
@@ -1651,12 +1680,13 @@ static void launchui_install(void)
   FONT_REGS old;unsigned char far *font;const unsigned char far *glyphs;
   const unsigned char far *fileglyph;int i,j,ega=launchui_ega14();
   if(launchui_active)return;
+  if(!launchui_resource_load()){no_glyph_mode=1;return;}
   if(ega){
     /* Build one complete 256-character EGA font image containing the
        selected base font plus Launch! UI glyphs, then load it atomically. */
     ega14_apply_launchui();launchui_active=1;return;
   }
-  glyphs=(const unsigned char far *)launch_glyph16;fileglyph=legacy_browser_file_l16;
+  glyphs=(const unsigned char far *)launchui_glyph_cache;fileglyph=legacy_browser_file_l16;
   font_plane_open(&old);
   for(i=0;i<(int)sizeof(launchui_codes);i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_codes[i]*32);for(j=0;j<32;j++){launchui_old[i][j]=font[j];font[j]=glyphs[i*32+j];}}
   for(i=0;i<6;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_browser_codes[i]*32);for(j=0;j<32;j++){launchui_browser_old[i][j]=font[j];font[j]=i?glyphs[(49+i)*32+j]:fileglyph[j];}}
@@ -1671,7 +1701,7 @@ static void launchui_rebase(void)
   const unsigned char far *fileglyph;int i,j,ega=launchui_ega14();
   if(!launchui_active)return;
   if(ega){ega14_apply_launchui();return;}
-  glyphs=(const unsigned char far *)launch_glyph16;fileglyph=legacy_browser_file_l16;
+  glyphs=(const unsigned char far *)launchui_glyph_cache;fileglyph=legacy_browser_file_l16;
   font_plane_open(&old);
   for(i=0;i<(int)sizeof(launchui_codes);i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_codes[i]*32);for(j=0;j<32;j++){launchui_old[i][j]=font[j];font[j]=glyphs[i*32+j];}}
   for(i=0;i<6;i++){font=(unsigned char far *)MAKE_FP(0xA000,launchui_browser_codes[i]*32);for(j=0;j<32;j++){launchui_browser_old[i][j]=font[j];font[j]=i?glyphs[(49+i)*32+j]:fileglyph[j];}}
@@ -1735,9 +1765,9 @@ static void mouse_pointer_install(void)
     if(mouse_glyph_saved||mouse_target_saved)mouse_pointer_restore();
     if(appearance.mouse_cursor>=2){
       const unsigned char far *cg;
-      if(appearance.mouse_cursor==2)cg=launchui_ega14()?launch_glyph14[12]:launch_glyph16[12];
-      else if(appearance.mouse_cursor==3)cg=launchui_ega14()?launch_glyph14[94]:launch_glyph16[94];
-      else cg=launchui_ega14()?launch_glyph14[110]:launch_glyph16[110];
+      if(appearance.mouse_cursor==2)cg=launchui_glyph_cache[12];
+      else if(appearance.mouse_cursor==3)cg=launchui_glyph_cache[94];
+      else cg=launchui_glyph_cache[110];
       if(!mouse_glyph_saved){
         if(!launchui_ega14()){font_plane_open(&old);font=(unsigned char far *)MAKE_FP(0xA000,127*32);for(i=0;i<32;i++)mouse_old_glyph[i]=font[i];font_plane_close(&old);}
         mouse_glyph_saved=1;
@@ -2445,7 +2475,7 @@ static int write_current_config(const char *name)
 {
   FILE *f=fopen(name,"wt");int ok;
   if(!f)return 0;
-  ok=fputs("; Launch! 3.79 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
+  ok=fputs("; Launch! 3.8 menu definition\n; ITEM=title|command and parameters|press Enter|change directory|prompt|add to PATH (0/1)|W (Windows only)\n; SEPARATOR= adds a movable horizontal separator\n\n",f)!=EOF;
   strcpy(write_path,"Launcher");
   if(ok)ok=write_section(f,-1,8);
   if(fclose(f)!=0)ok=0;
@@ -2473,7 +2503,7 @@ static int save_appearance(void)
   FILE *f;int ok=1;
   remove(appearance_temp_file);
   f=fopen(appearance_temp_file,"wt");if(!f)return 0;
-  if(fputs("; Launch! 3.5 appearance settings\n",f)==EOF)ok=0;
+  if(fputs("; Launch! 3.8 appearance settings\n",f)==EOF)ok=0;
   if(ok && fprintf(f,"flashing=%s\n",flashing_enabled?"true":"false")<0)ok=0;
   if(ok && fprintf(f,"suiteTitle=%s\nSCREEN_COLUMNS=%d\n",suite_title,screen_columns)<0)ok=0;
   if(ok && fprintf(f,"BACKGROUND=%u\nBORDER=%u\nTITLEBAR_FG=%u\nTITLEBAR_BG=%u\nMAIN_TITLE=%u\nTITLES=%u\n"
@@ -3510,7 +3540,7 @@ static const char *font_name_at(int id)
 
 
 #ifdef CONFIG_PROGRAM
-/* Configuration is a separate !CONFIG executable in 3.79.  Keeping the
+/* Configuration is a separate !CONFIG executable in 3.8.  Keeping the
    complete modal UI behind CONFIG_PROGRAM removes it from !.EXE/!86.EXE. */
 static void cycle_control(int x,int y,const char *value,int focused)
 {
@@ -4007,7 +4037,7 @@ static void config_about_box(void)
   bx=x+3;subdialog_box(x,y,w,h,"About Launch!");
   textout(x+3,y+2,"(C)Copyright 2026 Ben Renegar",C_INPUT_LABEL,34);
   textout(x+3,y+3,"www.benrenegar.com",C_INPUT_LABEL,34);
-  textout(x+3,y+6,"Version 3.79 - 2026-10-09",C_INPUT_LABEL,34);
+  textout(x+3,y+6,"Version 3.8 - 2026-10-11",C_INPUT_LABEL,34);
   for(;;){
     draw_button(bx,y+h-3,"  OK  ",6,focus==0);
     wait_input(&k,&mx,&my,&mb);
@@ -5283,7 +5313,7 @@ static int collections_load(void)
 static int collections_save(void)
 {
   FILE *f=fopen(collections_file,"wt");int i;if(!f)return 0;
-  fputs("; Launch! 3.5 File associations - description|extension|launcher node\n",f);
+  fputs("; Launch! 3.8 File associations - description|extension|launcher node\n",f);
   for(i=0;i<collection_count;i++)fprintf(f,"%s|%s|%d\n",collections[i].name,collections[i].ext,collections[i].launcher);
   return fclose(f)==0;
 }
@@ -6088,7 +6118,9 @@ static int menu_entry_attribute(int node,int selected)
 static int menu_item_offset(int depth,int node,int index)
 {
   if(depth)return 1+index-menu_scroll[depth];
-  return 2+index+(node<0?1:0)-menu_scroll[depth];
+  /* Keep one clear row below the root titlebar.  Together with the extra
+     root panel height this also leaves one clear row below the final item. */
+  return 2+index+((node<0&&menu_root_builtin_gap)?1:0)-menu_scroll[depth];
 }
 
 #ifndef __GNUC__
@@ -6151,7 +6183,7 @@ static int change_menu_selection(int depth,int *list,int n,int *selection,
                                  int direction,int panel_y,int panel_h)
 {
   int old=*selection,next,x=(depth-menu_first_panel)*MENU_WIDTH;
-  int old_row,next_row,first_row=depth?1:2,last_row=panel_h-2;
+  int old_row,next_row,first_row=depth?1:2,last_row=depth?panel_h-2:panel_h-3;
   if(!n)return 1;
   next=(old+n+direction)%n;if(next==old)return 1;
   old_row=menu_item_offset(depth,list[old],old);
@@ -6332,6 +6364,10 @@ static int menu(const char *open_to)
   cursor_hide();mouse_present=mouse_start();mouse_stop();
   last_mouse_x=mouse_raw_x;last_mouse_y=mouse_raw_y;last_activity=bios_ticks();
   for(;;){
+    /* Reserve the root built-in separator only when there are ordinary
+       root items above it.  Root-menu top/bottom breathing room is separate. */
+    menu_root_builtin_gap=(children(-1,hitlist)>0 &&
+      (appearance.show_collections||appearance.show_explore||appearance.show_power));
     i=depth+1-screen_cols/MENU_WIDTH;if(i<0)i=0;
     if(i!=menu_first_panel){menu_first_panel=i;redraw=2;}
     if(quick){
@@ -6404,7 +6440,7 @@ static int menu(const char *open_to)
       for(i=0;i<=depth;i++){
         int tn,j;
         tn=menu_children(parent[i],draw_list);h=tn?tn+2:3;
-        if(i==0){h+=2;if(appearance.show_collections||appearance.show_explore||appearance.show_power)h++;}
+        if(i==0){h+=2;if(menu_root_builtin_gap)h++;}
         if(h>screen_rows-sysbar_rows()) h=screen_rows-sysbar_rows();
         if(i==0) y=appearance.menu_top?sysbar_rows():screen_rows-h;
         else {
@@ -6415,8 +6451,9 @@ static int menu(const char *open_to)
         }
         if(tn){
           int selected_row=menu_item_offset(i,draw_list[sel[i]],sel[i]);
-          int first_row=i==0?2:1;
-          if(selected_row>h-2)menu_scroll[i]+=selected_row-(h-2);
+          int first_row=(i==0)?2:1;
+          int last_row=(i==0)?h-3:h-2;
+          if(selected_row>last_row)menu_scroll[i]+=selected_row-last_row;
           else if(selected_row<first_row)menu_scroll[i]-=first_row-selected_row;
           if(menu_scroll[i]<0)menu_scroll[i]=0;
         }
@@ -6430,8 +6467,8 @@ static int menu(const char *open_to)
           int item_y;
           node=draw_list[j];
           item_y=y+menu_item_offset(i,node,j);
-          if(item_y<y+(i==0?2:1)||item_y>=y+h-1)continue;
-          if(i==0&&node<0&&item_y>y+2&&(j==0||draw_list[j-1]>=0)){
+          if(item_y<y+1||item_y>=y+h-1)continue;
+          if(i==0&&node<0&&menu_root_builtin_gap&&(j==0||draw_list[j-1]>=0)){
             int sx;for(sx=1;sx<MENU_WIDTH-1;sx++)cell(x+sx,item_y-1,196,C_BORDER);
           }
           if(node==BUILTIN_COLLECTIONS){
@@ -7816,13 +7853,13 @@ static int queue_service_apply(void)
 static void show_help(void)
 {
 #ifdef LIGHT86
-  puts("Launch! 86 Light 3.79 - lightweight command menu for DOS\n");
+  puts("Launch! 86 Light 3.8 - lightweight command menu for DOS\n");
   puts("Usage: !86 [menu.mnu] [/OPENTO=folder | /?]\n");
   puts("Menu management: Ctrl+A Add, Ctrl+D Delete, Ctrl+E Edit, Ctrl+Up/Down Move, Ctrl+S Sort");
   puts("Configuration: run !CONFIG");
 #else
 
-  puts("Launch! 3.79 - a lightweight command menu for DOS\n");
+  puts("Launch! 3.8 - a lightweight command menu for DOS\n");
   puts("Usage: ! [menu.mnu] [/CONFIG | /EXPLORE | /OPEN | /BYE | /NOW | /OPENTO=folder | /?]\n");
   puts("Menu management shortcuts:");
   puts("  Ctrl+A        Add a folder, launcher or separator");
@@ -7892,7 +7929,7 @@ int main(int argc,char **argv)
   windows_session=running_under_windows();if(windows_session)no_glyph_mode=1;
   for(i=1;i<argc;i++){
     if(!stricmp(argv[i],"/?")||!stricmp(argv[i],"-?")){
-      puts("Launch! Configuration 3.79\n");
+      puts("Launch! Configuration 3.8\n");
       puts("Usage: !CONFIG [/DISPLAY | /?]\n");
       puts("  /DISPLAY      Apply saved screen columns and font, then return to DOS");
       return 0;

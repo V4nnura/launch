@@ -7,11 +7,11 @@
 Launch! for DOS ---------------------
 */
 /*
- * MAINTAINER NOTES - Launch! 3.79
+ * MAINTAINER NOTES - Launch! 3.8
  * File: FETCHBLD.C
  * Role: Build copy of !DFETCH
- * Build/ownership: Derived from DFETCH.C.
- * Maintainer contract: Keep synchronized with DFETCH.C.
+ * Build/ownership: Canonical source; build copy is FETCHBLD.C.
+ * Maintainer contract: Displays hardware/system facts in a compact dialog and can print the current report.
  * Documentation note: comments describe intent and invariants; behavior remains defined by the code and Release requirements.
  * DOS constraints: code targets 16-bit DOS/MS C 7-era models. Watch DGROUP (<64K in small model), stack use, far/near pointers, BIOS/DOS reentrancy and text-mode screen restoration.
  */
@@ -173,7 +173,7 @@ static void fetch_item(int x,int y,const char *label,const char *value)
 {
   char l[18];
   sprintf(l,"%s:",label);
-  acc_text(x,y,l,ACC_ATTR(acc_appearance.background,acc_appearance.folders),15);
+  acc_text(x,y,l,ACC_LABEL,15);
   acc_text(x+14,y,value,ACC_TEXT,34);
   report_item(label,value);
 }
@@ -471,11 +471,12 @@ int main(int argc,char **argv)
   unsigned long drive_total[MAX_DRIVES],drive_free[MAX_DRIVES];
   unsigned eq,total,avail,country;unsigned long physical,tk,fk;DF_DOS_INFO dos;
   int x=2,y=1,w=75,h=22,row,d,drive_count=0,i;
-  int serial,parallel,game,netint,flops,cd;
+  int serial,parallel,game,netint,flops,cd,fullscreen=0,normal_bg;
   const char *cs,*blaster;
 
   if(acc_help(argc,argv,"!DFETCH","DOS Fetch - a FastFetch-style view of DOS hardware and system information."))return 0;
   if(!acc_begin(argv[0],"DOS Fetch",0))return 1;
+  normal_bg=acc_appearance.background;
   fetch_blocks_install();
   if(acc_cols<80){x=0;w=acc_cols;}if(acc_rows<25){y=0;h=acc_rows;}
 
@@ -491,11 +492,18 @@ int main(int argc,char **argv)
 
   df_detect_dos(&dos);
 
-  acc_box(x,y,w,h,"DOS Fetch");
+fetch_redraw:
+  acc_appearance.background=(unsigned char)(fullscreen?0:normal_bg);
+  if(fullscreen)acc_clear(ACC_ATTR(0,7));else acc_box(x,y,w,h,"DOS Fetch");
+  if(!fullscreen){
+    int title_attr=ACC_ATTR(acc_appearance.titlebar_bg,acc_appearance.titles);
+    acc_put(x+w-8,y,ACC_MAXIMIZE_L,title_attr);
+    acc_put(x+w-7,y,ACC_MAXIMIZE_R,title_attr);
+  }
   /* DFETCH has no toolbar: remove acc_box()'s standard toolbar divider. */
-  acc_fill(x+1,y+h-4,w-2,1,' ',ACC_BG);
-  acc_put(x,y+h-4,179,ACC_BORDER);acc_put(x+w-1,y+h-4,179,ACC_BORDER);
-  draw_logo(x+3,y+6,dos.family);
+  if(!fullscreen){acc_fill(x+1,y+h-4,w-2,1,' ',ACC_BG);
+  acc_put(x,y+h-4,179,ACC_BORDER);acc_put(x+w-1,y+h-4,179,ACC_BORDER);}
+  draw_logo(x+3,y+3,dos.family);
   row=y+2;
   if(dos.family==DF_DOS_DR)
     sprintf(s,"%s %d.%02d",dos_vendor(dos.family),dos.major,dos.minor);
@@ -513,7 +521,7 @@ int main(int argc,char **argv)
   fetch_item(x+24,row++,"Memory",s);
   fetch_item(x+24,row++,"Manager",memory_manager());
 
-  if(drive_count){char lab[18];sprintf(lab,"System Disk");report_item(lab,"");acc_text(x+24,row,"System Disk:",ACC_ATTR(acc_appearance.background,acc_appearance.folders),15);draw_disk_bar(x+38,row,drive_letter[0],drive_percent[0]);row++;}
+  if(drive_count){char lab[18];sprintf(lab,"System Disk");report_item(lab,"");acc_text(x+24,row,"System Disk:",ACC_LABEL,15);draw_disk_bar(x+38,row,drive_letter[0],drive_percent[0]);row++;}
   else fetch_item(x+24,row++,"System Disk","None detected");
 
   eq=_bios_equiplist();flops=(eq&1)?((eq>>6)&3)+1:0;drive_list(floppy_s,flops,0);fetch_item(x+24,row++,"Floppy",floppy_s);
@@ -529,8 +537,10 @@ int main(int argc,char **argv)
     int k=0,mx=0,my=0;unsigned mb=0;
     acc_wait(&k,&mx,&my,&mb);
     if(k==27)break;
+    if(k==256+0x85||k==256+0x57||((mb&1)&&!fullscreen&&my==y&&mx==x+w-8)){fullscreen=!fullscreen;report_count=0;goto fetch_redraw;}
     if(k==16){if(!print_info(dos.family))acc_notice("Print","Unable to print DOS Fetch information to LPT1.");}
   }
+  acc_appearance.background=(unsigned char)normal_bg;
   fetch_blocks_restore();
   acc_end();return 0;
 }
